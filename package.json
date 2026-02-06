@@ -1,0 +1,67 @@
+{
+  "name": "fluentui-mcp",
+  "version": "1.0.0",
+  "description": "MCP (Model Context Protocol) server providing AI assistants with intelligent, context-efficient access to Microsoft FluentUI documentation. Supports multiple FluentUI versions (v8, v9, v10+) with in-memory indexing, smart search, and 12 specialized tools for building production-grade React UIs.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "fluentui-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "docs/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "start:v9": "node dist/index.js v9",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "yarn clean && yarn build && yarn test",
+    "ncu": "ncu -u && rm -fR node_modules yarn.lock && yarn install && yarn clean && yarn build && yarn test"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "fluentui",
+    "fluent-ui",
+    "microsoft",
+    "react",
+    "react-components",
+    "documentation",
+    "ai-assistant",
+    "claude",
+    "cline",
+    "llm",
+    "design-system",
+    "ui-components",
+    "developer-tools"
+  ],
+  "author": "blendsdk",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blendsdk/fluentui9-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/blendsdk/fluentui9-mcp/issues"
+  },
+  "homepage": "https://github.com/blendsdk/fluentui9-mcp#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "npm-check-updates": "^19.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
