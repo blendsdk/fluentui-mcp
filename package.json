@@ -46,12 +46,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/blendsdk/fluentui9-mcp.git"
+    "url": "git+https://github.com/blendsdk/fluentui-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/blendsdk/fluentui9-mcp/issues"
+    "url": "https://github.com/blendsdk/fluentui-mcp/issues"
   },
-  "homepage": "https://github.com/blendsdk/fluentui9-mcp#readme",
+  "homepage": "https://github.com/blendsdk/fluentui-mcp#readme",
   "engines": {
     "node": ">=18.0.0"
   },

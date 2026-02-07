@@ -254,8 +254,8 @@ AI uses tools:
 ### Setup
 
 ```bash
-git clone https://github.com/blendsdk/fluentui9-mcp.git
-cd fluentui9-mcp
+git clone https://github.com/blendsdk/fluentui-mcp.git
+cd fluentui-mcp
 yarn install
 ```
 
@@ -277,7 +277,7 @@ yarn test:coverage  # Coverage report
 ### Project Structure
 
 ```
-fluentui9-mcp/
+fluentui-mcp/
 ├── src/
 │   ├── index.ts                # MCP server entry point
 │   ├── config.ts               # Configuration resolver
