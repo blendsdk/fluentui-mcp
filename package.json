@@ -1,6 +1,6 @@
 {
   "name": "fluentui-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP (Model Context Protocol) server providing AI assistants with intelligent, context-efficient access to Microsoft FluentUI documentation. Supports multiple FluentUI versions (v8, v9, v10+) with in-memory indexing, smart search, and 12 specialized tools for building production-grade React UIs.",
   "type": "module",
   "main": "dist/index.js",
