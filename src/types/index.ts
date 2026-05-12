@@ -7,6 +7,34 @@
  * @module types
  */
 
+// Re-export all schema types for the schema-driven pipeline
+export type {
+  FluentUISchema,
+  SourceInfo,
+  SchemaStats,
+  ComponentEntry,
+  SchemaComponentCategory,
+  StabilityLevel,
+  KnownComponentCategory,
+  PropEntry,
+  SlotEntry,
+  StoryEntry,
+  ComponentEnhanced,
+  KeyboardEntry,
+  PatternExample,
+  UtilityEntry,
+  UtilityEnhanced,
+  UtilityExport,
+  UtilityExportKind,
+  ParameterEntry,
+  GuideEntry,
+  GuideCodeExample,
+  PatternEntry,
+  PatternEntryExample,
+} from './schema.js';
+
+export { KNOWN_COMPONENT_CATEGORIES } from './schema.js';
+
 // ============================================================================
 // Document Types
 // ============================================================================
