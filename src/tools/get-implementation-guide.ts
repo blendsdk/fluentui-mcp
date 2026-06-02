@@ -15,13 +15,14 @@
  * @module tools/get-implementation-guide
  */
 
-import type { DocumentStore } from '../indexer/document-store.js';
-import type { SearchEngine } from '../indexer/search-engine.js';
+import type { SchemaStore } from '../schema/schema-store.js';
+import type { SearchEngine } from '../search/search-engine.js';
 import type {
   GetImplementationGuideArgs,
   DocumentEntry,
   SearchResult,
 } from '../types/index.js';
+
 
 /**
  * Maximum number of components to include in the guide.
@@ -55,10 +56,11 @@ const MAX_GUIDE_PATTERNS = 4;
  * ```
  */
 export function getImplementationGuide(
-  store: DocumentStore,
+  store: SchemaStore,
   searchEngine: SearchEngine,
   args: GetImplementationGuideArgs
 ): string {
+
   const { goal } = args;
 
   if (!goal || goal.trim().length === 0) {
@@ -623,10 +625,10 @@ function extractPatternName(doc: DocumentEntry): string {
  * Format a message when no relevant docs are found for the goal.
  *
  * @param goal - The implementation goal
- * @param store - The document store
+ * @param store - The schema store
  * @returns Helpful message with alternative suggestions
  */
-function formatNoResults(goal: string, store: DocumentStore): string {
+function formatNoResults(goal: string, store: SchemaStore): string {
   const parts: string[] = [];
   parts.push(`No relevant documentation found for: "${goal}"`);
   parts.push('');
@@ -640,13 +642,14 @@ function formatNoResults(goal: string, store: DocumentStore): string {
   const modules = store.getModules();
   if (modules.length > 0) {
     parts.push('**Available documentation modules:**');
-    for (const { module, count } of modules) {
-      parts.push(`- ${module} (${count} docs)`);
+    for (const moduleName of modules) {
+      parts.push(`- ${moduleName}`);
     }
   }
 
   return parts.join('\n');
 }
+
 
 /**
  * Format a generic error message.

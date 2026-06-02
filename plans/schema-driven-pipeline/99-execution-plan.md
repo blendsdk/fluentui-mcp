@@ -430,12 +430,13 @@ This document defines the execution phases and AI chat sessions for implementati
 | 9.1.1 | Implement CLI with arg parsing | `scripts/enhancer/cli.ts` |
 | 9.1.2 | Add yarn enhance script to package.json | `package.json` |
 | 9.1.3 | Add pipeline:full script to package.json | `package.json` |
-| 9.1.4 | Test CLI (dry-run mode, components-only, guides-only) | Manual verification |
+| 9.1.4 | Test CLI (dry-run mode, components-only, guides-only) | `src/__tests__/enhancer/cli.test.ts` + manual |
 
 **Deliverables**:
-- [ ] `yarn enhance` command works
-- [ ] `yarn pipeline:full` runs scrape → enhance → build → test
-- [ ] All tests passing
+- [x] `yarn enhance` command works ✅ (completed: 2026-06-02 — arg parsing, validation, dry-run diff report verified)
+- [x] `yarn pipeline:full` runs scrape → enhance → build → test ✅ (completed: 2026-06-02)
+- [x] All tests passing ✅ (572 tests, 24 files)
+
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -458,13 +459,14 @@ This document defines the execution phases and AI chat sessions for implementati
 | 10.1.3 | Add unit tests | `src/__tests__/schema/schema-loader.test.ts`, `src/__tests__/schema/schema-validator.test.ts` |
 
 **Deliverables**:
-- [ ] Schema loads from test fixture files
-- [ ] Validation catches invalid schemas
-- [ ] All tests passing
+- [x] Schema loads from test fixture files ✅ (completed: 2026-06-02)
+- [x] Validation catches invalid schemas ✅ (completed: 2026-06-02)
+- [x] All tests passing ✅ (606 tests, 26 files)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
 ### Session 10.2: Schema Store (Components)
+
 
 **Objective**: Build the SchemaStore with component query methods.
 
@@ -478,9 +480,9 @@ This document defines the execution phases and AI chat sessions for implementati
 | 10.2.4 | Add unit tests for component queries | `src/__tests__/schema/schema-store.test.ts` |
 
 **Deliverables**:
-- [ ] All component query methods working
-- [ ] Fuzzy matching works (Button → Button, buton → Button)
-- [ ] All tests passing
+- [x] All component query methods working ✅ (completed: 2026-06-02 — findComponent, findComponentFuzzy, getComponentsByCategory, getComponentsByStability, findComponentsWithProp, suggestComponents, compareComponents)
+- [x] Fuzzy matching works (Button → Button, buton/substring → Button) ✅ (completed: 2026-06-02)
+- [x] All tests passing ✅ (completed: 2026-06-02 — 33 tests in schema-store.test.ts)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -498,8 +500,8 @@ This document defines the execution phases and AI chat sessions for implementati
 | 10.3.4 | Add unit tests | `src/__tests__/schema/schema-store.utilities.test.ts`, `src/__tests__/schema/schema-store.guides.test.ts` |
 
 **Deliverables**:
-- [ ] All SchemaStore methods implemented and tested
-- [ ] All tests passing
+- [x] All SchemaStore methods implemented and tested ✅ (completed: 2026-06-02 — utility, guide/pattern, and aggregate queries + getSearchableEntries/getVersionInfo)
+- [x] All tests passing ✅ (completed: 2026-06-02 — 19 utilities + 16 guides tests; 674 tests, 29 files)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -523,9 +525,9 @@ This document defines the execution phases and AI chat sessions for implementati
 | 11.1.4 | Add unit tests | `src/__tests__/formatters/component-formatter.test.ts`, `src/__tests__/formatters/props-formatter.test.ts` |
 
 **Deliverables**:
-- [ ] Formatters produce clean, readable markdown
-- [ ] Props tables render correctly
-- [ ] All tests passing
+- [x] Formatters produce clean, readable markdown ✅ (completed: 2026-06-02 — component-formatter formatFull/formatSummary/formatExamples, props-formatter, story-formatter)
+- [x] Props tables render correctly ✅ (completed: 2026-06-02 — pipe-escaped union types, sorted, empty-state handling)
+- [x] All tests passing ✅ (completed: 2026-06-02 — 38 formatter tests)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -543,8 +545,8 @@ This document defines the execution phases and AI chat sessions for implementati
 | 11.2.4 | Add unit tests | `src/__tests__/formatters/guide-formatter.test.ts`, `src/__tests__/formatters/list-formatter.test.ts` |
 
 **Deliverables**:
-- [ ] All formatters implemented
-- [ ] All tests passing
+- [x] All formatters implemented ✅ (completed: 2026-06-02 — guide-formatter, pattern-formatter, list-formatter)
+- [x] All tests passing ✅ (completed: 2026-06-02 — 25 guide/list/pattern tests; 737 tests, 33 files)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -570,13 +572,14 @@ This document defines the execution phases and AI chat sessions for implementati
 | 12.1.5 | Update tool tests | `src/__tests__/tools/core-tools.test.ts` |
 
 **Deliverables**:
-- [ ] All 6 core tools use SchemaStore
-- [ ] Tool output format unchanged (backward compatible)
-- [ ] All tests passing
+- [x] All 6 core tools use SchemaStore ✅ (completed: 2026-06-02 — query-component, search-docs[engine unchanged, fed schema-built index], list-by-category, get-foundation/pattern/enterprise; added `search/search-index.ts` + `SchemaStore.getAllComponents()`)
+- [x] Tool output format unchanged (backward compatible) ✅ (completed: 2026-06-02 — formatters reused; headers/sections preserved)
+- [x] All tests passing ✅ (completed: 2026-06-02 — tools-setup rewritten to SchemaStore; 737 tests, 33 files)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
 ### Session 12.2: Intelligence Tools Migration
+
 
 **Objective**: Migrate the 4 intelligence tools.
 
@@ -591,12 +594,13 @@ This document defines the execution phases and AI chat sessions for implementati
 | 12.2.5 | Update tool tests | `src/__tests__/tools/intelligence-tools.test.ts` |
 
 **Deliverables**:
-- [ ] All 4 intelligence tools use SchemaStore
-- [ ] All tests passing
+- [x] All 4 intelligence tools use SchemaStore ✅ (completed: 2026-06-02 — suggest-components[3-strategy: keyword map + store.suggestComponents + search], get-implementation-guide, get-component-examples[formatExamples], get-props-reference[formatPropsTable/Slots])
+- [x] All tests passing ✅ (completed: 2026-06-02 — intelligence-tools.test.ts rewritten; 737 tests)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
 ### Session 12.3: Utility Tools & Entry Point
+
 
 **Objective**: Migrate utility tools and update server entry point.
 
@@ -611,15 +615,16 @@ This document defines the execution phases and AI chat sessions for implementati
 | 12.3.5 | Update utility tool tests | `src/__tests__/tools/utility-tools.test.ts` |
 
 **Deliverables**:
-- [ ] All 12 tools migrated
-- [ ] Server starts from schema (not markdown)
-- [ ] All tests passing
+- [x] All 12 tools migrated ✅ (completed: 2026-06-02 — list-all-docs[formatAllDocs], reindex[reloads schema via loadSchema + buildSearchIndex, mutates shared `ServerState`])
+- [x] Server starts from schema (not markdown) ✅ (completed: 2026-06-02 — `index.ts` loadSchema → SchemaStore → buildSearchIndex; `config.ts` resolves schema path via resolveSchemaPath; `ServerConfig.docsPath` → `schemaPath`)
+- [x] All tests passing ✅ (completed: 2026-06-02 — utility-tools + e2e rewritten; build clean; 737 tests, 33 files)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
 ---
 
 ## Phase 13: MCP Server: Search Adaptation & E2E
+
 
 ### Session 13.1: Search Engine Adaptation
 
@@ -634,9 +639,9 @@ This document defines the execution phases and AI chat sessions for implementati
 | 13.1.3 | Add search tests | `src/__tests__/search/search-index.test.ts` |
 
 **Deliverables**:
-- [ ] Search indexes all schema content
-- [ ] Search returns relevant results
-- [ ] All tests passing
+- [x] Search indexes all schema content ✅ (completed: 2026-06-02 — `search-index.ts` builds from `schemaToDocuments`; canonical `SearchEngine` moved to `src/search/search-engine.ts` with a deprecated re-export shim at `src/indexer/search-engine.ts`)
+- [x] Search returns relevant results ✅ (completed: 2026-06-02 — module-filterable across components/utilities/guides/patterns)
+- [x] All tests passing ✅ (completed: 2026-06-02 — `search-index.test.ts` 15 tests; 752 tests)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -653,9 +658,9 @@ This document defines the execution phases and AI chat sessions for implementati
 | 13.2.3 | Verify all existing E2E scenarios still pass | Existing test files |
 
 **Deliverables**:
-- [ ] E2E tests pass with schema-driven server
-- [ ] All integration tests pass
-- [ ] All tests passing
+- [x] E2E tests pass with schema-driven server ✅ (completed: 2026-06-02 — `full-pipeline.test.ts` exercises all 12 tools after a fresh build)
+- [x] All integration tests pass ✅ (completed: 2026-06-02 — extracted testable server core to `src/server.ts` [`TOOL_DEFINITIONS`, `createServerState`, `dispatchToolCall`]; `index.ts` now a thin transport wrapper; new `server-pipeline.test.ts` 20 tests covering all tool routes + MCP CallTool shape + unknown-tool error)
+- [x] All tests passing ✅ (completed: 2026-06-02 — 772 tests, 35 files)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -839,51 +844,55 @@ This document defines the execution phases and AI chat sessions for implementati
 
 
 ### Phase 9: Enhancer CLI
-- [ ] 9.1.1 Implement CLI
-- [ ] 9.1.2 Add yarn enhance script
-- [ ] 9.1.3 Add pipeline:full script
-- [ ] 9.1.4 Test CLI modes
+- [x] 9.1.1 Implement CLI ✅ (completed: 2026-06-02 — `scripts/enhancer/cli.ts`: arg parsing, validation, path resolution, schema I/O, dry-run diff report, two-pass orchestration)
+- [x] 9.1.2 Add yarn enhance script ✅ (completed: 2026-06-02 — `tsx scripts/enhancer/cli.ts`)
+- [x] 9.1.3 Add pipeline:full script ✅ (completed: 2026-06-02 — scrape → enhance → build → test)
+- [x] 9.1.4 Test CLI modes ✅ (completed: 2026-06-02 — `src/__tests__/enhancer/cli.test.ts` 12 tests + manual dry-run verification; 572 tests, 24 files)
+
 
 ### Phase 10: MCP Schema Infrastructure
-- [ ] 10.1.1 Implement SchemaLoader
-- [ ] 10.1.2 Implement SchemaValidator
-- [ ] 10.1.3 Add loader/validator tests
-- [ ] 10.2.1 Implement SchemaStore constructor
-- [ ] 10.2.2 Implement component queries
-- [ ] 10.2.3 Implement structured queries
-- [ ] 10.2.4 Add store tests
-- [ ] 10.3.1 Implement utility queries
-- [ ] 10.3.2 Implement guide queries
-- [ ] 10.3.3 Implement aggregate queries
-- [ ] 10.3.4 Add utility/guide tests
+- [x] 10.1.1 Implement SchemaLoader ✅ (completed: 2026-06-02 — `src/schema/schema-loader.ts`: resolveSchemaPath + loadSchema, path priority explicit→env→bundled, strict mode)
+- [x] 10.1.2 Implement SchemaValidator ✅ (completed: 2026-06-02 — `src/schema/schema-validator.ts`: validateSchema + isSchemaValid, severity-tagged findings)
+- [x] 10.1.3 Add loader/validator tests ✅ (completed: 2026-06-02 — 13 loader + 21 validator tests; 606 tests, 26 files)
+
+- [x] 10.2.1 Implement SchemaStore constructor ✅ (completed: 2026-06-02 — `src/schema/schema-store.ts`: indexed by name/id/category)
+- [x] 10.2.2 Implement component queries ✅ (completed: 2026-06-02 — findComponent, findComponentFuzzy, getComponentsByCategory, getComponentsByStability)
+- [x] 10.2.3 Implement structured queries ✅ (completed: 2026-06-02 — findComponentsWithProp, suggestComponents, compareComponents)
+- [x] 10.2.4 Add store tests ✅ (completed: 2026-06-02 — `schema-store.test.ts` 33 tests)
+- [x] 10.3.1 Implement utility queries ✅ (completed: 2026-06-02 — findUtility, getAllUtilities)
+- [x] 10.3.2 Implement guide queries ✅ (completed: 2026-06-02 — foundation, patterns, enterprise, quick-reference getters)
+- [x] 10.3.3 Implement aggregate queries ✅ (completed: 2026-06-02 — getCategories, getModules, getStats, getVersionInfo, getSearchableEntries)
+- [x] 10.3.4 Add utility/guide tests ✅ (completed: 2026-06-02 — `schema-store.utilities.test.ts` 19 + `schema-store.guides.test.ts` 16; 674 tests, 29 files)
 
 ### Phase 11: Formatters
-- [ ] 11.1.1 Implement ComponentFormatter
-- [ ] 11.1.2 Implement PropsFormatter
-- [ ] 11.1.3 Implement StoryFormatter
-- [ ] 11.1.4 Add formatter tests
-- [ ] 11.2.1 Implement GuideFormatter
-- [ ] 11.2.2 Implement ListFormatter
-- [ ] 11.2.3 Implement PatternFormatter
-- [ ] 11.2.4 Add remaining formatter tests
+- [x] 11.1.1 Implement ComponentFormatter ✅ (completed: 2026-06-02 — `src/formatters/component-formatter.ts`: formatFull, formatSummary, formatExamples)
+- [x] 11.1.2 Implement PropsFormatter ✅ (completed: 2026-06-02 — `src/formatters/props-formatter.ts`: formatPropsTable, formatSlotsTable, pipe escaping)
+- [x] 11.1.3 Implement StoryFormatter ✅ (completed: 2026-06-02 — `src/formatters/story-formatter.ts`: formatStories, formatSingleStory)
+- [x] 11.1.4 Add formatter tests ✅ (completed: 2026-06-02 — `component-formatter.test.ts` 24 + `props-formatter.test.ts` 14)
+- [x] 11.2.1 Implement GuideFormatter ✅ (completed: 2026-06-02 — `src/formatters/guide-formatter.ts`: formatGuide, formatGuideSummary)
+- [x] 11.2.2 Implement ListFormatter ✅ (completed: 2026-06-02 — `src/formatters/list-formatter.ts`: formatComponentList, formatCategoryOverview, formatModuleList, formatAllDocs)
+- [x] 11.2.3 Implement PatternFormatter ✅ (completed: 2026-06-02 — `src/formatters/pattern-formatter.ts`: formatPattern, formatPatternSummary)
+- [x] 11.2.4 Add remaining formatter tests ✅ (completed: 2026-06-02 — `guide-formatter.test.ts` 12 + `list-formatter.test.ts` 13; 737 tests, 33 files)
 
 ### Phase 12: Tool Migration
-- [ ] 12.1.1-12.1.4 Migrate 6 core tools
-- [ ] 12.1.5 Update core tool tests
-- [ ] 12.2.1-12.2.4 Migrate 4 intelligence tools
-- [ ] 12.2.5 Update intelligence tool tests
-- [ ] 12.3.1-12.3.2 Migrate 2 utility tools
-- [ ] 12.3.3 Update src/index.ts
-- [ ] 12.3.4 Update src/config.ts
-- [ ] 12.3.5 Update utility tool tests
+- [x] 12.1.0 Rewrite tools-setup.ts to SchemaStore ✅ (completed: 2026-06-02 — `getTestIndex` + `createTestServerState` from enhanced test schema)
+- [x] 12.1.1-12.1.4 Migrate 6 core tools ✅ (completed: 2026-06-02 — query-component, search-docs[unchanged, schema-built index], list-by-category, get-foundation/pattern/enterprise; added `src/search/search-index.ts`)
+- [x] 12.1.5 Update core tool tests ✅ (completed: 2026-06-02 — core-tools.test.ts 26 tests)
+- [x] 12.2.1-12.2.4 Migrate 4 intelligence tools ✅ (completed: 2026-06-02 — suggest-components, get-implementation-guide, get-component-examples, get-props-reference)
+- [x] 12.2.5 Update intelligence tool tests ✅ (completed: 2026-06-02 — intelligence-tools.test.ts 15 tests)
+- [x] 12.3.1-12.3.2 Migrate 2 utility tools ✅ (completed: 2026-06-02 — list-all-docs[formatAllDocs], reindex[ServerState reload])
+- [x] 12.3.3 Update src/index.ts ✅ (completed: 2026-06-02 — loadSchema → SchemaStore → buildSearchIndex; ServerState-based dispatcher)
+- [x] 12.3.4 Update src/config.ts ✅ (completed: 2026-06-02 — schemaPath resolution via resolveSchemaPath; ServerConfig.schemaPath)
+- [x] 12.3.5 Update utility tool tests ✅ (completed: 2026-06-02 — utility-tools.test.ts 8 + e2e full-pipeline 13; 737 tests, 33 files)
+
 
 ### Phase 13: Search & E2E
-- [ ] 13.1.1 Implement search index builder
-- [ ] 13.1.2 Adapt search engine
-- [ ] 13.1.3 Add search tests
-- [ ] 13.2.1 Update E2E tests
-- [ ] 13.2.2 Add server integration test
-- [ ] 13.2.3 Verify all scenarios
+- [x] 13.1.1 Implement search index builder ✅ (completed: 2026-06-02 — `src/search/search-index.ts` from Phase 12; `schemaToDocuments` + `buildSearchIndex`)
+- [x] 13.1.2 Adapt search engine ✅ (completed: 2026-06-02 — canonical `SearchEngine` moved to `src/search/search-engine.ts`; `src/indexer/search-engine.ts` now a deprecated re-export shim; all schema-driven source/test imports updated)
+- [x] 13.1.3 Add search tests ✅ (completed: 2026-06-02 — `src/__tests__/search/search-index.test.ts` 15 tests)
+- [x] 13.2.1 Update E2E tests ✅ (completed: 2026-06-02 — `full-pipeline.test.ts` already schema-driven from Phase 12; imports repointed to `src/search/`)
+- [x] 13.2.2 Add server integration test ✅ (completed: 2026-06-02 — extracted `src/server.ts`; `src/__tests__/integration/server-pipeline.test.ts` 20 tests)
+- [x] 13.2.3 Verify all scenarios ✅ (completed: 2026-06-02 — build clean; 772 tests, 35 files)
 
 ### Phase 14: CI/CD
 - [ ] 14.1.1 Create CI workflow

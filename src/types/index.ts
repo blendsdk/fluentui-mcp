@@ -150,8 +150,8 @@ export interface ServerConfig {
   /** Which FluentUI version to serve (e.g., "v9", "v10") */
   version: string;
 
-  /** Absolute path to the documentation folder for the selected version */
-  docsPath: string;
+  /** Absolute path to the enhanced JSON schema file for the selected version */
+  schemaPath: string;
 
   /** Server name used in MCP registration (e.g., "fluentui-v9-docs") */
   serverName: string;
@@ -159,6 +159,7 @@ export interface ServerConfig {
   /** Server version string from package.json */
   serverVersion: string;
 }
+
 
 // ============================================================================
 // Tool Argument Types

@@ -1,110 +1,118 @@
 /**
- * Tool: reindex — Rebuild the documentation index.
+ * Tool: reindex — Reload the schema from disk and rebuild in-memory state.
  *
- * Re-scans the docs directory and rebuilds all in-memory indexes
- * (document store + search engine). Useful if documentation files
- * have been added, modified, or removed at runtime.
- *
- * This reuses existing store and search engine instances so that
- * all tool references remain valid after reindexing.
+ * Re-reads the enhanced JSON schema file, rebuilds the {@link SchemaStore}, and
+ * rebuilds the search index. The shared {@link ServerState} container is mutated
+ * in place so that the server's request handlers pick up the new store/engine
+ * without needing to be re-registered.
  *
  * @module tools/reindex
  */
 
-import { buildIndex } from '../indexer/index-builder.js';
-import type { DocumentStore } from '../indexer/document-store.js';
-import type { SearchEngine } from '../indexer/search-engine.js';
-import type { IndexStats } from '../indexer/index-builder.js';
+import { SchemaStore } from '../schema/schema-store.js';
+import { loadSchema } from '../schema/schema-loader.js';
+import { buildSearchIndex } from '../search/search-index.js';
+import type { SearchEngine } from '../search/search-engine.js';
+
+/**
+ * Mutable container holding the live server state. Both the entry point and the
+ * `reindex` tool reference the same object so reloads are visible everywhere.
+ */
+export interface ServerState {
+  /** The active schema store. Replaced on reindex. */
+  store: SchemaStore;
+
+  /** The active search engine. Rebuilt on reindex. */
+  searchEngine: SearchEngine;
+
+  /** Absolute path to the schema file the state was loaded from. */
+  schemaPath: string;
+}
 
 /**
  * Execute the reindex tool.
  *
- * Clears all existing data and re-scans the documentation directory,
- * rebuilding the document store and search engine indexes.
+ * Reloads the schema from `state.schemaPath`, rebuilds the store and search
+ * index, and mutates `state` in place.
  *
- * @param store - The existing document store (will be cleared and repopulated)
- * @param searchEngine - The existing search engine (will be cleared and rebuilt)
- * @param docsPath - Absolute path to the docs version directory
- * @returns Formatted markdown string with reindex results and statistics
+ * @param state - The shared server state container (mutated on success)
+ * @returns Formatted markdown string with reindex results
  *
  * @example
  * ```typescript
- * const result = await reindex(store, searchEngine, '/path/to/docs/v9');
- * // Returns summary of reindexed documents
+ * const result = await reindex(state);
  * ```
  */
-export async function reindex(
-  store: DocumentStore,
-  searchEngine: SearchEngine,
-  docsPath: string
-): Promise<string> {
+export async function reindex(state: ServerState): Promise<string> {
   try {
-    // Track the previous state for comparison
-    const previousCount = store.size;
+    const previousCount = state.store.getAllComponents().length;
 
-    // Rebuild the index using existing instances (they'll be cleared internally)
-    const { stats } = await buildIndex(docsPath, store, searchEngine);
+    const { schema, validationErrors, resolvedPath } = loadSchema({
+      path: state.schemaPath,
+    });
 
-    return formatReindexResult(stats, previousCount);
+    const store = new SchemaStore(schema);
+    const searchEngine = buildSearchIndex(store, state.searchEngine);
+
+    // Swap in the new state.
+    state.store = store;
+    state.searchEngine = searchEngine;
+    state.schemaPath = resolvedPath;
+
+    return formatReindexResult(store, previousCount, validationErrors.length);
   } catch (error) {
-    return formatReindexError(error, docsPath);
+    return formatReindexError(error, state.schemaPath);
   }
 }
 
 /**
  * Format a successful reindex result with statistics.
  *
- * Shows document counts, timing, and breakdown by module/category.
- *
- * @param stats - Indexing statistics from the build operation
- * @param previousCount - How many documents were indexed before
+ * @param store - The freshly built schema store
+ * @param previousCount - How many components were indexed before
+ * @param warningCount - Number of validation findings from the reload
  * @returns Formatted markdown result
  */
-function formatReindexResult(stats: IndexStats, previousCount: number): string {
+function formatReindexResult(
+  store: SchemaStore,
+  previousCount: number,
+  warningCount: number
+): string {
+  const stats = store.getStats();
+  const newCount = store.getAllComponents().length;
   const parts: string[] = [];
 
   parts.push('# Reindex Complete ✅');
   parts.push('');
-
-  // Summary
-  parts.push(`**Documents indexed:** ${stats.indexedFiles}`);
+  parts.push(`**Components:** ${newCount}`);
   parts.push(`**Previous count:** ${previousCount}`);
-  parts.push(`**Duration:** ${stats.durationMs}ms`);
+  parts.push(`**Utilities:** ${store.getAllUtilities().length}`);
 
-  if (stats.failedFiles > 0) {
-    parts.push(`**⚠️ Failed files:** ${stats.failedFiles}`);
+  if (warningCount > 0) {
+    parts.push(`**⚠️ Validation findings:** ${warningCount}`);
   }
 
   parts.push('');
 
-  // Module breakdown
-  const moduleEntries = Object.entries(stats.byModule);
-  if (moduleEntries.length > 0) {
-    parts.push('## By Module');
-    for (const [module, count] of moduleEntries) {
-      parts.push(`- **${module}:** ${count} docs`);
-    }
-    parts.push('');
-  }
-
-  // Category breakdown
-  const categoryEntries = Object.entries(stats.byCategory);
-  if (categoryEntries.length > 0) {
+  const categories = store.getCategories();
+  if (categories.size > 0) {
     parts.push('## By Category');
-    for (const [category, count] of categoryEntries) {
-      parts.push(`- **${category}:** ${count} docs`);
+    for (const [category, count] of categories) {
+      parts.push(`- **${category}:** ${count} components`);
     }
     parts.push('');
   }
 
-  // Delta info
-  const delta = stats.indexedFiles - previousCount;
+  // Reference total props/stories from the schema stats block.
+  parts.push(`*Total props: ${stats.totalProps}, total stories: ${stats.totalStories}.*`);
+
+  const delta = newCount - previousCount;
   if (delta > 0) {
-    parts.push(`*${delta} new document(s) discovered.*`);
+    parts.push(`*${delta} new component(s) discovered.*`);
   } else if (delta < 0) {
-    parts.push(`*${Math.abs(delta)} document(s) no longer present.*`);
+    parts.push(`*${Math.abs(delta)} component(s) no longer present.*`);
   } else {
-    parts.push('*No change in document count.*');
+    parts.push('*No change in component count.*');
   }
 
   return parts.join('\n');
@@ -114,10 +122,10 @@ function formatReindexResult(stats: IndexStats, previousCount: number): string {
  * Format a reindex error with troubleshooting guidance.
  *
  * @param error - The error that occurred
- * @param docsPath - The docs path that was being scanned
+ * @param schemaPath - The schema path that was being loaded
  * @returns Formatted error message
  */
-function formatReindexError(error: unknown, docsPath: string): string {
+function formatReindexError(error: unknown, schemaPath: string): string {
   const message = error instanceof Error ? error.message : String(error);
 
   return [
@@ -125,11 +133,11 @@ function formatReindexError(error: unknown, docsPath: string): string {
     '',
     `**Error:** ${message}`,
     '',
-    `**Docs path:** \`${docsPath}\``,
+    `**Schema path:** \`${schemaPath}\``,
     '',
     '**Troubleshooting:**',
-    '- Verify the docs directory exists and is readable',
-    '- Check that .md files are present in the expected structure',
-    '- Ensure the server has read permissions for the directory',
+    '- Verify the schema file exists and is readable',
+    '- Check that the file contains valid JSON',
+    '- Ensure the server has read permissions for the file',
   ].join('\n');
 }

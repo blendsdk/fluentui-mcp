@@ -2,14 +2,15 @@
  * Tests for core tools: query_component, search_docs, list_by_category,
  * get_foundation, get_pattern, get_enterprise.
  *
- * Uses the real docs/v9/ index for integration-level validation.
+ * Uses the enhanced test schema (Button/buttons, Input/forms, Dialog/feedback)
+ * via the shared schema-driven tools-setup.
  *
  * @module __tests__/tools/core-tools
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import type { DocumentStore } from '../../indexer/document-store.js';
-import type { SearchEngine } from '../../indexer/search-engine.js';
+import type { SchemaStore } from '../../schema/schema-store.js';
+import type { SearchEngine } from '../../search/search-engine.js';
 import { getTestIndex } from './tools-setup.js';
 
 import { queryComponent } from '../../tools/query-component.js';
@@ -19,11 +20,11 @@ import { getFoundation } from '../../tools/get-foundation.js';
 import { getPattern } from '../../tools/get-pattern.js';
 import { getEnterprise } from '../../tools/get-enterprise.js';
 
-let store: DocumentStore;
+let store: SchemaStore;
 let searchEngine: SearchEngine;
 
-beforeAll(async () => {
-  const index = await getTestIndex();
+beforeAll(() => {
+  const index = getTestIndex();
   store = index.store;
   searchEngine = index.searchEngine;
 });
@@ -36,13 +37,13 @@ describe('queryComponent', () => {
   it('should return full documentation for a known component', () => {
     const result = queryComponent(store, { componentName: 'Button' });
     expect(result).toContain('# Button');
-    expect(result).toContain('**Package:**');
+    expect(result).toContain('**Package**');
     expect(result).toContain('@fluentui/react-button');
   });
 
   it('should find components with partial/fuzzy names', () => {
-    const result = queryComponent(store, { componentName: 'toggle' });
-    expect(result).toContain('ToggleButton');
+    const result = queryComponent(store, { componentName: 'dial' });
+    expect(result).toContain('# Dialog');
   });
 
   it('should be case-insensitive', () => {
@@ -68,7 +69,7 @@ describe('queryComponent', () => {
 
 describe('searchDocs', () => {
   it('should return ranked results for a valid query', () => {
-    const result = searchDocs(searchEngine, { query: 'form validation' });
+    const result = searchDocs(searchEngine, { query: 'button action' });
     expect(result).toContain('Search Results');
     expect(result).toContain('relevant');
   });
@@ -76,13 +77,11 @@ describe('searchDocs', () => {
   it('should filter results by module when specified', () => {
     const result = searchDocs(searchEngine, { query: 'button', module: 'components' });
     expect(result).toContain('Search Results');
-    // Should not contain foundation-only or pattern-only results
     expect(result).toContain('components');
   });
 
   it('should respect the limit parameter', () => {
-    const result = searchDocs(searchEngine, { query: 'component', limit: 2 });
-    // Count the "### N." result headers — should be at most 2
+    const result = searchDocs(searchEngine, { query: 'button input dialog', limit: 2 });
     const matches = result.match(/### \d+\./g);
     expect(matches).toBeTruthy();
     expect(matches!.length).toBeLessThanOrEqual(2);
@@ -94,8 +93,6 @@ describe('searchDocs', () => {
   });
 
   it('should return no results for a non-existent module filter', () => {
-    // With dynamic module discovery, unrecognized modules aren't hard errors —
-    // the search simply returns no results because no docs match that module.
     const result = searchDocs(searchEngine, { query: 'button', module: 'nonexistent' as any });
     expect(result).toContain('No results found');
     expect(result).toContain('list_all_docs');
@@ -129,10 +126,9 @@ describe('listByCategory', () => {
     expect(result).toContain('Invalid category');
   });
 
-  it('should include metadata indicators for components', () => {
-    const result = listByCategory(store, { category: 'buttons' });
-    // Button docs have code examples and props tables
-    expect(result).toContain('examples');
+  it('should include a component summary', () => {
+    const result = listByCategory(store, { category: 'forms' });
+    expect(result).toContain('Input');
   });
 });
 
@@ -145,23 +141,22 @@ describe('getFoundation', () => {
     const result = getFoundation(store, {});
     expect(result).toContain('Foundation Documentation');
     expect(result).toContain('Getting Started');
-    expect(result).toContain('Theming');
   });
 
   it('should return specific topic documentation', () => {
-    const result = getFoundation(store, { topic: 'theming' });
-    expect(result).toContain('Theming');
+    const result = getFoundation(store, { topic: 'getting-started' });
+    expect(result).toContain('Getting Started');
     expect(result).toContain('foundation');
   });
 
   it('should resolve topic aliases', () => {
-    const result = getFoundation(store, { topic: 'a11y' });
-    expect(result).toContain('Accessibility');
+    const result = getFoundation(store, { topic: 'start' });
+    expect(result).toContain('Getting Started');
   });
 
-  it('should resolve alternate alias names', () => {
-    const result = getFoundation(store, { topic: 'css' });
-    expect(result).toContain('Griffel');
+  it('should report when a recognized topic has no guide', () => {
+    const result = getFoundation(store, { topic: 'theming' });
+    expect(result).toContain('no guide was found');
   });
 
   it('should return error for invalid topic', () => {
@@ -176,15 +171,14 @@ describe('getFoundation', () => {
 // ============================================================================
 
 describe('getPattern', () => {
-  it('should return pattern overview when given a valid category', () => {
+  it('should return pattern listing when given a valid category', () => {
     const result = getPattern(store, { patternCategory: 'forms' });
-    // Should contain pattern listings for the forms category
     expect(result.toLowerCase()).toContain('form');
   });
 
   it('should return specific pattern when name provided', () => {
-    const result = getPattern(store, { patternCategory: 'forms', patternName: 'validation' });
-    expect(result.toLowerCase()).toContain('validation');
+    const result = getPattern(store, { patternCategory: 'forms', patternName: 'login' });
+    expect(result.toLowerCase()).toContain('login');
   });
 
   it('should return error for invalid pattern category', () => {
@@ -199,18 +193,17 @@ describe('getPattern', () => {
 
 describe('getEnterprise', () => {
   it('should return enterprise documentation for a valid topic', () => {
-    const result = getEnterprise(store, { topic: 'dashboard' });
-    expect(result.toLowerCase()).toContain('dashboard');
+    const result = getEnterprise(store, { topic: 'app-shell' });
+    expect(result.toLowerCase()).toContain('shell');
   });
 
-  it('should return enterprise documentation for admin topic', () => {
-    const result = getEnterprise(store, { topic: 'admin' });
-    expect(result.toLowerCase()).toContain('admin');
+  it('should resolve enterprise aliases', () => {
+    const result = getEnterprise(store, { topic: 'shell' });
+    expect(result.toLowerCase()).toContain('shell');
   });
 
   it('should return error/overview for invalid topic', () => {
     const result = getEnterprise(store, { topic: 'nonexistent' });
-    // Should either list available topics or show an error
     expect(result.length).toBeGreaterThan(0);
   });
 });

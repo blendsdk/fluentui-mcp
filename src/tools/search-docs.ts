@@ -11,7 +11,7 @@
  * @module tools/search-docs
  */
 
-import type { SearchEngine } from '../indexer/search-engine.js';
+import type { SearchEngine } from '../search/search-engine.js';
 import type { SearchDocsArgs, DocumentModule, SearchResult } from '../types/index.js';
 import { DEFAULT_SEARCH_LIMIT } from '../types/index.js';
 
