@@ -43,4 +43,10 @@ export {
   toComponentSummary,
   buildComponentSummaries,
   serializeComponentSummaries,
+  serializeComponentSummariesBudgeted,
+  resolveTargetComponents,
+  estimateTokens,
+  GROUNDING_INPUT_BUDGET_TOKENS,
 } from './shared.js';
+export type { BudgetedSerializeOptions } from './shared.js';
+

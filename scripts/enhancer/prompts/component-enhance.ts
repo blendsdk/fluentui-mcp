@@ -54,10 +54,13 @@ Rules:
 - Keep descriptions concise but informative.`;
 
 /**
- * Build a compact, deterministic serialization of a component's API surface.
+ * Build a full, deterministic serialization of a component's API surface.
  *
- * Only the fields useful for grounding the LLM are included; verbose or
- * derived fields are omitted to keep token usage low.
+ * Maximum-grounding: every prop (with type/default/description), every slot,
+ * every story at full source `code` (imports + styles + render), plus the
+ * component's compositions (`relatedComponents`, `additionalExports`). No
+ * truncation — the model is fed everything it needs to generate rich,
+ * grounded documentation.
  *
  * @param component - The raw component entry
  * @returns A pretty-printed JSON string describing the component
@@ -86,13 +89,18 @@ export function serializeComponentForPrompt(component: ComponentEntry): string {
       stories: component.stories.map((s) => ({
         name: s.name,
         description: s.description,
+        imports: s.imports,
+        code: s.code,
         renderCode: s.renderCode,
       })),
+      relatedComponents: component.relatedComponents,
+      additionalExports: component.additionalExports,
     },
     null,
     2,
   );
 }
+
 
 /**
  * Build the full message array for enhancing a single component.

@@ -16,6 +16,8 @@ import type {
   ProviderConfig,
 } from './provider.js';
 import { LLMError, isRetryableStatus } from './provider.js';
+import { resolveMaxTokens } from './ceilings.js';
+
 
 /** Default OpenAI model used when none is configured. */
 export const DEFAULT_OPENAI_MODEL = 'gpt-4o';
@@ -84,9 +86,11 @@ export class OpenAIProvider implements LLMProvider {
     if (options?.temperature !== undefined) {
       body.temperature = options.temperature;
     }
-    if (options?.maxTokens !== undefined) {
-      body.max_tokens = options.maxTokens;
-    }
+    // Always request an explicit max_tokens, resolved against the model's
+    // output ceiling so an unset value asks for the model maximum and an
+    // over-limit request is clamped (never an HTTP 400).
+    body.max_tokens = resolveMaxTokens(this.model, options?.maxTokens);
+
     // OpenAI supports a JSON response mode that guarantees valid JSON output.
     if (options?.responseFormat === 'json') {
       body.response_format = { type: 'json_object' };

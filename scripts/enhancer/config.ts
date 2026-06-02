@@ -31,22 +31,23 @@ export const FOUNDATION_GUIDES: GuideSpec[] = [
  * The `group` field is the pattern group (forms, navigation, layout…).
  */
 export const PATTERN_GUIDES: GuideSpec[] = [
-  { id: 'basic-forms', title: 'Basic Form Patterns', group: 'forms' },
-  { id: 'form-validation', title: 'Form Validation', group: 'forms' },
-  { id: 'login-form', title: 'Login Form Pattern', group: 'forms' },
-  { id: 'sidebar-navigation', title: 'Sidebar Navigation', group: 'navigation' },
-  { id: 'tab-navigation', title: 'Tab Navigation', group: 'navigation' },
-  { id: 'breadcrumb-patterns', title: 'Breadcrumb Patterns', group: 'navigation' },
+  { id: 'basic-forms', title: 'Basic Form Patterns', group: 'forms', targetComponentIds: ['input', 'field', 'button', 'textarea'] },
+  { id: 'form-validation', title: 'Form Validation', group: 'forms', targetComponentIds: ['field', 'input', 'button'] },
+  { id: 'login-form', title: 'Login Form Pattern', group: 'forms', targetComponentIds: ['input', 'button', 'field', 'checkbox'] },
+  { id: 'sidebar-navigation', title: 'Sidebar Navigation', group: 'navigation', targetComponentIds: ['nav', 'tree'] },
+  { id: 'tab-navigation', title: 'Tab Navigation', group: 'navigation', targetComponentIds: ['tablist', 'tab'] },
+  { id: 'breadcrumb-patterns', title: 'Breadcrumb Patterns', group: 'navigation', targetComponentIds: ['breadcrumb'] },
   { id: 'page-structure', title: 'Page Structure', group: 'layout' },
   { id: 'responsive-design', title: 'Responsive Design', group: 'layout' },
-  { id: 'dashboard-layout', title: 'Dashboard Layout', group: 'layout' },
-  { id: 'dialog-patterns', title: 'Dialog Patterns', group: 'modals' },
-  { id: 'drawer-patterns', title: 'Drawer Patterns', group: 'modals' },
-  { id: 'controlled-uncontrolled', title: 'Controlled vs Uncontrolled', group: 'state' },
-  { id: 'form-state', title: 'Form State Management', group: 'state' },
-  { id: 'loading-states', title: 'Loading States', group: 'data' },
-  { id: 'error-handling', title: 'Error Handling Patterns', group: 'data' },
+  { id: 'dashboard-layout', title: 'Dashboard Layout', group: 'layout', targetComponentIds: ['card'] },
+  { id: 'dialog-patterns', title: 'Dialog Patterns', group: 'modals', targetComponentIds: ['dialog', 'button'] },
+  { id: 'drawer-patterns', title: 'Drawer Patterns', group: 'modals', targetComponentIds: ['drawer'] },
+  { id: 'controlled-uncontrolled', title: 'Controlled vs Uncontrolled', group: 'state', targetComponentIds: ['input'] },
+  { id: 'form-state', title: 'Form State Management', group: 'state', targetComponentIds: ['field', 'input'] },
+  { id: 'loading-states', title: 'Loading States', group: 'data', targetComponentIds: ['spinner', 'skeleton'] },
+  { id: 'error-handling', title: 'Error Handling Patterns', group: 'data', targetComponentIds: ['messagebar', 'field'] },
 ];
+
 
 /**
  * Enterprise guides covering production-grade application patterns.
@@ -102,9 +103,17 @@ export interface EnhancerConfig {
   /** Temperature for LLM generation */
   temperature: number;
 
+  /**
+   * Maximum tokens to request per LLM response. OPTIONAL: when undefined, each
+   * provider uses its model's own output ceiling (see MODEL_OUTPUT_CEILINGS).
+   * An explicit value (or LLM_MAX_TOKENS) is clamped to the model ceiling.
+   */
+  maxTokens?: number;
+
   /** Enable verbose logging */
   verbose: boolean;
 }
+
 
 /** Default enhancer configuration values. */
 export const DEFAULT_ENHANCER_CONFIG: Omit<EnhancerConfig, 'version'> = {
@@ -137,10 +146,19 @@ export function resolveEnhancerConfig(
   const envRetries = process.env.LLM_MAX_RETRIES
     ? Number.parseInt(process.env.LLM_MAX_RETRIES, 10)
     : undefined;
+  // NaN-guarded: a non-numeric LLM_MAX_TOKENS resolves to undefined so the
+  // provider falls back to the model's own output ceiling.
+  const parsedEnvMaxTokens = process.env.LLM_MAX_TOKENS
+    ? Number.parseInt(process.env.LLM_MAX_TOKENS, 10)
+    : undefined;
+  const envMaxTokens = Number.isFinite(parsedEnvMaxTokens)
+    ? parsedEnvMaxTokens
+    : undefined;
 
   return {
     version: overrides.version,
     full: overrides.full ?? DEFAULT_ENHANCER_CONFIG.full,
+
     enhanceComponents:
       overrides.enhanceComponents ?? DEFAULT_ENHANCER_CONFIG.enhanceComponents,
     generateGuides:
@@ -153,6 +171,9 @@ export function resolveEnhancerConfig(
       overrides.maxRetries ?? envRetries ?? DEFAULT_ENHANCER_CONFIG.maxRetries,
     baseDelayMs: overrides.baseDelayMs ?? DEFAULT_ENHANCER_CONFIG.baseDelayMs,
     temperature: overrides.temperature ?? DEFAULT_ENHANCER_CONFIG.temperature,
+    // undefined is a valid resolved value ⇒ provider uses the model ceiling.
+    maxTokens: overrides.maxTokens ?? envMaxTokens,
     verbose: overrides.verbose ?? DEFAULT_ENHANCER_CONFIG.verbose,
   };
 }
+

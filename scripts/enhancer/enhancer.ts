@@ -399,8 +399,10 @@ type GuideMessageBuilder = (context: {
   spec: GuideSpec;
   allComponentNames: string[];
   componentSummaries: ComponentSummary[];
+  targetComponents: ComponentEntry[];
   version: string;
 }) => Parameters<LLMProvider['chat']>[0];
+
 
 /**
  * Generate a set of GuideEntry items for a catalog using a message builder.
@@ -426,8 +428,10 @@ async function generateGuides(
         spec,
         allComponentNames,
         componentSummaries: summaries,
+        targetComponents: [],
         version: config.version,
       });
+
       const response = await provider.chat(messages, {
         temperature: config.temperature,
         responseFormat: 'json',
@@ -470,8 +474,10 @@ async function generatePatterns(
         spec,
         allComponentNames,
         componentSummaries: summaries,
+        targetComponents: [],
         version: config.version,
       });
+
       const response = await provider.chat(messages, {
         temperature: config.temperature,
         responseFormat: 'json',

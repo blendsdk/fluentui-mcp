@@ -169,7 +169,16 @@ export interface GuideSpec {
    * collection name; for patterns it is the pattern group (forms, layout…).
    */
   group: string;
+
+  /**
+   * Optional component IDs this guide focuses on. When present, the
+   * orchestrator resolves these to full {@link ComponentEntry} data
+   * ({@link GuideGenerationContext.targetComponents}) and injects their
+   * complete API surface at full fidelity. Unknown ids are skipped.
+   */
+  targetComponentIds?: string[];
 }
+
 
 /**
  * Context supplied to guide-generation prompts.
@@ -184,15 +193,43 @@ export interface GuideGenerationContext {
   /** All component names available for cross-referencing */
   allComponentNames: string[];
 
-  /** Compact component summaries (name + import + key props) for grounding */
+  /** Full component summaries (props/slots/relationships) for grounding */
   componentSummaries: ComponentSummary[];
+
+  /**
+   * Full component entries this guide focuses on (resolved from
+   * `spec.targetComponentIds`). Injected at full fidelity so the guide
+   * composes their real APIs. Empty when the spec declares no targets.
+   */
+  targetComponents: ComponentEntry[];
 
   /** The version being enhanced (e.g., 'v9') */
   version: string;
 }
 
 /**
- * A compact summary of a component used as grounding context in guide prompts.
+ * A single prop entry in a {@link ComponentSummary} (name + type + required).
+ */
+export interface ComponentSummaryProp {
+  name: string;
+  type: string;
+  required: boolean;
+}
+
+/**
+ * A single slot entry in a {@link ComponentSummary} (name + element type).
+ */
+export interface ComponentSummarySlot {
+  name: string;
+  elementType: string;
+}
+
+/**
+ * A full summary of a component used as grounding context in guide prompts.
+ *
+ * Carries the complete API surface — every prop (with type), every slot,
+ * related components, and additional package exports — so generated guides
+ * reference real, complete APIs (no truncation).
  */
 export interface ComponentSummary {
   /** Component display name */
@@ -204,9 +241,19 @@ export interface ComponentSummary {
   /** Full import statement */
   importStatement: string;
 
-  /** A handful of representative prop names */
-  keyProps: string[];
+  /** Every prop with name + type + required flag (no cap). */
+  props: ComponentSummaryProp[];
+
+  /** Every slot with name + elementType. */
+  slots: ComponentSummarySlot[];
+
+  /** Related component names. */
+  relatedComponents: string[];
+
+  /** Additional package exports (hooks, types). */
+  additionalExports: string[];
 }
+
 
 // ============================================================================
 // Merge Types

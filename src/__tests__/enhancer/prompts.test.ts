@@ -113,9 +113,11 @@ function makeGuideContext(): GuideGenerationContext {
     spec: { id: 'getting-started', title: 'Getting Started', group: 'foundation' },
     allComponentNames: components.map((c) => c.name),
     componentSummaries: buildComponentSummaries(components),
+    targetComponents: [],
     version: 'v9',
   };
 }
+
 
 describe('guide prompt builders', () => {
   it('foundation guide includes the guide id and component inventory', () => {
@@ -151,7 +153,7 @@ describe('guide prompt builders', () => {
 // ============================================================================
 
 describe('component summaries', () => {
-  it('prefers required props and caps the count', () => {
+  it('carries every prop (no cap) with name, type, and required flag', () => {
     const component = createComponentEntry('Demo', {
       props: [
         { name: 'a', type: 'string', required: false, description: '', deprecated: false, inherited: false, source: 'X' },
@@ -164,27 +166,40 @@ describe('component summaries', () => {
       ],
     });
     const summary = toComponentSummary(component);
-    // Required props come first.
-    expect(summary.keyProps[0]).toBe('b');
-    expect(summary.keyProps[1]).toBe('c');
-    // Capped at 6.
-    expect(summary.keyProps).toHaveLength(6);
+    // All seven props are present (no KEY_PROPS_LIMIT cap).
+    expect(summary.props).toHaveLength(7);
+    expect(summary.props.map((p) => p.name)).toEqual([
+      'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    ]);
+    expect(summary.props[1]).toEqual({ name: 'b', type: 'string', required: true });
   });
 
-  it('serializes summaries into a readable block', () => {
+  it('serializes summaries into a full, structured block', () => {
     const summaries: ComponentSummary[] = [
       {
         name: 'Button',
         category: 'buttons',
         importStatement: "import { Button } from '@fluentui/react-components'",
-        keyProps: ['appearance', 'size'],
+        props: [
+          { name: 'appearance', type: "'primary' | 'secondary'", required: false },
+          { name: 'size', type: "'small' | 'large'", required: false },
+        ],
+        slots: [{ name: 'root', elementType: 'button' }],
+        relatedComponents: ['ToggleButton'],
+        additionalExports: ['buttonClassNames'],
       },
     ];
     const text = serializeComponentSummaries(summaries);
     expect(text).toContain('Button (buttons)');
-    expect(text).toContain('props: appearance, size');
+    expect(text).toContain('appearance');
+    expect(text).toContain("'primary' | 'secondary'");
+    expect(text).toContain('size');
+    expect(text).toContain('root');
+    expect(text).toContain('ToggleButton');
+    expect(text).toContain('buttonClassNames');
   });
 });
+
 
 // ============================================================================
 // Response Parsing

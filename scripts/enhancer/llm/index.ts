@@ -25,6 +25,16 @@ export {
 export { OpenAIProvider, DEFAULT_OPENAI_MODEL } from './openai.js';
 export { AnthropicProvider, DEFAULT_ANTHROPIC_MODEL } from './anthropic.js';
 
+export {
+  MODEL_OUTPUT_CEILINGS,
+  FALLBACK_OUTPUT_CEILING,
+  resolveMaxTokens,
+} from './ceilings.js';
+
+export type { CompleteOptions, CompleteResponse } from './complete.js';
+export { chatComplete } from './complete.js';
+
+
 export type {
   BatchItemResult,
   BatchRunResult,

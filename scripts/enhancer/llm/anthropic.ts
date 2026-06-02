@@ -22,6 +22,7 @@ import type {
   ProviderConfig,
 } from './provider.js';
 import { LLMError, isRetryableStatus } from './provider.js';
+import { resolveMaxTokens } from './ceilings.js';
 
 /** Default Anthropic model used when none is configured. */
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-3-5-sonnet-latest';
@@ -32,11 +33,6 @@ const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com/v1';
 /** Anthropic API version header value. */
 const ANTHROPIC_VERSION = '2023-06-01';
 
-/**
- * The Messages API requires max_tokens; use this when the caller doesn't
- * specify one.
- */
-const DEFAULT_MAX_TOKENS = 4096;
 
 /**
  * Shape of the relevant fields in an Anthropic messages response.
@@ -106,8 +102,11 @@ export class AnthropicProvider implements LLMProvider {
     const body: Record<string, unknown> = {
       model: this.model,
       messages: conversation,
-      max_tokens: options?.maxTokens ?? DEFAULT_MAX_TOKENS,
+      // max_tokens is REQUIRED; resolve against the model ceiling so an unset
+      // value asks for the model maximum and over-limit requests are clamped.
+      max_tokens: resolveMaxTokens(this.model, options?.maxTokens),
     };
+
 
     if (systemPrompt) {
       body.system = systemPrompt;

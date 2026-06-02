@@ -3,7 +3,9 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-06-02 15:23 (preflight fixes folded in — see 00-preflight-report.md)
-> **Progress**: 0/32 tasks (0%)
+> **Progress**: 17/32 tasks (53%) — Phases 1-2 complete (2026-06-02)
+
+
 > **CodeOps Version**: (codeops-mcp unavailable this session)
 
 
@@ -210,27 +212,29 @@ spec-test-first ordering.
 > 4. If missing/incomplete, reconstruct from the phase tables above.
 > 5. Never batch updates — update immediately after each task.
 
-### Phase 1: LLM Output Capacity
-- [ ] 1.1.1 Write spec tests ST-1..ST-10, ST-9b/9c, ST-6b/6c
-- [ ] 1.1.2 Verify spec tests FAIL (red)
-- [ ] 1.1.3 Add parse.ts JSON-completeness/repair helpers
-- [ ] 1.1.4 Add optional maxTokens to config + env resolution (NaN-guarded)
-- [ ] 1.1.5a Add model-aware ceiling lookup (ceilings.ts)
-- [ ] 1.1.5b Wire resolveMaxTokens into both providers (clamp; send max_tokens always)
-- [ ] 1.1.6 Add chatComplete escalation ladder (continuation → re-request → repair + repairsUsed)
-- [ ] 1.1.7 Verify spec tests PASS (green)
-- [ ] 1.1.8 Write impl tests
-- [ ] 1.1.9 Full verification
+### Phase 1: LLM Output Capacity ✅ (2026-06-02)
+- [x] 1.1.1 Write spec tests ST-1..ST-10, ST-9b/9c, ST-6b/6c
+- [x] 1.1.2 Verify spec tests FAIL (red)
+- [x] 1.1.3 Add parse.ts JSON-completeness/repair helpers
+- [x] 1.1.4 Add optional maxTokens to config + env resolution (NaN-guarded)
+- [x] 1.1.5a Add model-aware ceiling lookup (ceilings.ts)
+- [x] 1.1.5b Wire resolveMaxTokens into both providers (clamp; send max_tokens always)
+- [x] 1.1.6 Add chatComplete escalation ladder (continuation → re-request → repair + repairsUsed)
+- [x] 1.1.7 Verify spec tests PASS (green)
+- [x] 1.1.8 Write impl tests
+- [x] 1.1.9 Full verification (build clean; 739 tests pass)
 
-### Phase 2: Grounding Data Layer
-- [ ] 2.1.1 Write spec tests ST-11..ST-17, ST-17b/17c
-- [ ] 2.1.2 Verify spec tests FAIL (red)
-- [ ] 2.1.3 Remove cap; enrich ComponentSummary; rewrite serializers
-- [ ] 2.1.4 Full story code + compositions in component serialization
-- [ ] 2.1.5 Add targetComponentIds/targetComponents plumbing
-- [ ] 2.1.5b Add input-budget guard (estimateTokens + degrade non-targeted inventory)
-- [ ] 2.1.6 Verify spec tests PASS (green)
-- [ ] 2.1.7 Full verification
+
+### Phase 2: Grounding Data Layer ✅ (2026-06-02)
+- [x] 2.1.1 Write spec tests ST-11..ST-17, ST-17b/17c
+- [x] 2.1.2 Verify spec tests FAIL (red)
+- [x] 2.1.3 Remove cap; enrich ComponentSummary; rewrite serializers
+- [x] 2.1.4 Full story code + compositions in component serialization
+- [x] 2.1.5 Add targetComponentIds/targetComponents plumbing
+- [x] 2.1.5b Add input-budget guard (estimateTokens + degrade non-targeted inventory)
+- [x] 2.1.6 Verify spec tests PASS (green)
+- [x] 2.1.7 Full verification (build clean; 752 tests pass)
+
 
 ### Phase 3: Schema Expansion
 - [ ] 3.1.1 Write mapping spec tests ST-18..ST-19
