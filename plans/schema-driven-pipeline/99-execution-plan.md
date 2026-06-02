@@ -904,7 +904,8 @@ This document defines the execution phases and AI chat sessions for implementati
 
 ### Phase 15: Initial Data Generation
 - [x] 15.1.1-15.1.5 Scrape real FluentUI ✅ (completed: 2026-06-02 — sparse-cloned microsoft/fluentui to /tmp; `yarn scrape --version v9 --source /tmp/fluentui` → 62 components, 4 utilities, 473 props, 767 stories, 55 stable / 7 unstable. Fixed three latent issues surfaced by real data: (1) v9-adapter import bug `extractApiProps`→`extractPropsFromApiMd`; (2) `readPackageJson` now falls back to `library/package.json` (vNext layout); (3) new `resolveExportsIndexPath` tolerates umbrella `src/index.ts` vs `library/src/index.ts`. Added `.env`/`.env.example` support to scrape/enhance scripts (`node --env-file-if-exists`). +4 regression tests; 776 tests, 35 files. NOTE: contrib repo not cloned (15.1.2) — deferred to enhancer session / optional)
-- [ ] 15.2.1-15.2.4 Enhance and validate
+- [x] 15.2.1-15.2.4 Enhance and validate ✅ (completed: 2026-06-02 — `yarn enhance --version v9 --full` with OpenAI provider via `.env` → `data/v9/fluentui-schema-enhanced.json` (3.0 MB). Result: 62/62 components enhanced, 4/4 utilities, 16 guides (6 foundation + 5 enterprise + 5 quick-ref), 15 patterns, **0 failures** in ~339s. Validation: `loadSchema({version:'v9'})` → 0 errors / 0 warnings; spot-checked Button (accurate description, correct `@fluentui/react-components` import, dos/don'ts, a11y, common patterns). MCP server smoke test via `createServerState` + `dispatchToolCall`: all 12 tools registered, `query_component`/`search_docs`/`get_implementation_guide` return correct output against real schema. Enhancer improvement: added per-item progress logging (component/utility/guide/pattern names + ✓ completion counts via `runBatch` `onProgress`) per user feedback. Build clean, 776 tests / 35 files pass)
+
 
 ### Phase 16: Cleanup
 - [ ] 16.1.1 Remove legacy indexer code
