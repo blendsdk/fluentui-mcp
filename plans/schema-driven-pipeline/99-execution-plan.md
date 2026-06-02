@@ -729,15 +729,16 @@ This document defines the execution phases and AI chat sessions for implementati
 | 15.2.4 | Fix any enhancer issues discovered | Various |
 
 **Deliverables**:
-- [ ] Enhanced v9 schema with LLM-enriched content
-- [ ] MCP server works with real data
-- [ ] All tests passing
+- [x] Enhanced v9 schema with LLM-enriched content ✅ (completed: 2026-06-02 — 62/62 components, 4/4 utilities, 16 guides, 15 patterns, 0 failures; `data/v9/fluentui-schema-enhanced.json` 3.0 MB)
+- [x] MCP server works with real data ✅ (completed: 2026-06-02 — loadSchema 0 errors/0 warnings; all 12 tools verified via createServerState + dispatchToolCall)
+- [x] All tests passing ✅ (completed: 2026-06-02 — build clean; 776 tests, 35 files. Also added enhancer per-item progress logging per user feedback)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
 ---
 
 ## Phase 16: Legacy Cleanup & Final Verification
+
 
 ### Session 16.1: Cleanup & Documentation
 
@@ -756,10 +757,10 @@ This document defines the execution phases and AI chat sessions for implementati
 | 16.1.7 | Version bump in package.json (1.2.0 — backward-compatible MCP API, internal refactor) | `package.json` |
 
 **Deliverables**:
-- [ ] Legacy code removed
-- [ ] Documentation updated
-- [ ] All tests passing
-- [ ] Ready for npm publish
+- [x] Legacy code removed ✅ (completed: 2026-06-02 — removed `src/indexer/` and `src/__tests__/indexer/`)
+- [x] Documentation updated ✅ (completed: 2026-06-02 — README + DOCS-MAINTENANCE rewritten for schema-driven pipeline)
+- [x] All tests passing ✅ (completed: 2026-06-02 — 701 tests / 30 files pass, build clean)
+- [x] Ready for npm publish ✅ (completed: 2026-06-02 — version bumped to 1.2.0, npm-check-updates moved to devDependencies)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -908,12 +909,12 @@ This document defines the execution phases and AI chat sessions for implementati
 
 
 ### Phase 16: Cleanup
-- [ ] 16.1.1 Remove legacy indexer code
-- [ ] 16.1.2 Remove legacy tests
-- [ ] 16.1.3 Update README
-- [ ] 16.1.4 Update maintenance docs
-- [ ] 16.1.5 Final build & test
-- [ ] 16.1.6 Version bump to 1.2.0
+- [x] 16.1.1 Remove legacy indexer code ✅ (completed: 2026-06-02 — deleted `src/indexer/` incl. deprecated search-engine re-export shim)
+- [x] 16.1.2 Remove legacy tests ✅ (completed: 2026-06-02 — deleted `src/__tests__/indexer/`)
+- [x] 16.1.3 Update README ✅ (completed: 2026-06-02 — schema-driven architecture, FLUENTUI_SCHEMA_PATH, regenerate-schema + project-structure sections)
+- [x] 16.1.4 Update maintenance docs ✅ (completed: 2026-06-02 — DOCS-MAINTENANCE rewritten around scraper/enhancer pipeline + schema structure)
+- [x] 16.1.5 Final build & test ✅ (completed: 2026-06-02 — build clean; 701 tests / 30 files pass)
+- [x] 16.1.6 Move npm-check-updates to devDependencies + version bump to 1.2.0 ✅ (completed: 2026-06-02)
 
 ---
 

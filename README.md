@@ -119,9 +119,9 @@ You can even run multiple versions simultaneously:
 }
 ```
 
-### Custom Documentation Path
+### Custom Schema Path
 
-Point to your own documentation folder:
+Point to your own enhanced schema file:
 
 ```json
 {
@@ -129,12 +129,13 @@ Point to your own documentation folder:
         "fluentui-docs": {
             "command": "fluentui-mcp",
             "env": {
-                "FLUENTUI_DOCS_PATH": "/path/to/your/docs"
+                "FLUENTUI_SCHEMA_PATH": "/path/to/your/fluentui-schema-enhanced.json"
             }
         }
     }
 }
 ```
+
 
 ---
 
@@ -171,7 +172,22 @@ Point to your own documentation folder:
 
 ## How It Works
 
-### Architecture
+The server is powered by a **schema-driven pipeline**. Instead of parsing
+markdown at runtime, a single pre-built JSON schema bundles all FluentUI
+documentation. That schema is generated offline by a two-stage pipeline:
+
+```
+┌─────────────┐   ┌──────────────┐   ┌─────────────────────────┐
+│   Scraper   │ → │   Enhancer   │ → │  fluentui-schema-       │
+│ (ts-morph)  │   │  (LLM-based) │   │  enhanced.json (bundled)│
+└─────────────┘   └──────────────┘   └─────────────────────────┘
+   Extracts          Adds AI            Single source of truth
+   props/slots/      descriptions,      shipped with the package
+   stories from      best practices,
+   FluentUI source   a11y, patterns
+```
+
+At runtime the MCP server simply loads and serves that schema:
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -181,34 +197,39 @@ Point to your own documentation folder:
 │            12 Specialized Tools                  │
 │   query │ search │ suggest │ guide │ ...         │
 ├──────────────────────────────────────────────────┤
-│         In-Memory Document Store                 │
-│   ┌───────────┐ ┌────────────┐ ┌──────────┐      │
-│   │ Documents │ │ Categories │ │  Search  │      │
-│   │   Map     │ │   Index    │ │  Index   │      │
-│   └───────────┘ └────────────┘ └──────────┘      │
+│              Formatters Layer                    │
+│  component │ guide │ pattern │ props │ list │ …  │
 ├──────────────────────────────────────────────────┤
-│   Scanner │ Metadata Extractor │ Search Engine   │
+│          In-Memory Schema Store + Search         │
+│   ┌────────────┐ ┌────────────┐ ┌──────────┐     │
+│   │   Schema   │ │ Categories │ │  Search  │     │
+│   │   Store    │ │   Index    │ │  Index   │     │
+│   └────────────┘ └────────────┘ └──────────┘     │
 ├──────────────────────────────────────────────────┤
-│         Bundled Documentation (Markdown)         │
-│  Foundation │ Components │ Patterns │ Enterprise │
+│      Schema Loader │ Validator │ Search Engine    │
+├──────────────────────────────────────────────────┤
+│      Bundled Schema (fluentui-schema-enhanced)   │
+│   Components │ Utilities │ Guides │ Patterns      │
 └──────────────────────────────────────────────────┘
 ```
 
-### Indexing Strategy
+### Loading Strategy
 
-1. **Startup**: Server scans the docs folder recursively (< 1 second)
-2. **Index**: Builds in-memory search index with TF-IDF scoring
-3. **Serve**: All tool calls served from memory (instant, no disk I/O)
-4. **Reindex**: The `reindex` tool can refresh the index on demand
+1. **Startup**: Server loads the bundled enhanced schema JSON (< 1 second)
+2. **Validate**: Schema is validated; any structural issues are reported to stderr
+3. **Index**: Builds an in-memory search index with TF-IDF scoring
+4. **Serve**: All tool calls served from memory (instant, no disk I/O)
+5. **Reindex**: The `reindex` tool can rebuild the index on demand
 
-### Documentation Coverage
+### Schema Coverage (FluentUI v9)
 
-| Module         | Content                                                              | Files |
+| Section        | Content                                                              | Count |
 | -------------- | -------------------------------------------------------------------- | ----- |
-| **Foundation** | Setup, theming, styling, architecture, accessibility                 | 7     |
-| **Components** | 47+ component docs with props, examples, best practices              | 50+   |
-| **Patterns**   | Form patterns, layout patterns, navigation, modals, state management | 30+   |
-| **Enterprise** | App shells, dashboards, admin UIs, data-heavy apps, WCAG compliance  | 15+   |
+| **Components** | Props, slots, stories, AI descriptions, best practices, a11y         | 62    |
+| **Utilities**  | Hooks and helper exports with parameter references                   | 4     |
+| **Guides**     | Foundation, enterprise, and quick-reference guides                   | 16    |
+| **Patterns**   | Form, layout, navigation, modal, and state-management patterns       | 15    |
+
 
 ---
 
@@ -278,41 +299,27 @@ yarn test:coverage  # Coverage report
 
 ```
 fluentui-mcp/
-├── src/
-│   ├── index.ts                # MCP server entry point
+├── src/                        # MCP server (runtime)
+│   ├── index.ts                # stdio transport entry point
+│   ├── server.ts               # Tool definitions, state, dispatch
 │   ├── config.ts               # Configuration resolver
-│   ├── types/
-│   │   └── index.ts            # TypeScript type definitions
-│   ├── indexer/
-│   │   ├── scanner.ts          # Recursive docs directory scanner
-│   │   ├── metadata-extractor.ts # Markdown metadata extraction
-│   │   ├── document-store.ts   # In-memory document store
+│   ├── types/                  # Schema + shared TypeScript types
+│   ├── schema/
+│   │   ├── schema-loader.ts    # Resolves & loads the bundled schema
+│   │   ├── schema-store.ts     # In-memory schema store + indexes
+│   │   └── schema-validator.ts # Structural schema validation
+│   ├── search/
 │   │   ├── search-engine.ts    # TF-IDF search engine
-│   │   └── index-builder.ts    # Orchestrates indexing at startup
-│   ├── tools/
-│   │   ├── query-component.ts
-│   │   ├── search-docs.ts
-│   │   ├── list-by-category.ts
-│   │   ├── get-foundation.ts
-│   │   ├── get-pattern.ts
-│   │   ├── get-enterprise.ts
-│   │   ├── suggest-components.ts
-│   │   ├── get-implementation-guide.ts
-│   │   ├── get-component-examples.ts
-│   │   ├── get-props-reference.ts
-│   │   ├── list-all-docs.ts
-│   │   └── reindex.ts
-│   └── __tests__/
-│       ├── indexer/
-│       ├── tools/
-│       └── e2e/
-├── docs/
-│   └── v9/                     # Bundled FluentUI v9 documentation
-│       ├── 00-overview.md
-│       ├── 01-foundation/
-│       ├── 02-components/
-│       ├── 03-patterns/
-│       └── 04-enterprise/
+│   │   └── search-index.ts     # In-memory search index
+│   ├── formatters/             # Render schema entries → markdown
+│   └── tools/                  # 12 MCP tool implementations
+├── scripts/                    # Offline schema pipeline (build-time)
+│   ├── scraper/                # ts-morph extraction from FluentUI source
+│   └── enhancer/               # LLM enrichment + guide/pattern generation
+├── data/
+│   └── v9/
+│       ├── fluentui-schema.json          # Raw scraped schema
+│       └── fluentui-schema-enhanced.json # Enhanced schema (shipped)
 ├── package.json
 ├── tsconfig.json
 └── vitest.config.ts
@@ -322,31 +329,36 @@ fluentui-mcp/
 
 ## Configuration
 
-| Source                       | Priority                    | Example                       |
-| ---------------------------- | --------------------------- | ----------------------------- |
-| CLI argument                 | Highest                     | `fluentui-mcp v9`             |
-| `FLUENTUI_VERSION` env var   | Medium                      | `FLUENTUI_VERSION=v9`         |
-| `FLUENTUI_DOCS_PATH` env var | Highest (overrides version) | `FLUENTUI_DOCS_PATH=/my/docs` |
-| Default                      | Lowest                      | Bundled v9 docs               |
+| Source                         | Priority                     | Example                                |
+| ------------------------------ | ---------------------------- | -------------------------------------- |
+| CLI argument                   | Medium (version)             | `fluentui-mcp v9`                      |
+| `FLUENTUI_VERSION` env var     | Medium                       | `FLUENTUI_VERSION=v9`                  |
+| `FLUENTUI_SCHEMA_PATH` env var | Highest (overrides version)  | `FLUENTUI_SCHEMA_PATH=/my/schema.json` |
+| Default                        | Lowest                       | Bundled v9 enhanced schema             |
 
 ---
 
-## Adding Documentation for New Versions
+## Regenerating the Schema
 
-To add documentation for a new FluentUI version:
+The bundled schema is generated offline by the scraper + enhancer pipeline.
+Enrichment requires an LLM provider — set `LLM_PROVIDER` (`openai` or
+`anthropic`) and the matching API key in a local `.env` file (see
+`.env.example`).
 
-1. Create a new folder: `docs/v10/` (or whatever version)
-2. Follow the same folder structure as `docs/v9/`:
-    ```
-    docs/v10/
-    ├── 00-overview.md
-    ├── 01-foundation/
-    ├── 02-components/
-    ├── 03-patterns/
-    └── 04-enterprise/
-    ```
-3. The server automatically discovers and indexes all markdown files
-4. Use `fluentui-mcp v10` to serve the new version
+```bash
+# 1. Scrape props/slots/stories from FluentUI source (clones the repo)
+yarn scrape --version v9 --clone
+
+# 2. Enhance with AI descriptions, best practices, a11y, and guides
+yarn enhance --version v9 --full
+
+# Or run the whole pipeline (scrape → enhance → build → test) in one step:
+yarn pipeline:full
+```
+
+The enhancer is incremental: it hashes each source entry and only re-runs the
+LLM for entries that changed. Use `--dry-run` to preview a diff without making
+any LLM calls.
 
 ---
 
@@ -361,15 +373,16 @@ To add documentation for a new FluentUI version:
 
 ### Tool Errors
 
-1. **"Documentation path not found"**: Check version exists in `docs/` folder
+1. **"Schema not found"**: Check the version exists under `data/` or set `FLUENTUI_SCHEMA_PATH`
 2. **"Component not found"**: Try `search_docs` with broader terms
 3. **Search returning no results**: Try `reindex` to rebuild the search index
 
 ### Performance
 
--   First query: < 100ms (served from memory after startup indexing)
+-   First query: < 100ms (served from memory after startup load)
 -   Search queries: < 50ms (pre-built TF-IDF index)
--   Startup indexing: < 1 second for ~100 markdown files
+-   Startup: < 1 second to load and index the bundled schema
+
 
 ---
 
