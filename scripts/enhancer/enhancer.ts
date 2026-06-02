@@ -184,11 +184,15 @@ export async function runEnhancement(
   }));
 
   if (config.enhanceComponents) {
-    log(`Pass 1: enhancing ${componentsToEnhance.length} components`);
+    const componentTotal = componentsToEnhance.length;
+    log(`Pass 1: enhancing ${componentTotal} components`);
     const enhanceSet = new Set(componentsToEnhance.map((c) => c.id));
 
+    let componentStarted = 0;
     const componentResults = await runBatch(
       componentsToEnhance.map((component) => async () => {
+        const n = (componentStarted += 1);
+        log(`  [${n}/${componentTotal}] component → ${component.name}`);
         const messages = buildComponentEnhanceMessages({
           component,
           allComponentNames,
@@ -204,8 +208,13 @@ export async function runEnhancement(
           enhanced: mapComponentEnhanced(raw, hashIndex[component.id]),
         };
       }),
-      batchOptions(config),
+      {
+        ...batchOptions(config),
+        onProgress: (completed, total) =>
+          log(`  ✓ components ${completed}/${total} done`),
+      },
     );
+
 
     const enhancedById = new Map<string, ComponentEnhanced>();
     for (const item of componentResults.items) {
@@ -249,11 +258,15 @@ export async function runEnhancement(
   }));
 
   if (config.enhanceComponents) {
-    log(`Pass 1: enhancing ${utilitiesToEnhance.length} utilities`);
+    const utilityTotal = utilitiesToEnhance.length;
+    log(`Pass 1: enhancing ${utilityTotal} utilities`);
     const enhanceSet = new Set(utilitiesToEnhance.map((u) => u.id));
 
+    let utilityStarted = 0;
     const utilityResults = await runBatch(
       utilitiesToEnhance.map((utility) => async () => {
+        const n = (utilityStarted += 1);
+        log(`  [${n}/${utilityTotal}] utility → ${utility.name}`);
         const messages = buildUtilityEnhanceMessages({
           utility,
           allComponentNames,
@@ -269,8 +282,13 @@ export async function runEnhancement(
           enhanced: mapUtilityEnhanced(raw, hashIndex[utility.id]),
         };
       }),
-      batchOptions(config),
+      {
+        ...batchOptions(config),
+        onProgress: (completed, total) =>
+          log(`  ✓ utilities ${completed}/${total} done`),
+      },
     );
+
 
     const enhancedById = new Map<string, UtilityEnhanced>();
     for (const item of utilityResults.items) {
@@ -324,6 +342,8 @@ export async function runEnhancement(
       config,
       summaries,
       buildFoundationGuideMessages,
+      log,
+      'foundation',
     );
     enterprise = await generateGuides(
       ENTERPRISE_GUIDES,
@@ -331,6 +351,8 @@ export async function runEnhancement(
       config,
       summaries,
       buildEnterpriseGuideMessages,
+      log,
+      'enterprise',
     );
     quickReference = await generateGuides(
       QUICK_REFERENCE_GUIDES,
@@ -338,13 +360,17 @@ export async function runEnhancement(
       config,
       summaries,
       buildQuickReferenceMessages,
+      log,
+      'quick-ref',
     );
     patterns = await generatePatterns(
       PATTERN_GUIDES,
       provider,
       config,
       summaries,
+      log,
     );
+
 
     stats.guidesGenerated =
       foundation.length + enterprise.length + quickReference.length;
@@ -385,11 +411,17 @@ async function generateGuides(
   config: EnhancerConfig,
   summaries: ComponentSummary[],
   buildMessages: GuideMessageBuilder,
+  log?: (msg: string) => void,
+  label = 'guide',
 ): Promise<GuideEntry[]> {
   const allComponentNames = summaries.map((s) => s.name);
+  const total = specs.length;
 
+  let started = 0;
   const results = await runBatch(
     specs.map((spec) => async () => {
+      const n = (started += 1);
+      log?.(`  [${n}/${total}] ${label} → ${spec.title}`);
       const messages = buildMessages({
         spec,
         allComponentNames,
@@ -403,13 +435,18 @@ async function generateGuides(
       const raw = parseJsonResponse<RawGuide>(response.content);
       return mapGuideEntry(spec, raw);
     }),
-    batchOptions(config),
+    {
+      ...batchOptions(config),
+      onProgress: (completed, t) =>
+        log?.(`  ✓ ${label} ${completed}/${t} done`),
+    },
   );
 
   return results.items
     .filter((item) => item.ok && item.result)
     .map((item) => item.result as GuideEntry);
 }
+
 
 /**
  * Generate PatternEntry items for the pattern catalog.
@@ -419,11 +456,16 @@ async function generatePatterns(
   provider: LLMProvider,
   config: EnhancerConfig,
   summaries: ComponentSummary[],
+  log?: (msg: string) => void,
 ): Promise<PatternEntry[]> {
   const allComponentNames = summaries.map((s) => s.name);
+  const total = specs.length;
 
+  let started = 0;
   const results = await runBatch(
     specs.map((spec) => async () => {
+      const n = (started += 1);
+      log?.(`  [${n}/${total}] pattern → ${spec.title}`);
       const messages = buildPatternGuideMessages({
         spec,
         allComponentNames,
@@ -437,13 +479,18 @@ async function generatePatterns(
       const raw = parseJsonResponse<RawPattern>(response.content);
       return mapPatternEntry(spec, raw);
     }),
-    batchOptions(config),
+    {
+      ...batchOptions(config),
+      onProgress: (completed, t) =>
+        log?.(`  ✓ pattern ${completed}/${t} done`),
+    },
   );
 
   return results.items
     .filter((item) => item.ok && item.result)
     .map((item) => item.result as PatternEntry);
 }
+
 
 // ============================================================================
 // Mapping Helpers
