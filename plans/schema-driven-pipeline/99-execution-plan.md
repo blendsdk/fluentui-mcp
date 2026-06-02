@@ -389,12 +389,13 @@ This document defines the execution phases and AI chat sessions for implementati
 | 8.1.6 | Create quick reference prompt | `scripts/enhancer/prompts/quick-reference.ts` |
 
 **Deliverables**:
-- [ ] All prompts defined with clear output format instructions
-- [ ] All tests passing
+- [x] All prompts defined with clear output format instructions ✅ (completed: 2026-06-02)
+- [x] All tests passing ✅ (completed: 2026-06-02)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
 ### Session 8.2: Enhancement Orchestrator
+
 
 **Objective**: Build the main enhancer that orchestrates Pass 1 (components) and Pass 2 (guides).
 
@@ -404,12 +405,13 @@ This document defines the execution phases and AI chat sessions for implementati
 |---|------|------|
 | 8.2.1 | Implement enhancer orchestrator (Pass 1: components, Pass 2: guides) | `scripts/enhancer/enhancer.ts` |
 | 8.2.2 | Implement enhancer configuration | `scripts/enhancer/config.ts` |
-| 8.2.3 | Add integration test with mock LLM provider | `src/__tests__/integration/enhancer-pipeline.test.ts` |
+| 8.2.3 | Add integration test with mock LLM provider | `src/__tests__/enhancer/enhancer.test.ts`, `src/__tests__/enhancer/prompts.test.ts` |
 
 **Deliverables**:
-- [ ] Enhancer orchestrates both passes
-- [ ] Integration test produces valid enhanced schema
-- [ ] All tests passing
+- [x] Enhancer orchestrates both passes ✅ (completed: 2026-06-02)
+- [x] Integration test produces valid enhanced schema ✅ (completed: 2026-06-02)
+- [x] All tests passing ✅ (560 tests, 23 files)
+
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -830,10 +832,11 @@ This document defines the execution phases and AI chat sessions for implementati
 
 
 ### Phase 8: Enhancer Prompts & Guides
-- [ ] 8.1.1-8.1.6 Create all prompt templates
-- [ ] 8.2.1 Implement enhancer orchestrator
-- [ ] 8.2.2 Implement enhancer config
-- [ ] 8.2.3 Add enhancer integration test
+- [x] 8.1.1-8.1.6 Create all prompt templates ✅ (completed: 2026-06-02 — component, utility, foundation, pattern, enterprise, quick-reference prompts + shared grounding + barrel)
+- [x] 8.2.1 Implement enhancer orchestrator ✅ (completed: 2026-06-02 — `scripts/enhancer/enhancer.ts`, two-pass, incremental carry-forward, batch-driven)
+- [x] 8.2.2 Implement enhancer config ✅ (completed: 2026-06-02 — `scripts/enhancer/config.ts` guide catalogs + runtime config; also `parse.ts` robust JSON parsing)
+- [x] 8.2.3 Add enhancer integration test ✅ (completed: 2026-06-02 — `enhancer.test.ts` 5 + `prompts.test.ts` 19 = 24 new tests)
+
 
 ### Phase 9: Enhancer CLI
 - [ ] 9.1.1 Implement CLI

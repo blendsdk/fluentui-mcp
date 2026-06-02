@@ -148,6 +148,67 @@ export interface UtilityEnhancementResult {
 }
 
 // ============================================================================
+// Guide Generation Types
+// ============================================================================
+
+/**
+ * Specification for a guide to generate (foundation, enterprise, quick ref).
+ *
+ * Drives Pass 2 of the enhancer. The orchestrator iterates these specs and
+ * asks the LLM to generate the corresponding guide content.
+ */
+export interface GuideSpec {
+  /** Stable guide ID (e.g., 'getting-started', 'theming') */
+  id: string;
+
+  /** Human-readable title */
+  title: string;
+
+  /**
+   * Grouping key. For foundation/enterprise/quick-reference this is the
+   * collection name; for patterns it is the pattern group (forms, layout…).
+   */
+  group: string;
+}
+
+/**
+ * Context supplied to guide-generation prompts.
+ *
+ * Provides the LLM the full component inventory so generated examples
+ * reference only real component names and import paths.
+ */
+export interface GuideGenerationContext {
+  /** The guide specification being generated */
+  spec: GuideSpec;
+
+  /** All component names available for cross-referencing */
+  allComponentNames: string[];
+
+  /** Compact component summaries (name + import + key props) for grounding */
+  componentSummaries: ComponentSummary[];
+
+  /** The version being enhanced (e.g., 'v9') */
+  version: string;
+}
+
+/**
+ * A compact summary of a component used as grounding context in guide prompts.
+ */
+export interface ComponentSummary {
+  /** Component display name */
+  name: string;
+
+  /** Component category */
+  category: string;
+
+  /** Full import statement */
+  importStatement: string;
+
+  /** A handful of representative prop names */
+  keyProps: string[];
+}
+
+// ============================================================================
 // Merge Types
 // ============================================================================
 

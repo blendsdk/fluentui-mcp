@@ -1,0 +1,63 @@
+/**
+ * Prompt for quick-reference guide generation (Pass 2).
+ *
+ * Quick-reference guides are concise cheatsheets and checklists (setup &
+ * imports, component cheatsheet, styling tokens, common patterns,
+ * accessibility checklist). They favor scannable tables and short snippets.
+ *
+ * @module enhancer/prompts/quick-reference
+ */
+
+import type { GuideGenerationContext } from '../types.js';
+import type { LLMMessage } from '../llm/provider.js';
+import { serializeComponentSummaries } from './shared.js';
+
+/**
+ * System prompt for quick-reference generation.
+ */
+export const QUICK_REFERENCE_SYSTEM_PROMPT = `You are a FluentUI v9 documentation expert.
+Generate a concise quick-reference cheatsheet for the requested topic.
+
+You MUST return ONLY valid JSON (no markdown fences) matching this structure:
+{
+  "content": "Concise markdown cheatsheet (tables, short snippets)",
+  "codeExamples": [
+    {
+      "title": "Example title",
+      "description": "What this snippet shows",
+      "code": "// Short TSX/CSS snippet",
+      "language": "tsx"
+    }
+  ],
+  "referencedComponents": ["Button", "Input"]
+}
+
+Rules:
+- Use REAL FluentUI component names and import paths from the provided inventory.
+- Prefer scannable tables and short, copy-pasteable snippets over prose.
+- Do NOT reference components that are not in the inventory.
+- Keep it concise — this is a cheatsheet, not a tutorial.`;
+
+/**
+ * Build the message array for generating a quick-reference guide.
+ *
+ * @param context - Guide generation context
+ * @returns Messages ready to pass to {@link LLMProvider.chat}
+ */
+export function buildQuickReferenceMessages(
+  context: GuideGenerationContext,
+): LLMMessage[] {
+  const userContent = [
+    `Version: ${context.version}`,
+    `Reference ID: ${context.spec.id}`,
+    `Reference title: ${context.spec.title}`,
+    '',
+    'Available components (use only these):',
+    serializeComponentSummaries(context.componentSummaries),
+  ].join('\n');
+
+  return [
+    { role: 'system', content: QUICK_REFERENCE_SYSTEM_PROMPT },
+    { role: 'user', content: userContent },
+  ];
+}
