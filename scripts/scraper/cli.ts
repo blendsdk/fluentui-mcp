@@ -15,9 +15,11 @@
 import { resolve } from 'node:path';
 
 import { getVersionConfig } from './config.js';
+import { cloneRepo, resolveCommit } from './clone.js';
 import { discoverPackages, discoverContribPackages } from './discover.js';
 import { V9Adapter } from './adapters/v9-adapter.js';
 import { writeSchema } from './output.js';
+
 import type { ScraperCliOptions, DiscoveredPackage } from './types.js';
 import type {
   ComponentEntry,
@@ -149,13 +151,43 @@ export function createAdapter(adapterType: string): ScraperAdapter {
  */
 export function runScraper(options: ScraperCliOptions): void {
   const config = getVersionConfig(options.version);
-  const sourcePath = resolve(options.source!);
+
+  // Resolve the source path. With --clone we shallow-clone the FluentUI repo
+  // (cached under .cache/) and treat the result like a --source checkout.
+  // With --source we use the provided local path directly.
+  let sourcePath: string;
+  let contribPath: string | undefined;
+  if (options.clone) {
+    sourcePath = cloneRepo({
+      repo: config.fluentui,
+      dirName: `fluentui-${config.version}`,
+      ref: options.ref,
+      reuse: options.reuse,
+      verbose: options.verbose,
+    });
+    // Clone the contrib repo too when a contrib ref is explicitly requested.
+    if (options.contribRef) {
+      contribPath = cloneRepo({
+        repo: config.contrib,
+        dirName: `fluentui-contrib-${config.version}`,
+        ref: options.contribRef,
+        reuse: options.reuse,
+        verbose: options.verbose,
+      });
+    }
+
+  } else {
+    sourcePath = resolve(options.source!);
+    contribPath = options.contrib ? resolve(options.contrib) : undefined;
+  }
+
   const outputPath =
     options.output ?? `data/${config.version}/fluentui-schema.json`;
 
   if (options.verbose) {
     console.log(`Scraping FluentUI ${config.version} from ${sourcePath}`);
   }
+
 
   // Step 1: Discover packages in the main repo
   const packages = discoverPackages(sourcePath, config);
@@ -165,12 +197,13 @@ export function runScraper(options: ScraperCliOptions): void {
 
   // Step 1b: Discover contrib packages (optional)
   let contribPackages: DiscoveredPackage[] = [];
-  if (options.contrib) {
-    contribPackages = discoverContribPackages(resolve(options.contrib));
+  if (contribPath) {
+    contribPackages = discoverContribPackages(contribPath);
     if (options.verbose) {
       console.log(`Discovered ${contribPackages.length} contrib packages`);
     }
   }
+
 
   const allPackages = [...packages, ...contribPackages];
 
@@ -213,11 +246,12 @@ export function runScraper(options: ScraperCliOptions): void {
     // Skip 'internal' packages silently
   }
 
-  // Step 4: Build source info metadata
+  // Step 4: Build source info metadata. When the checkout came from a git
+  // clone we can resolve the real commit SHA; otherwise fall back to 'unknown'.
   const sourceInfo: SourceInfo = {
     repo: config.fluentui.repo,
     ref: options.ref ?? config.fluentui.defaultRef,
-    commit: 'unknown', // Real commit requires git; filled by CI
+    commit: resolveCommit(sourcePath),
     scrapedAt: new Date().toISOString(),
   };
 
@@ -229,16 +263,17 @@ export function runScraper(options: ScraperCliOptions): void {
     utilities,
     sources: {
       fluentui: sourceInfo,
-      contrib: options.contrib
+      contrib: contribPath
         ? {
             repo: config.contrib.repo,
             ref: options.contribRef ?? config.contrib.defaultRef,
-            commit: 'unknown',
+            commit: resolveCommit(contribPath),
             scrapedAt: new Date().toISOString(),
           }
         : undefined,
     },
   });
+
 
   // Step 6: Report results
   console.log('\nScraping complete!');
