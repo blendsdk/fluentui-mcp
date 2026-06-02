@@ -684,16 +684,17 @@ This document defines the execution phases and AI chat sessions for implementati
 | 14.1.4 | Update package.json files field (data/ instead of docs/) | `package.json` |
 
 **Deliverables**:
-- [ ] CI workflow defined
-- [ ] Update-docs workflow defined
-- [ ] Publish workflow updated
-- [ ] All tests passing
+- [x] CI workflow defined ✅ (completed: 2026-06-02 — `.github/workflows/ci.yml`: build + test matrix on Node 20/22, push/PR to main)
+- [x] Update-docs workflow defined ✅ (completed: 2026-06-02 — `.github/workflows/update-docs.yml`: workflow_dispatch, sparse-clone FluentUI + contrib, scrape → enhance → build → test → create-pull-request, schema artifact upload)
+- [x] Publish workflow updated ✅ (completed: 2026-06-02 — `.github/workflows/publish.yml`: verifies `data/` dir + valid enhanced schema JSON, asserts `data/` present in `npm pack`)
+- [x] All tests passing ✅ (completed: 2026-06-02 — build clean; 772 tests, 35 files; package.json `files` now ships `data/` instead of `docs/`)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
 ---
 
 ## Phase 15: Initial Data Generation & Validation
+
 
 ### Session 15.1: Run Scraper Against Real FluentUI
 
@@ -895,10 +896,11 @@ This document defines the execution phases and AI chat sessions for implementati
 - [x] 13.2.3 Verify all scenarios ✅ (completed: 2026-06-02 — build clean; 772 tests, 35 files)
 
 ### Phase 14: CI/CD
-- [ ] 14.1.1 Create CI workflow
-- [ ] 14.1.2 Create update-docs workflow
-- [ ] 14.1.3 Update publish workflow
-- [ ] 14.1.4 Update package.json files field
+- [x] 14.1.1 Create CI workflow ✅ (completed: 2026-06-02 — `.github/workflows/ci.yml`, Node 20/22 matrix, push/PR to main)
+- [x] 14.1.2 Create update-docs workflow ✅ (completed: 2026-06-02 — `.github/workflows/update-docs.yml`, dispatch + sparse-clone + scrape → enhance → PR)
+- [x] 14.1.3 Update publish workflow ✅ (completed: 2026-06-02 — `.github/workflows/publish.yml` verifies `data/` schema present in package)
+- [x] 14.1.4 Update package.json files field ✅ (completed: 2026-06-02 — `files` ships `data/` instead of `docs/`; 772 tests, 35 files)
+
 
 ### Phase 15: Initial Data Generation
 - [ ] 15.1.1-15.1.5 Scrape real FluentUI

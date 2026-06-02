@@ -98,8 +98,19 @@ jobs:
             - name: Run tests
               run: yarn test
 
+            - name: Verify schema data is present
+              run: |
+                  echo "Verifying data/ schema files are included in the package..."
+                  test -d data || { echo "::error::data/ directory is missing"; exit 1; }
+                  SCHEMA=$(find data -name 'fluentui-schema-enhanced.json' | head -n1)
+                  test -n "$SCHEMA" || { echo "::error::No enhanced schema found under data/"; exit 1; }
+                  node -e "JSON.parse(require('fs').readFileSync('$SCHEMA','utf-8')); console.log('Valid JSON schema:', '$SCHEMA')"
+
             - name: Verify package contents
-              run: npm pack --dry-run
+              run: |
+                  npm pack --dry-run 2>&1 | tee pack-output.txt
+                  grep -q "data/" pack-output.txt || { echo "::error::data/ not included in npm package"; exit 1; }
+
 
             - name: Publish to npm (dry run)
               if: ${{ github.event.inputs.dry_run == 'true' || github.event.inputs.dry_run == '' }}

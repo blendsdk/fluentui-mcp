@@ -9,7 +9,7 @@
   },
   "files": [
     "dist/",
-    "docs/",
+    "data/",
     "README.md",
     "LICENSE"
   ],
