@@ -100,8 +100,8 @@ This document defines the execution phases and AI chat sessions for implementati
 | 2.1.4 | Add unit tests for discovery | `src/__tests__/scraper/discover.test.ts` |
 
 **Deliverables**:
-- [ ] Package discovery works against mock fixtures
-- [ ] All tests passing
+- [x] Package discovery works against mock fixtures ✅ (completed: 2026-05-13 11:01)
+- [x] All tests passing (272 tests, 12 files) ✅ (completed: 2026-05-13 11:01)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -118,9 +118,9 @@ This document defines the execution phases and AI chat sessions for implementati
 | 2.2.3 | Add unit tests for classification | `src/__tests__/scraper/classify.test.ts` |
 
 **Deliverables**:
-- [ ] All known packages classified correctly
-- [ ] Unknown packages default to 'utilities'
-- [ ] All tests passing
+- [x] All known packages classified correctly ✅ (completed: 2026-05-13 11:03)
+- [x] Unknown packages default to 'utilities' ✅ (completed: 2026-05-13 11:03)
+- [x] All tests passing (341 tests, 13 files) ✅ (completed: 2026-05-13 11:03)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -144,10 +144,10 @@ This document defines the execution phases and AI chat sessions for implementati
 | 3.1.4 | Add unit tests for props extraction | `src/__tests__/scraper/props-extractor.test.ts` |
 
 **Deliverables**:
-- [ ] Props extracted from mock types files
-- [ ] JSDoc descriptions captured
-- [ ] Deprecated props detected
-- [ ] All tests passing
+- [x] Props extracted from mock types files ✅ (completed: 2026-05-13 11:08)
+- [x] JSDoc descriptions captured ✅ (completed: 2026-05-13 11:08)
+- [x] Deprecated props detected ✅ (completed: 2026-05-13 11:08)
+- [x] All tests passing (368 tests, 14 files) ✅ (completed: 2026-05-13 11:08)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -160,11 +160,11 @@ This document defines the execution phases and AI chat sessions for implementati
 | # | Task | File |
 |---|------|------|
 | 3.2.1 | Implement slots extraction (Slot<> generic parsing) | `scripts/scraper/extractors/slots-extractor.ts` |
-| 3.2.2 | Add unit tests for slots extraction | `src/__tests__/scraper/slots-extractor.test.ts` |
+| 3.2.2 | Add unit tests for slots extraction | `src/__tests__/scraper/extractors.test.ts` |
 
 **Deliverables**:
-- [ ] Slots extracted with element types and required status
-- [ ] All tests passing
+- [x] Slots extracted with element types and required status ✅ (completed: 2026-05-13 11:08)
+- [x] All tests passing ✅ (completed: 2026-05-13 11:08)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -177,12 +177,12 @@ This document defines the execution phases and AI chat sessions for implementati
 | # | Task | File |
 |---|------|------|
 | 3.3.1 | Implement .api.md file parser (regex-based) | `scripts/scraper/extractors/api-extractor-fallback.ts` |
-| 3.3.2 | Create mock .api.md files for testing | `src/__tests__/fixtures/` |
-| 3.3.3 | Add unit tests for fallback parser | `src/__tests__/scraper/api-extractor-fallback.test.ts` |
+| 3.3.2 | Create mock .api.md files for testing | `src/__tests__/fixtures/mock-fluentui/` |
+| 3.3.3 | Add unit tests for fallback parser | `src/__tests__/scraper/extractors.test.ts` |
 
 **Deliverables**:
-- [ ] Fallback parser extracts props from .api.md format
-- [ ] All tests passing
+- [x] Fallback parser extracts props from .api.md format ✅ (completed: 2026-05-13 11:08)
+- [x] All tests passing ✅ (completed: 2026-05-13 11:08)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -205,9 +205,9 @@ This document defines the execution phases and AI chat sessions for implementati
 | 4.1.3 | Add unit tests for story extraction | `src/__tests__/scraper/stories-extractor.test.ts` |
 
 **Deliverables**:
-- [ ] Stories extracted with name, description, full code, render code
-- [ ] Import statements captured
-- [ ] All tests passing
+- [x] Stories extracted with name, description, full code, render code ✅ (completed: 2026-05-13 11:12)
+- [x] Import statements captured ✅ (completed: 2026-05-13 11:12)
+- [x] All tests passing (396 tests, 15 files) ✅ (completed: 2026-05-13 11:12)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -221,12 +221,12 @@ This document defines the execution phases and AI chat sessions for implementati
 |---|------|------|
 | 4.2.1 | Implement default value extraction (destructuring, nullish coalescing) | `scripts/scraper/extractors/defaults-extractor.ts` |
 | 4.2.2 | Implement utility package extractor | `scripts/scraper/extractors/utility-extractor.ts` |
-| 4.2.3 | Add unit tests for defaults and utility extraction | `src/__tests__/scraper/defaults-extractor.test.ts` |
+| 4.2.3 | Add unit tests for defaults and utility extraction | `src/__tests__/scraper/stories-defaults.test.ts` |
 
 **Deliverables**:
-- [ ] Default values extracted from common patterns
-- [ ] Utility exports extracted
-- [ ] All tests passing
+- [x] Default values extracted from common patterns ✅ (completed: 2026-05-13 11:12)
+- [x] Utility exports extracted ✅ (completed: 2026-05-13 11:12)
+- [x] All tests passing ✅ (completed: 2026-05-13 11:12)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -250,9 +250,9 @@ This document defines the execution phases and AI chat sessions for implementati
 | 5.1.4 | Add unit tests for adapters | `src/__tests__/scraper/v9-adapter.test.ts` |
 
 **Deliverables**:
-- [ ] V9 adapter finds all expected files in mock directory
+- [x] V9 adapter finds all expected files in mock directory ✅ (completed: 2026-05-17 22:35)
 - [ ] ~~V8 adapter handles different directory layout~~ (DEFERRED)
-- [ ] All tests passing
+- [x] All tests passing (42 adapter tests) ✅ (completed: 2026-05-17 22:35)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -270,9 +270,9 @@ This document defines the execution phases and AI chat sessions for implementati
 | 5.2.4 | Add integration test (mock directory → full schema output) | `src/__tests__/integration/scraper-pipeline.test.ts` |
 
 **Deliverables**:
-- [ ] `yarn scrape` command works
-- [ ] Integration test produces valid schema JSON
-- [ ] All tests passing
+- [x] `yarn scrape` command works ✅ (completed: 2026-05-17 22:37)
+- [x] Integration test produces valid schema JSON ✅ (completed: 2026-05-17 22:38)
+- [x] All tests passing (455 tests, 17 files) ✅ (completed: 2026-05-17 22:38)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -295,9 +295,9 @@ This document defines the execution phases and AI chat sessions for implementati
 | 6.1.3 | Add unit tests for hasher (determinism, change detection) | `src/__tests__/enhancer/hasher.test.ts` |
 
 **Deliverables**:
-- [ ] Hash is deterministic for same input
-- [ ] Hash changes when props/slots change
-- [ ] All tests passing
+- [x] Hash is deterministic for same input ✅ (completed: 2026-05-17 22:42)
+- [x] Hash changes when props/slots change ✅ (completed: 2026-05-17 22:42)
+- [x] All tests passing (28 hasher tests) ✅ (completed: 2026-05-17 22:42)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -314,9 +314,9 @@ This document defines the execution phases and AI chat sessions for implementati
 | 6.2.3 | Add unit tests for diff and merge | `src/__tests__/enhancer/diff.test.ts`, `src/__tests__/enhancer/merge.test.ts` |
 
 **Deliverables**:
-- [ ] Diff correctly identifies new/changed/unchanged/removed
-- [ ] Merge preserves unchanged enhancements
-- [ ] All tests passing
+- [x] Diff correctly identifies new/changed/unchanged/removed ✅ (completed: 2026-05-17 22:43)
+- [x] Merge preserves unchanged enhancements ✅ (completed: 2026-05-17 22:44)
+- [x] All tests passing (510 tests, 20 files) ✅ (completed: 2026-05-17 22:49)
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -337,12 +337,13 @@ This document defines the execution phases and AI chat sessions for implementati
 | 7.1.1 | Create LLM provider interface | `scripts/enhancer/llm/provider.ts` |
 | 7.1.2 | Implement OpenAI provider | `scripts/enhancer/llm/openai.ts` |
 | 7.1.3 | Implement Anthropic provider | `scripts/enhancer/llm/anthropic.ts` |
-| 7.1.4 | Add LLM SDK dependencies (devDependencies) | `package.json` |
+| 7.1.4 | ~~Add LLM SDK dependencies~~ (N/A — Option B: native `fetch`, zero deps) | — |
 
 **Deliverables**:
-- [ ] Provider interface defined
-- [ ] Both providers implemented
-- [ ] All tests passing
+- [x] Provider interface defined ✅ (completed: 2026-06-02)
+- [x] Both providers implemented ✅ (completed: 2026-06-02)
+- [x] All tests passing ✅ (536 tests, 21 files)
+
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -355,13 +356,14 @@ This document defines the execution phases and AI chat sessions for implementati
 | # | Task | File |
 |---|------|------|
 | 7.2.1 | Implement batch processor with concurrency, retry, backoff | `scripts/enhancer/llm/batch.ts` |
-| 7.2.2 | Create mock LLM provider for testing | `src/__tests__/fixtures/mock-llm-provider.ts` |
-| 7.2.3 | Add unit tests for batch processing | `src/__tests__/enhancer/batch.test.ts` |
+| 7.2.2 | Create mock LLM provider for testing (placed in `scripts/` for reuse) | `scripts/enhancer/llm/mock.ts` |
+| 7.2.3 | Add unit tests for batch processing | `src/__tests__/enhancer/llm.test.ts` |
 
 **Deliverables**:
-- [ ] Batch processes items with concurrency control
-- [ ] Retries on failure with exponential backoff
-- [ ] All tests passing
+- [x] Batch processes items with concurrency control ✅ (completed: 2026-06-02)
+- [x] Retries on failure with exponential backoff ✅ (completed: 2026-06-02)
+- [x] All tests passing ✅ (536 tests, 21 files)
+
 
 **Verify**: `clear && yarn clean && yarn build && yarn test`
 
@@ -772,59 +774,60 @@ This document defines the execution phases and AI chat sessions for implementati
 - [x] 1.2.5 Create fixture helpers ✅ (completed: 2026-05-13 10:38)
 
 ### Phase 2: Scraper Discovery & Classification
-- [ ] 2.1.1 Create scraper types
-- [ ] 2.1.2 Create version configuration
-- [ ] 2.1.3 Implement package discovery
-- [ ] 2.1.4 Add discovery tests
-- [ ] 2.2.1 Implement category classification
-- [ ] 2.2.2 Implement stability classification
-- [ ] 2.2.3 Add classification tests
+- [x] 2.1.1 Create scraper types ✅ (completed: 2026-05-13 10:56)
+- [x] 2.1.2 Create version configuration ✅ (completed: 2026-05-13 10:57)
+- [x] 2.1.3 Implement package discovery ✅ (completed: 2026-05-13 10:58)
+- [x] 2.1.4 Add discovery tests ✅ (completed: 2026-05-13 11:01)
+- [x] 2.2.1 Implement category classification ✅ (completed: 2026-05-13 11:02)
+- [x] 2.2.2 Implement stability classification ✅ (completed: 2026-05-13 11:02)
+- [x] 2.2.3 Add classification tests ✅ (completed: 2026-05-13 11:03)
 
 ### Phase 3: Scraper Props & Slots
-- [ ] 3.1.1 Add ts-morph dependency
-- [ ] 3.1.2 Implement props extraction
-- [ ] 3.1.3 Create mock types files
-- [ ] 3.1.4 Add props tests
-- [ ] 3.2.1 Implement slots extraction
-- [ ] 3.2.2 Add slots tests
-- [ ] 3.3.1 Implement API Extractor fallback
-- [ ] 3.3.2 Create mock .api.md files
-- [ ] 3.3.3 Add fallback tests
+- [x] 3.1.1 Add ts-morph dependency ✅ (completed: 2026-05-13 11:06)
+- [x] 3.1.2 Implement props extraction ✅ (completed: 2026-05-13 11:06)
+- [x] 3.1.3 Create mock types files ✅ (pre-existing from Phase 1.2)
+- [x] 3.1.4 Add props tests ✅ (completed: 2026-05-13 11:08)
+- [x] 3.2.1 Implement slots extraction ✅ (completed: 2026-05-13 11:07)
+- [x] 3.2.2 Add slots tests ✅ (completed: 2026-05-13 11:08)
+- [x] 3.3.1 Implement API Extractor fallback ✅ (completed: 2026-05-13 11:07)
+- [x] 3.3.2 Create mock .api.md files ✅ (completed: 2026-05-13 11:07)
+- [x] 3.3.3 Add fallback tests ✅ (completed: 2026-05-13 11:08)
 
 ### Phase 4: Scraper Stories & Defaults
-- [ ] 4.1.1 Implement story extraction
-- [ ] 4.1.2 Create mock stories
-- [ ] 4.1.3 Add story tests
-- [ ] 4.2.1 Implement defaults extraction
-- [ ] 4.2.2 Implement utility extractor
-- [ ] 4.2.3 Add defaults/utility tests
+- [x] 4.1.1 Implement story extraction ✅ (completed: 2026-05-13 11:10)
+- [x] 4.1.2 Create mock stories ✅ (pre-existing from Phase 1.2)
+- [x] 4.1.3 Add story tests ✅ (completed: 2026-05-13 11:12)
+- [x] 4.2.1 Implement defaults extraction ✅ (completed: 2026-05-13 11:10)
+- [x] 4.2.2 Implement utility extractor ✅ (completed: 2026-05-13 11:11)
+- [x] 4.2.3 Add defaults/utility tests ✅ (completed: 2026-05-13 11:12)
 
 ### Phase 5: Scraper CLI & Integration
-- [ ] 5.1.1 Create adapter interface
-- [ ] 5.1.2 Implement V9 adapter
+- [x] 5.1.1 Create adapter interface ✅ (completed: 2026-05-17 22:31)
+- [x] 5.1.2 Implement V9 adapter ✅ (completed: 2026-05-17 22:32)
 - [ ] ~~5.1.3 Implement V8 adapter~~ (DEFERRED)
-- [ ] 5.1.4 Add adapter tests
-- [ ] 5.2.1 Implement schema output writer
-- [ ] 5.2.2 Implement CLI
-- [ ] 5.2.3 Add yarn scrape script
-- [ ] 5.2.4 Add scraper integration test
+- [x] 5.1.4 Add adapter tests ✅ (completed: 2026-05-17 22:34)
+- [x] 5.2.1 Implement schema output writer ✅ (completed: 2026-05-17 22:36)
+- [x] 5.2.2 Implement CLI ✅ (completed: 2026-05-17 22:36)
+- [x] 5.2.3 Add yarn scrape script ✅ (completed: 2026-05-17 22:37)
+- [x] 5.2.4 Add scraper integration test ✅ (completed: 2026-05-17 22:38)
 
 ### Phase 6: Enhancer Diff & Hash
-- [ ] 6.1.1 Create enhancer types
-- [ ] 6.1.2 Implement source hasher
-- [ ] 6.1.3 Add hasher tests
-- [ ] 6.2.1 Implement diff engine
-- [ ] 6.2.2 Implement merge logic
-- [ ] 6.2.3 Add diff/merge tests
+- [x] 6.1.1 Create enhancer types ✅ (completed: 2026-05-17 22:41)
+- [x] 6.1.2 Implement source hasher ✅ (completed: 2026-05-17 22:41)
+- [x] 6.1.3 Add hasher tests ✅ (completed: 2026-05-17 22:42)
+- [x] 6.2.1 Implement diff engine ✅ (completed: 2026-05-17 22:43)
+- [x] 6.2.2 Implement merge logic ✅ (completed: 2026-05-17 22:44)
+- [x] 6.2.3 Add diff/merge tests ✅ (completed: 2026-05-17 22:49)
 
 ### Phase 7: Enhancer LLM & Batch
-- [ ] 7.1.1 Create LLM provider interface
-- [ ] 7.1.2 Implement OpenAI provider
-- [ ] 7.1.3 Implement Anthropic provider
-- [ ] 7.1.4 Add LLM SDK dependencies
-- [ ] 7.2.1 Implement batch processor
-- [ ] 7.2.2 Create mock LLM provider
-- [ ] 7.2.3 Add batch tests
+- [x] 7.1.1 Create LLM provider interface (`scripts/enhancer/llm/provider.ts` — LLMError, isRetryableStatus, resolveProviderConfig, createProvider)
+- [x] 7.1.2 Implement OpenAI provider (`scripts/enhancer/llm/openai.ts`)
+- [x] 7.1.3 Implement Anthropic provider (`scripts/enhancer/llm/anthropic.ts`)
+- [x] 7.1.4 ~~Add LLM SDK dependencies~~ — **N/A**: chose Option B (native `fetch`, zero new deps). Decision recorded in `provider.ts` header.
+- [x] 7.2.1 Implement batch processor (`scripts/enhancer/llm/batch.ts` — concurrency, retry, exponential backoff)
+- [x] 7.2.2 Create mock LLM provider (`scripts/enhancer/llm/mock.ts` — placed under `scripts/` so both tooling and tests can import it)
+- [x] 7.2.3 Add batch tests (`src/__tests__/enhancer/llm.test.ts` — 26 tests covering providers, config, batch, mock)
+
 
 ### Phase 8: Enhancer Prompts & Guides
 - [ ] 8.1.1-8.1.6 Create all prompt templates
