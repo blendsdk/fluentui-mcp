@@ -16,6 +16,7 @@ import {
   discoverPackages,
   discoverContribPackages,
   readExportsIndex,
+  resolveExportsIndexPath,
   findPackageDirectories,
   classifyPackageType,
 } from '../../../scripts/scraper/discover.js';
@@ -345,6 +346,113 @@ describe('readExportsIndex', () => {
 
     expect(packages.has('@fluentui/react-a')).toBe(true);
     expect(packages.has('@fluentui/react-b')).toBe(true);
+  });
+});
+
+// ============================================================================
+// readPackageJson — vNext layout (package.json under library/)
+// ============================================================================
+
+describe('discoverPackages — vNext package.json layout', () => {
+  it('should discover packages whose package.json lives under library/', () => {
+    // Newer FluentUI packages place package.json at <pkg>/library/package.json
+    // rather than at the package root. Discovery must find these too.
+    const tmpMock = join(TEMP_DIR, 'vnext-layout');
+    const pkgRoot = join(
+      tmpMock,
+      'packages',
+      'react-components',
+      'react-vnext',
+    );
+    const libDir = join(pkgRoot, 'library');
+    const srcDir = join(libDir, 'src');
+    mkdirSync(srcDir, { recursive: true });
+
+    // package.json under library/, NOT at the package root
+    writeFileSync(
+      join(libDir, 'package.json'),
+      JSON.stringify({ name: '@fluentui/react-vnext', version: '9.1.0' }),
+    );
+    writeFileSync(
+      join(srcDir, 'VNext.tsx'),
+      'export const VNext = () => null;',
+    );
+
+    // Umbrella stable index (newer layout: src/ without library/)
+    const umbrellaSrc = join(
+      tmpMock,
+      'packages',
+      'react-components',
+      'react-components',
+      'src',
+    );
+    mkdirSync(umbrellaSrc, { recursive: true });
+    writeFileSync(
+      join(umbrellaSrc, 'index.ts'),
+      "export { VNext } from '@fluentui/react-vnext';\n",
+    );
+
+    const packages = discoverPackages(tmpMock, V9_CONFIG);
+
+    const vnext = packages.find((p) => p.dirName === 'react-vnext');
+    expect(vnext).toBeDefined();
+    expect(vnext!.packageName).toBe('@fluentui/react-vnext');
+    expect(vnext!.packageVersion).toBe('9.1.0');
+    // Stability is sourced from the umbrella index resolved via the
+    // newer src/ layout — confirms resolveExportsIndexPath fallback works.
+    expect(vnext!.isStableExport).toBe(true);
+  });
+});
+
+// ============================================================================
+// resolveExportsIndexPath
+// ============================================================================
+
+describe('resolveExportsIndexPath', () => {
+  it('should return the configured path when it exists', () => {
+    // The mock fixture uses the older library/src/ layout
+    const resolved = resolveExportsIndexPath(
+      MOCK_FLUENTUI_DIR,
+      V9_CONFIG.paths.stableExportsIndex,
+    );
+
+    expect(resolved).toContain('library/src/index.ts');
+    expect(existsSync(resolved)).toBe(true);
+  });
+
+  it('should fall back to the src/ layout when library/src/ is absent', () => {
+    // Create only the newer src/ layout (no library/src/)
+    const root = join(TEMP_DIR, 'exports-newer-layout');
+    const umbrellaSrc = join(
+      root,
+      'packages',
+      'react-components',
+      'react-components',
+      'src',
+    );
+    mkdirSync(umbrellaSrc, { recursive: true });
+    writeFileSync(join(umbrellaSrc, 'index.ts'), '// index\n');
+
+    const resolved = resolveExportsIndexPath(
+      root,
+      V9_CONFIG.paths.stableExportsIndex,
+    );
+
+    // Should have collapsed library/src/ → src/
+    expect(resolved).toContain('react-components/src/index.ts');
+    expect(resolved).not.toContain('library/src');
+    expect(existsSync(resolved)).toBe(true);
+  });
+
+  it('should return the configured path when neither candidate exists', () => {
+    const resolved = resolveExportsIndexPath(
+      '/non/existent/root',
+      V9_CONFIG.paths.stableExportsIndex,
+    );
+
+    // Falls back to the configured path so the caller's existsSync fails
+    expect(resolved).toContain('library/src/index.ts');
+    expect(existsSync(resolved)).toBe(false);
   });
 });
 

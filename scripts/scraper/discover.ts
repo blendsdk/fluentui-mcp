@@ -37,13 +37,19 @@ export function discoverPackages(
 ): DiscoveredPackage[] {
   const resolvedSource = resolve(sourcePath);
 
-  // Read the stable and unstable export indices to determine package stability
+  // Read the stable and unstable export indices to determine package stability.
+  // The umbrella package's index location varies by FluentUI revision: older
+  // checkouts use `.../library/src/index.ts` while newer ones use
+  // `.../src/index.ts`. resolveExportsIndexPath tolerates both.
   const stableExports = readExportsIndex(
-    join(resolvedSource, config.paths.stableExportsIndex),
+    resolveExportsIndexPath(resolvedSource, config.paths.stableExportsIndex),
   );
   const unstableExports = config.paths.unstableExportsIndex
     ? readExportsIndex(
-        join(resolvedSource, config.paths.unstableExportsIndex),
+        resolveExportsIndexPath(
+          resolvedSource,
+          config.paths.unstableExportsIndex,
+        ),
       )
     : new Set<string>();
 
@@ -173,13 +179,26 @@ interface PackageJsonInfo {
  * This is intentional — some directories might not have a package.json
  * (e.g., empty directories, directories being set up).
  *
+ * Modern FluentUI v9 packages (the "vNext" layout) place their
+ * package.json inside a `library/` subdirectory rather than at the
+ * package root. This helper checks the root first (older layout and
+ * contrib packages), then falls back to `library/package.json` so both
+ * layouts are discovered.
+ *
  * @param dirPath - Directory containing the package.json
  * @returns Parsed name and version, or null if unreadable
  */
 function readPackageJson(dirPath: string): PackageJsonInfo | null {
-  const pkgJsonPath = join(dirPath, 'package.json');
+  const rootPkgJsonPath = join(dirPath, 'package.json');
+  const libraryPkgJsonPath = join(dirPath, 'library', 'package.json');
 
-  if (!existsSync(pkgJsonPath)) {
+  const pkgJsonPath = existsSync(rootPkgJsonPath)
+    ? rootPkgJsonPath
+    : existsSync(libraryPkgJsonPath)
+      ? libraryPkgJsonPath
+      : null;
+
+  if (!pkgJsonPath) {
     return null;
   }
 
@@ -200,6 +219,49 @@ function readPackageJson(dirPath: string): PackageJsonInfo | null {
     // Malformed JSON — skip this package
     return null;
   }
+}
+
+/**
+ * Resolve the on-disk path to an exports-index file, tolerating both the
+ * older and newer umbrella-package layouts.
+ *
+ * The version config encodes the index path with a `library/src/` segment
+ * (e.g. `.../react-components/library/src/index.ts`). Older checkouts and
+ * the test fixtures use exactly that path. Newer FluentUI revisions moved
+ * the umbrella package's sources up one level to `.../react-components/src/`,
+ * dropping the `library/` segment.
+ *
+ * This helper returns the configured path if it exists; otherwise it tries
+ * the same path with the `/library/src/` segment collapsed to `/src/`. The
+ * first existing candidate wins; if neither exists the configured path is
+ * returned so the caller's `existsSync` check yields an empty export set.
+ *
+ * @param sourceRoot - Absolute path to the FluentUI monorepo checkout
+ * @param relativeIndexPath - Index path from the version config
+ * @returns Absolute path to the best-matching exports index
+ */
+export function resolveExportsIndexPath(
+  sourceRoot: string,
+  relativeIndexPath: string,
+): string {
+  const configured = join(sourceRoot, relativeIndexPath);
+  if (existsSync(configured)) {
+    return configured;
+  }
+
+  // Collapse the `library/src/` segment to `src/` for the newer layout.
+  const collapsed = relativeIndexPath.replace(
+    /library\/src\//,
+    'src/',
+  );
+  if (collapsed !== relativeIndexPath) {
+    const candidate = join(sourceRoot, collapsed);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return configured;
 }
 
 /**

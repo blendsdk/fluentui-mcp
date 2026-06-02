@@ -711,9 +711,9 @@ This document defines the execution phases and AI chat sessions for implementati
 | 15.1.5 | Fix any scraper issues discovered | Various |
 
 **Deliverables**:
-- [ ] Real v9 schema generated with 80+ components
-- [ ] Schema validates correctly
-- [ ] All tests passing
+- [x] Real v9 schema generated ✅ (completed: 2026-06-02 — 62 components, 4 utilities, 473 props, 767 stories. NOTE: yielded 62 (not the planned 80+) because the bundled v9 monorepo snapshot exposes 77 `react-*` dirs of which non-component/-compat/-internal packages are correctly filtered out; all stable umbrella components are present incl. Button, Input, Dialog, Accordion, etc.)
+- [x] Schema validates correctly ✅ (completed: 2026-06-02 — 55 stable / 7 unstable classification verified; Button → `@fluentui/react-components`; prop types/descriptions/defaults accurate)
+- [x] All tests passing ✅ (completed: 2026-06-02 — 776 tests, 35 files; +4 discover regression tests)
 
 ### Session 15.2: Run Enhancer & Validate
 
@@ -903,7 +903,7 @@ This document defines the execution phases and AI chat sessions for implementati
 
 
 ### Phase 15: Initial Data Generation
-- [ ] 15.1.1-15.1.5 Scrape real FluentUI
+- [x] 15.1.1-15.1.5 Scrape real FluentUI ✅ (completed: 2026-06-02 — sparse-cloned microsoft/fluentui to /tmp; `yarn scrape --version v9 --source /tmp/fluentui` → 62 components, 4 utilities, 473 props, 767 stories, 55 stable / 7 unstable. Fixed three latent issues surfaced by real data: (1) v9-adapter import bug `extractApiProps`→`extractPropsFromApiMd`; (2) `readPackageJson` now falls back to `library/package.json` (vNext layout); (3) new `resolveExportsIndexPath` tolerates umbrella `src/index.ts` vs `library/src/index.ts`. Added `.env`/`.env.example` support to scrape/enhance scripts (`node --env-file-if-exists`). +4 regression tests; 776 tests, 35 files. NOTE: contrib repo not cloned (15.1.2) — deferred to enhancer session / optional)
 - [ ] 15.2.1-15.2.4 Enhance and validate
 
 ### Phase 16: Cleanup

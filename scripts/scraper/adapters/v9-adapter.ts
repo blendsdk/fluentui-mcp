@@ -28,7 +28,7 @@ import { extractProps } from '../extractors/props-extractor.js';
 import { extractSlots } from '../extractors/slots-extractor.js';
 import { extractStoriesFromFile } from '../extractors/stories-extractor.js';
 import { extractDefaults } from '../extractors/defaults-extractor.js';
-import { extractApiProps } from '../extractors/api-extractor-fallback.js';
+import { extractPropsFromApiMd } from '../extractors/api-extractor-fallback.js';
 import { extractUtilityExports } from '../extractors/utility-extractor.js';
 
 // ============================================================================
@@ -72,7 +72,7 @@ export class V9Adapter implements ScraperAdapter {
     if (props.length === 0) {
       const apiMdFile = findApiMdFile(pkg);
       if (apiMdFile) {
-        props = extractApiProps(apiMdFile);
+        props = extractPropsFromApiMd(apiMdFile);
       }
     }
 
