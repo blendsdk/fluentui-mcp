@@ -7,6 +7,8 @@ dist/
 # VitePress (techdocs) build output & cache
 techdocs/.vitepress/dist/
 techdocs/.vitepress/cache/
+techdocs/.vitepress/.temp/
+
 
 # Scraper clone cache
 .cache/

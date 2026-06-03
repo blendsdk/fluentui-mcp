@@ -21,7 +21,8 @@ export default withMermaid(
 
   themeConfig: {
     nav: [
-      { text: 'Architecture', link: '/architecture/system-overview' },
+      { text: 'Home', link: '/' },
+      { text: 'Architecture', link: '/architecture/overview' },
       { text: 'Decisions', link: '/decisions/' },
       { text: 'Guides', link: '/guides/getting-started' },
       { text: 'Reference', link: '/reference/configuration' },
@@ -30,7 +31,10 @@ export default withMermaid(
     sidebar: [
       {
         text: 'Overview',
-        items: [{ text: 'Introduction', link: '/' }],
+        items: [
+          { text: 'Showcase / Home', link: '/' },
+          { text: 'Technical Architecture', link: '/architecture/overview' },
+        ],
       },
       {
         text: 'Architecture',
@@ -39,6 +43,7 @@ export default withMermaid(
           { text: 'API Design (MCP Tools)', link: '/architecture/api-design' },
         ],
       },
+
       {
         text: 'Decisions',
         items: [
