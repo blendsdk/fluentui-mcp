@@ -4,6 +4,10 @@ node_modules/
 # Build output
 dist/
 
+# VitePress (techdocs) build output & cache
+techdocs/.vitepress/dist/
+techdocs/.vitepress/cache/
+
 # Scraper clone cache
 .cache/
 

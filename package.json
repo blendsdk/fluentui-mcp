@@ -26,7 +26,10 @@
     "ncu": "ncu -u && rm -fR node_modules yarn.lock && yarn install && yarn clean && yarn build && yarn test",
     "scrape": "node --env-file-if-exists=.env --import tsx scripts/scraper/cli.ts",
     "enhance": "node --env-file-if-exists=.env --import tsx scripts/enhancer/cli.ts",
-    "pipeline:full": "yarn scrape --version v9 --clone --verbose && yarn enhance --version v9 --full --verbose && yarn build && yarn test"
+    "pipeline:full": "yarn scrape --version v9 --clone --verbose && yarn enhance --version v9 --full --verbose && yarn build && yarn test",
+    "docs:dev": "vitepress dev techdocs",
+    "docs:build": "vitepress build techdocs",
+    "docs:preview": "vitepress preview techdocs"
   },
   "keywords": [
     "mcp",
@@ -63,10 +66,13 @@
   },
   "devDependencies": {
     "@types/node": "^25.2.1",
+    "mermaid": "^11.15.0",
     "npm-check-updates": "^19.3.2",
     "ts-morph": "^28.0.0",
     "tsx": "^4.19.4",
     "typescript": "^5.9.3",
+    "vitepress": "^1.6.3",
+    "vitepress-plugin-mermaid": "^2.0.17",
     "vitest": "^4.0.18"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
