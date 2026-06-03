@@ -1,13 +1,13 @@
 {
   "schemaVersion": "1.0",
   "version": "v9",
-  "generatedAt": "2026-06-02T10:51:16.260Z",
+  "generatedAt": "2026-06-03T21:08:37.587Z",
   "sources": {
     "fluentui": {
       "repo": "https://github.com/microsoft/fluentui.git",
       "ref": "master",
-      "commit": "unknown",
-      "scrapedAt": "2026-06-02T10:51:16.259Z"
+      "commit": "fdf755ce26d41c57452b79fb23fc4a590630a1b5",
+      "scrapedAt": "2026-06-03T21:08:37.587Z"
     }
   },
   "components": [
