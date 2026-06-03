@@ -22,8 +22,10 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import type { FluentUISchema } from '../../src/types/schema.js';
+import { validateSchema } from '../../src/schema/schema-validator.js';
 import type { EnhancerCliOptions } from './types.js';
 import { diffSchemas, formatDiffReport } from './diff.js';
+
 import { computeComponentHash, computeUtilityHash } from './hasher.js';
 import { resolveEnhancerConfig } from './config.js';
 import { runEnhancement } from './enhancer.js';
@@ -281,6 +283,13 @@ export async function runEnhancer(options: EnhancerCliOptions): Promise<void> {
 
   writeSchema(outputPath, schema);
 
+  // Validate the freshly written schema so a `--full` run that produces a
+  // structurally invalid output is surfaced immediately (errors block;
+  // warnings are advisory). This makes "validate output: 0 errors" automatic.
+  const findings = validateSchema(schema);
+  const validationErrors = findings.filter((f) => f.severity === 'error');
+  const validationWarnings = findings.filter((f) => f.severity === 'warning');
+
   // Report results.
   console.log('\nEnhancement complete!');
   console.log(`  Components enhanced:        ${stats.componentsEnhanced}`);
@@ -290,8 +299,27 @@ export async function runEnhancer(options: EnhancerCliOptions): Promise<void> {
   console.log(`  Guides generated:           ${stats.guidesGenerated}`);
   console.log(`  Patterns generated:         ${stats.patternsGenerated}`);
   console.log(`  Failures:                   ${stats.failures}`);
+  console.log(`  Validation errors:          ${validationErrors.length}`);
+  console.log(`  Validation warnings:        ${validationWarnings.length}`);
   console.log(`  Output:                     ${outputPath}`);
+
+  // Surface the first handful of findings so they are actionable without a
+  // separate validation run.
+  for (const finding of [...validationErrors, ...validationWarnings].slice(0, 10)) {
+    const tag = finding.severity === 'error' ? 'ERROR' : 'warn';
+    console.error(`  [${tag}] ${finding.path}: ${finding.message}`);
+  }
+
+  // A structurally invalid output is a hard failure — the bundled schema must
+  // always load cleanly.
+  if (validationErrors.length > 0) {
+    console.error(
+      `\nOutput failed schema validation with ${validationErrors.length} error(s).`,
+    );
+    process.exit(1);
+  }
 }
+
 
 // ============================================================================
 // Entry Point

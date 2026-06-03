@@ -16,9 +16,15 @@
  * @module formatters/component-formatter
  */
 
-import type { ComponentEntry, ComponentEnhanced } from '../types/index.js';
+import type {
+  ComponentEntry,
+  ComponentEnhanced,
+  AntiPattern,
+  PatternExample,
+} from '../types/index.js';
 import { formatPropsTable, formatSlotsTable } from './props-formatter.js';
 import { formatStories } from './story-formatter.js';
+
 
 /** Joins non-empty section strings with blank lines between them. */
 function joinSections(sections: Array<string | undefined>): string {
@@ -161,9 +167,108 @@ function formatStyling(enhanced: ComponentEnhanced): string {
 }
 
 /**
+ * Render a list of {@link PatternExample}s under a given heading. Used for
+ * composition examples (slot overrides / children composition).
+ */
+function formatPatternExamples(heading: string, items?: PatternExample[]): string {
+  if (!items?.length) {
+    return '';
+  }
+  const blocks = items.map((p) => {
+    const parts = [`### ${p.name}`];
+    if (p.description && p.description.trim() !== '') {
+      parts.push('', p.description.trim());
+    }
+    parts.push('', '```tsx', p.code.trim(), '```');
+    return parts.join('\n');
+  });
+  return [heading, '', blocks.join('\n\n')].join('\n');
+}
+
+/**
+ * Render the Prop Guidance section: per-prop usage advice with optional
+ * examples. Omitted entirely when there is no guidance.
+ */
+function formatPropGuidance(enhanced: ComponentEnhanced): string {
+  const guidance = enhanced.propGuidance;
+  if (!guidance?.length) {
+    return '';
+  }
+  const items = guidance.map((g) => {
+    const example = g.example && g.example.trim() !== ''
+      ? ` \`${g.example.trim()}\``
+      : '';
+    return `- **${g.prop}**: ${g.guidance}${example}`;
+  });
+  return ['## Prop Guidance', '', ...items].join('\n');
+}
+
+/**
+ * Render the Anti-Patterns section: common mistakes paired with the fix.
+ */
+function formatAntiPatterns(items?: AntiPattern[]): string {
+  if (!items?.length) {
+    return '';
+  }
+  const blocks = items.map((a) => {
+    const parts = [`### ${a.title}`, '', `❌ ${a.problem}`, '', `✅ ${a.solution}`];
+    if (a.code && a.code.trim() !== '') {
+      parts.push('', '```tsx', a.code.trim(), '```');
+    }
+    return parts.join('\n');
+  });
+  return ['## Anti-Patterns', '', blocks.join('\n\n')].join('\n');
+}
+
+/**
+ * Render the Performance section from `performanceNotes`.
+ */
+function formatPerformance(enhanced: ComponentEnhanced): string {
+  const notes = enhanced.performanceNotes?.trim();
+  if (!notes || notes === '') {
+    return '';
+  }
+  return ['## Performance', '', notes].join('\n');
+}
+
+/**
+ * Render the Theming & Tokens section from `themingNotes`.
+ */
+function formatTheming(enhanced: ComponentEnhanced): string {
+  const notes = enhanced.themingNotes?.trim();
+  if (!notes || notes === '') {
+    return '';
+  }
+  return ['## Theming & Tokens', '', notes].join('\n');
+}
+
+/**
+ * Render the Edge Cases section as a bullet list.
+ */
+function formatEdgeCases(enhanced: ComponentEnhanced): string {
+  const cases = enhanced.edgeCases;
+  if (!cases?.length) {
+    return '';
+  }
+  return ['## Edge Cases', '', ...cases.map((c) => `- ${c}`)].join('\n');
+}
+
+/**
+ * Render the Related Patterns section listing pattern/guide ids.
+ */
+function formatRelatedPatterns(enhanced: ComponentEnhanced): string {
+  const patterns = enhanced.relatedPatterns;
+  if (!patterns?.length) {
+    return '';
+  }
+  return ['## Related Patterns', '', ...patterns.map((p) => `- ${p}`)].join('\n');
+}
+
+/**
  * Render the "See Also" section from related component names.
  */
 function formatSeeAlso(component: ComponentEntry): string {
+
   if (component.relatedComponents.length === 0) {
     return '';
   }
@@ -193,10 +298,18 @@ export function formatFull(component: ComponentEntry): string {
     formatPropsSection(component),
     formatExamplesSection(component),
     enhanced ? formatBestPractices(enhanced) : '',
+    enhanced ? formatPropGuidance(enhanced) : '',
+    enhanced ? formatPatternExamples('## Composition Examples', enhanced.compositionExamples) : '',
+    enhanced ? formatAntiPatterns(enhanced.antiPatterns) : '',
     enhanced ? formatAccessibility(enhanced) : '',
     enhanced ? formatStyling(enhanced) : '',
+    enhanced ? formatPerformance(enhanced) : '',
+    enhanced ? formatTheming(enhanced) : '',
+    enhanced ? formatEdgeCases(enhanced) : '',
+    enhanced ? formatRelatedPatterns(enhanced) : '',
     formatSeeAlso(component),
   ]);
+
 }
 
 /**

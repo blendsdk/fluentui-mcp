@@ -3,7 +3,9 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-06-02 15:23 (preflight fixes folded in — see 00-preflight-report.md)
-> **Progress**: Phases 1-6 complete (2026-06-03) — 779 tests pass
+> **Progress**: Phases 1-8 complete; Phase 9 limited live verification done + gpt-5.x/o-series provider fix (2026-06-03) — 796 tests pass. Full `--full` run deferred to user.
+
+
 
 
 
@@ -272,26 +274,59 @@ spec-test-first ordering.
 - [x] 6.1.4 Full verification (build clean; 779 tests pass)
 
 
-### Phase 7: Formatters & Tools
-- [ ] 7.1.1 Write spec tests ST-27..ST-31 (incl. guide/pattern formatters)
-- [ ] 7.1.2 Verify FAIL (red)
-- [ ] 7.1.3 Render new fields in component/props formatters
-- [ ] 7.1.4 Render new fields in guide/pattern formatters (ST-30/31)
-- [ ] 7.1.5 Verify tools pass full entries
+### Phase 7: Formatters & Tools ✅ (2026-06-03)
+- [x] 7.1.1 Write spec tests ST-27..ST-31 (enriched-formatter.spec.test.ts, 9 tests)
+- [x] 7.1.2 Verify FAIL (red) — 4/9 "present" tests failing
+- [x] 7.1.3 Render new fields in component/props formatters (propGuidance, antiPatterns, performance, theming, edgeCases, relatedPatterns, composition)
+- [x] 7.1.4 Render new fields in guide/pattern formatters (keyTakeaways, pitfalls, accessibilityNotes, whenToUse/whenNotToUse)
+- [x] 7.1.5 Verify tools pass full entries (no signature change — query-component/get-props-reference already pass full ComponentEntry)
+- [x] 7.1.6 Verify PASS (green) — existing formatter tests unchanged & passing
+- [x] 7.1.7 Full verification (build clean; 788 tests pass)
 
-- [ ] 7.1.6 Verify PASS (green) + update existing formatter tests
-- [ ] 7.1.7 Full verification
+### Phase 8: Tests Pass + Regressions ✅ (2026-06-03)
+- [x] 8.1.1 Run full suite, fix regressions (no regressions; 788 pass)
+- [x] 8.1.2 Confirm KEY_PROPS_LIMIT gone (ST-17) — only in plan docs + tests asserting absence
+- [x] 8.1.3 Full verification (build clean; 788 tests pass)
 
-### Phase 8: Tests Pass + Regressions
-- [ ] 8.1.1 Run full suite, fix regressions
-- [ ] 8.1.2 Confirm KEY_PROPS_LIMIT gone (ST-17)
-- [ ] 8.1.3 Full verification
 
 ### Phase 9: Verify + Live Run
-- [ ] 9.1.1 Run yarn enhance --full (gpt-4o)
-- [ ] 9.1.2 Validate output: 0 errors; new fields; size
-- [ ] 9.1.3 Spot-check richness
-- [ ] 9.1.4 Final full verification
+- [ ] 9.1.1 Run yarn enhance --full (gpt-4o/full catalog) — **DEFERRED**: user will run the full paid run themselves
+- [x] 9.1.2 Validate output: 0 errors — **wired into the CLI** so it runs automatically on every
+      `yarn enhance` write (`scripts/enhancer/cli.ts`: post-write `validateSchema`, prints
+      "Validation errors/warnings" counts, surfaces first 10 findings, hard-exits non-zero on any
+      error). Verified offline via fetch-stubbed CLI test ("reports 0 validation errors"); also
+      confirmed the current bundled schema validates with 0 errors / 0 warnings. Field-population
+      and bundle size on the full catalogue still depend on 9.1.1.
+- [~] 9.1.3 Spot-check richness — **substantively done** via the two limited live runs (9.1.5/9.1.6);
+      full-catalogue spot-check still depends on 9.1.1.
+- [x] 9.1.4 Final full verification (build clean; 797 tests pass, 2026-06-03)
+
+- [x] 9.1.5 **Limited live verification — gpt-5.5** (3 components: avatar/badge/breadcrumb via
+      `--components-only --input /tmp/enh-test`) — 3 enhanced, **0 failures**, ~108s real
+      LLM calls. All new fields populated (propGuidance 12, antiPatterns 4, compositionExamples 4,
+      relatedPatterns 6, edgeCases 9, performanceNotes/themingNotes strings). Content spot-checked:
+      accurate, grounded v9 content (real props, working imports, genuine a11y guidance).
+- [x] 9.1.6 **Limited live verification — gpt-4o** (3 components: button/card/spinner) — 3 enhanced,
+      **0 failures**, ~60s real LLM calls. All new fields populated (propGuidance 4-9, antiPatterns 3,
+      compositionExamples 2, edgeCases 3, perf/theming strings; relatedPatterns optional/empty here).
+      Confirms the provider fix is **model-agnostic**: GPT-4o uses the legacy `max_tokens`+`temperature`
+      path; GPT-5.x/o-series use `max_completion_tokens` and omit `temperature`. Both work end-to-end.
+
+
+#### Phase 9 bug fix — newer OpenAI models (gpt-5.x / o-series) (2026-06-03)
+The first limited live run failed all 3 components instantly. Root cause: configured model
+`gpt-5.5` rejects the legacy `max_tokens` param (HTTP 400: "use `max_completion_tokens`") and
+also rejects any non-default `temperature`. Fix (spec-test-first):
+- `scripts/enhancer/llm/ceilings.ts`: added `MODEL_FAMILY_CEILINGS` + `ceilingForModel`
+  (exact match → longest family prefix → fallback), `usesMaxCompletionTokens(model)`,
+  `supportsCustomTemperature(model)`. GPT-5 ceiling 32768, o3/o4 65536, o1 32768.
+- `scripts/enhancer/llm/openai.ts`: send `max_completion_tokens` (not `max_tokens`) and omit
+  `temperature` for GPT-5/o-series; GPT-4o and earlier unchanged.
+- `scripts/enhancer/llm/index.ts`: export the new helpers.
+- `src/__tests__/enhancer/capacity.spec.test.ts`: added ST-9d (family prefixes), ST-9e/9f
+  (param/temperature compatibility flags), ST-9g (provider request shaping). +8 tests → 796 pass.
+
+
 
 ---
 

@@ -66,10 +66,32 @@ export function formatPattern(pattern: PatternEntry): string {
   return joinSections([
     header,
     pattern.content?.trim() ?? '',
+    formatProseSection('## When to Use', pattern.whenToUse),
+    formatProseSection('## When Not to Use', pattern.whenNotToUse),
     examples,
+    formatProseSection('## Accessibility', pattern.accessibilityNotes),
+    formatBulletSection('## Pitfalls', pattern.pitfalls),
     referenced,
   ]);
 }
+
+/** Render a prose section under a heading, omitted when the text is empty. */
+function formatProseSection(heading: string, text?: string): string {
+  const trimmed = text?.trim();
+  if (!trimmed || trimmed === '') {
+    return '';
+  }
+  return [heading, '', trimmed].join('\n');
+}
+
+/** Render a bullet-list section under a heading, omitted when the list is empty. */
+function formatBulletSection(heading: string, items?: string[]): string {
+  if (!items?.length) {
+    return '';
+  }
+  return [heading, '', ...items.map((i) => `- ${i}`)].join('\n');
+}
+
 
 /**
  * Format a brief one-line summary of a pattern for list output.

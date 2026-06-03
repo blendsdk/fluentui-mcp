@@ -27,9 +27,14 @@ export { AnthropicProvider, DEFAULT_ANTHROPIC_MODEL } from './anthropic.js';
 
 export {
   MODEL_OUTPUT_CEILINGS,
+  MODEL_FAMILY_CEILINGS,
   FALLBACK_OUTPUT_CEILING,
+  ceilingForModel,
   resolveMaxTokens,
+  usesMaxCompletionTokens,
+  supportsCustomTemperature,
 } from './ceilings.js';
+
 
 export type { CompleteOptions, CompleteResponse } from './complete.js';
 export { chatComplete } from './complete.js';

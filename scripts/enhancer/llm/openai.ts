@@ -16,7 +16,12 @@ import type {
   ProviderConfig,
 } from './provider.js';
 import { LLMError, isRetryableStatus } from './provider.js';
-import { resolveMaxTokens } from './ceilings.js';
+import {
+  resolveMaxTokens,
+  usesMaxCompletionTokens,
+  supportsCustomTemperature,
+} from './ceilings.js';
+
 
 
 /** Default OpenAI model used when none is configured. */
@@ -83,13 +88,27 @@ export class OpenAIProvider implements LLMProvider {
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     };
 
-    if (options?.temperature !== undefined) {
+    // Newer model families (GPT-5, o-series) only accept the default
+    // temperature and reject any explicit value with an HTTP 400, so we omit
+    // it entirely for them. Older models still honor a custom temperature.
+    if (
+      options?.temperature !== undefined &&
+      supportsCustomTemperature(this.model)
+    ) {
       body.temperature = options.temperature;
     }
-    // Always request an explicit max_tokens, resolved against the model's
-    // output ceiling so an unset value asks for the model maximum and an
-    // over-limit request is clamped (never an HTTP 400).
-    body.max_tokens = resolveMaxTokens(this.model, options?.maxTokens);
+
+    // Always request an explicit output-token budget, resolved against the
+    // model's ceiling so an unset value asks for the model maximum and an
+    // over-limit request is clamped (never an HTTP 400). Newer model families
+    // (GPT-5, o-series) replaced `max_tokens` with `max_completion_tokens`.
+    const resolvedMaxTokens = resolveMaxTokens(this.model, options?.maxTokens);
+    if (usesMaxCompletionTokens(this.model)) {
+      body.max_completion_tokens = resolvedMaxTokens;
+    } else {
+      body.max_tokens = resolvedMaxTokens;
+    }
+
 
     // OpenAI supports a JSON response mode that guarantees valid JSON output.
     if (options?.responseFormat === 'json') {

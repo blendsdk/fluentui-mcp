@@ -210,3 +210,79 @@ describe('runEnhancer — dry run', () => {
     expect(printed).toContain('dry run');
   });
 });
+
+// ============================================================================
+// Output Validation (offline, fetch-stubbed)
+// ============================================================================
+
+describe('runEnhancer — validates output after writing', () => {
+  let dir: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  const savedEnv = {
+    provider: process.env.LLM_PROVIDER,
+    model: process.env.LLM_MODEL,
+    key: process.env.OPENAI_API_KEY,
+  };
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'enhancer-validate-'));
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    // Drive the real provider path offline: openai provider + stubbed fetch.
+    process.env.LLM_PROVIDER = 'openai';
+    process.env.LLM_MODEL = 'gpt-4o';
+    process.env.OPENAI_API_KEY = 'test-key';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ choices: [{ message: { content: '{}' } }] }),
+        text: async () => '{}',
+      } as unknown as Response),
+    );
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+    vi.unstubAllGlobals();
+    rmSync(dir, { recursive: true, force: true });
+    process.env.LLM_PROVIDER = savedEnv.provider;
+    process.env.LLM_MODEL = savedEnv.model;
+    process.env.OPENAI_API_KEY = savedEnv.key;
+  });
+
+  it('writes a valid schema and reports 0 validation errors', async () => {
+    const inputPath = join(dir, 'raw.json');
+    const outputPath = join(dir, 'enhanced.json');
+    writeFileSync(
+      inputPath,
+      JSON.stringify(createMinimalTestSchema(), null, 2),
+      'utf-8',
+    );
+
+    await runEnhancer({
+      version: 'v9',
+      full: true,
+      componentsOnly: true,
+      guidesOnly: false,
+      dryRun: false,
+      input: inputPath,
+      output: outputPath,
+      concurrency: 2,
+      verbose: false,
+    });
+
+    // Output was written and is structurally valid (0 errors).
+    expect(existsSync(outputPath)).toBe(true);
+
+    const printed = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(printed).toContain('Validation errors:          0');
+
+    // The written file round-trips and passes the validator directly.
+    const written = readSchema(outputPath);
+    expect(written.components.length).toBe(
+      createMinimalTestSchema().components.length,
+    );
+  });
+});
+

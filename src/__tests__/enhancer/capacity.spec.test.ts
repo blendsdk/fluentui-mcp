@@ -25,7 +25,11 @@ import {
   MODEL_OUTPUT_CEILINGS,
   FALLBACK_OUTPUT_CEILING,
   resolveMaxTokens,
+  ceilingForModel,
+  usesMaxCompletionTokens,
+  supportsCustomTemperature,
 } from '../../../scripts/enhancer/llm/ceilings.js';
+
 import { chatComplete } from '../../../scripts/enhancer/llm/complete.js';
 import { resolveEnhancerConfig } from '../../../scripts/enhancer/config.js';
 import { OpenAIProvider, AnthropicProvider } from '../../../scripts/enhancer/llm/index.js';
@@ -179,6 +183,97 @@ describe('resolveMaxTokens (ST-9)', () => {
     expect(resolveMaxTokens('claude-3-5-sonnet-latest')).toBe(8192);
   });
 });
+
+// ============================================================================
+// ST-9d: family-prefix ceiling resolution for newer/dated model snapshots
+// ============================================================================
+
+describe('ceilingForModel family prefixes (ST-9d)', () => {
+  it('resolves a dated gpt-5 snapshot via family prefix', () => {
+    expect(ceilingForModel('gpt-5.5')).toBe(32768);
+    expect(ceilingForModel('gpt-5.5-2025-11-01')).toBe(32768);
+  });
+
+  it('resolves o-series reasoning models via family prefix', () => {
+    expect(ceilingForModel('o3-mini')).toBe(65536);
+    expect(ceilingForModel('o1-preview')).toBe(32768);
+  });
+
+  it('prefers an exact match over a family prefix', () => {
+    expect(ceilingForModel('gpt-4o')).toBe(16384);
+  });
+
+  it('falls back for a totally unknown family', () => {
+    expect(ceilingForModel('llama-9')).toBe(FALLBACK_OUTPUT_CEILING);
+  });
+});
+
+// ============================================================================
+// ST-9e/9f: newer OpenAI models use max_completion_tokens + fixed temperature
+// ============================================================================
+
+describe('OpenAI model parameter compatibility (ST-9e/9f)', () => {
+  it('flags GPT-5 and o-series as requiring max_completion_tokens', () => {
+    expect(usesMaxCompletionTokens('gpt-5.5')).toBe(true);
+    expect(usesMaxCompletionTokens('o3-mini')).toBe(true);
+    expect(usesMaxCompletionTokens('o1')).toBe(true);
+    expect(usesMaxCompletionTokens('gpt-4o')).toBe(false);
+    expect(usesMaxCompletionTokens('gpt-3.5-turbo')).toBe(false);
+  });
+
+  it('flags GPT-5 and o-series as not accepting custom temperature', () => {
+    expect(supportsCustomTemperature('gpt-5.5')).toBe(false);
+    expect(supportsCustomTemperature('o3-mini')).toBe(false);
+    expect(supportsCustomTemperature('gpt-4o')).toBe(true);
+  });
+});
+
+describe('OpenAIProvider newer-model request shaping (ST-9g)', () => {
+  const messages: LLMMessage[] = [{ role: 'user', content: 'hi' }];
+
+  it('sends max_completion_tokens (not max_tokens) and omits temperature for gpt-5', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      fakeResponse(200, { choices: [{ message: { content: '{}' } }] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new OpenAIProvider({
+      provider: 'openai',
+      apiKey: 'k',
+      model: 'gpt-5.5',
+    });
+    await provider.chat(messages, { temperature: 0.4 });
+
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    );
+    expect(body.max_completion_tokens).toBe(32768);
+    expect(body.max_tokens).toBeUndefined();
+    expect(body.temperature).toBeUndefined();
+  });
+
+  it('still sends max_tokens and temperature for gpt-4o', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      fakeResponse(200, { choices: [{ message: { content: '{}' } }] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new OpenAIProvider({
+      provider: 'openai',
+      apiKey: 'k',
+      model: 'gpt-4o',
+    });
+    await provider.chat(messages, { temperature: 0.4 });
+
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    );
+    expect(body.max_tokens).toBe(16384);
+    expect(body.max_completion_tokens).toBeUndefined();
+    expect(body.temperature).toBe(0.4);
+  });
+});
+
 
 // ============================================================================
 // ST-10: optional config.maxTokens env resolution (NaN-guarded)

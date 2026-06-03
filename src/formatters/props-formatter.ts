@@ -109,8 +109,34 @@ export function formatPropsTable(component: ComponentEntry): string {
   const header = '| Prop | Type | Default | Required | Description |';
   const divider = '|------|------|---------|----------|-------------|';
   const rows = sortByName(component.props).map(formatPropRow);
-  return [header, divider, ...rows].join('\n');
+  const table = [header, divider, ...rows].join('\n');
+
+  const guidance = formatPropGuidance(component);
+  return guidance === '' ? table : `${table}\n\n${guidance}`;
 }
+
+/**
+ * Render per-prop usage guidance from the enhanced content as a "Prop Guidance"
+ * note block beneath the props table. Guidance whose `prop` does not match a
+ * documented prop is still rendered as a standalone note (the validator warns
+ * about such references but the formatter is forgiving — AR #2).
+ *
+ * Returns an empty string when there is no guidance, so callers omit the block.
+ */
+function formatPropGuidance(component: ComponentEntry): string {
+  const guidance = component.enhanced?.propGuidance;
+  if (!guidance?.length) {
+    return '';
+  }
+  const items = guidance.map((g) => {
+    const example = g.example && g.example.trim() !== ''
+      ? ` \`${escapeCell(g.example)}\``
+      : '';
+    return `- **${g.prop}**: ${g.guidance}${example}`;
+  });
+  return ['**Prop Guidance**', '', ...items].join('\n');
+}
+
 
 /**
  * Format a component's slots as a markdown table.

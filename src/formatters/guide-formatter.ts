@@ -44,6 +44,23 @@ function formatReferenced(guide: GuideEntry): string {
   return `**Referenced components**: ${guide.referencedComponents.join(', ')}`;
 }
 
+/** Render a bullet-list section under a heading, omitted when the list is empty. */
+function formatBulletSection(heading: string, items?: string[]): string {
+  if (!items?.length) {
+    return '';
+  }
+  return [heading, '', ...items.map((i) => `- ${i}`)].join('\n');
+}
+
+/** Render a prose section under a heading, omitted when the text is empty. */
+function formatProseSection(heading: string, text?: string): string {
+  const trimmed = text?.trim();
+  if (!trimmed || trimmed === '') {
+    return '';
+  }
+  return [heading, '', trimmed].join('\n');
+}
+
 /**
  * Format a guide as markdown.
  *
@@ -73,10 +90,14 @@ export function formatGuide(guide: GuideEntry, includeExamples = true): string {
   return joinSections([
     header,
     guide.content?.trim() ?? '',
+    formatBulletSection('## Key Takeaways', guide.keyTakeaways),
     examples,
+    formatBulletSection('## Pitfalls', guide.pitfalls),
+    formatProseSection('## Accessibility', guide.accessibilityNotes),
     formatReferenced(guide),
   ]);
 }
+
 
 /**
  * Format a brief one-line summary of a guide for list output.
