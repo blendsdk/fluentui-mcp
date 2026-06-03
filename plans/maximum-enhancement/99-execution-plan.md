@@ -3,7 +3,8 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-06-02 15:23 (preflight fixes folded in — see 00-preflight-report.md)
-> **Progress**: Phases 1-8 complete; Phase 9 limited live verification done + gpt-5.x/o-series provider fix (2026-06-03) — 796 tests pass. Full `--full` run deferred to user.
+> **Progress**: ✅ ALL PHASES COMPLETE (2026-06-03). Full `--full` pipeline run by user: 62/62 components + 4 utilities + 31 guides/patterns enriched; validator 0 errors/0 warnings; bundle 3.5M; 797 tests pass. Only Success Criterion #8 (re-analyze project) remains.
+
 
 
 
@@ -289,17 +290,23 @@ spec-test-first ordering.
 - [x] 8.1.3 Full verification (build clean; 788 tests pass)
 
 
-### Phase 9: Verify + Live Run
-- [ ] 9.1.1 Run yarn enhance --full (gpt-4o/full catalog) — **DEFERRED**: user will run the full paid run themselves
+### Phase 9: Verify + Live Run ✅ (2026-06-03)
+- [x] 9.1.1 Run `yarn pipeline:full` (scrape + `enhance --full --verbose`, gpt-4o) — **DONE by user**.
+      Result: 62/62 components + 4 utilities + 31 guides/patterns (6 foundation, 15 patterns,
+      5 enterprise, 5 quick-reference) enriched; 0 failures.
 - [x] 9.1.2 Validate output: 0 errors — **wired into the CLI** so it runs automatically on every
       `yarn enhance` write (`scripts/enhancer/cli.ts`: post-write `validateSchema`, prints
       "Validation errors/warnings" counts, surfaces first 10 findings, hard-exits non-zero on any
-      error). Verified offline via fetch-stubbed CLI test ("reports 0 validation errors"); also
-      confirmed the current bundled schema validates with 0 errors / 0 warnings. Field-population
-      and bundle size on the full catalogue still depend on 9.1.1.
-- [~] 9.1.3 Spot-check richness — **substantively done** via the two limited live runs (9.1.5/9.1.6);
-      full-catalogue spot-check still depends on 9.1.1.
+      error). Full bundled schema validated: **0 errors / 0 warnings**. Bundle size **2.6M → 3.5M**.
+      Field coverage: enhanced 62/62; antiPatterns 62; edgeCases 62; performanceNotes 62;
+      themingNotes 62; compositionExamples 59; propGuidance 57. Guides 16/16 keyTakeaways+pitfalls
+      (11/16 a11y notes); patterns 15/15 whenToUse/whenNotToUse/pitfalls; utilities 4/4 perf notes.
+- [x] 9.1.3 Spot-check richness — verified end-to-end via real `dispatchToolCall("query_component",
+      {Button})`: all enriched sections render (Prop Guidance, Composition Examples, Anti-Patterns,
+      Performance, Theming & Tokens, Edge Cases, Related Patterns). Earlier limited runs (9.1.5/9.1.6)
+      confirmed content accuracy (real props, working imports, genuine a11y guidance).
 - [x] 9.1.4 Final full verification (build clean; 797 tests pass, 2026-06-03)
+
 
 - [x] 9.1.5 **Limited live verification — gpt-5.5** (3 components: avatar/badge/breadcrumb via
       `--components-only --input /tmp/enh-test`) — 3 enhanced, **0 failures**, ~108s real

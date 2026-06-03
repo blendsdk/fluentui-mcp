@@ -225,10 +225,11 @@ At runtime the MCP server simply loads and serves that schema:
 
 | Section        | Content                                                              | Count |
 | -------------- | -------------------------------------------------------------------- | ----- |
-| **Components** | Props, slots, stories, AI descriptions, best practices, a11y         | 62    |
-| **Utilities**  | Hooks and helper exports with parameter references                   | 4     |
-| **Guides**     | Foundation, enterprise, and quick-reference guides                   | 16    |
-| **Patterns**   | Form, layout, navigation, modal, and state-management patterns       | 15    |
+| **Components** | Props, slots, stories, AI descriptions, best practices, a11y, prop guidance, anti-patterns, composition examples, performance/theming notes, edge cases | 62    |
+| **Utilities**  | Hooks and helper exports with parameter references + performance notes | 4     |
+| **Guides**     | Foundation, enterprise, and quick-reference guides (with key takeaways, pitfalls, a11y notes) | 16    |
+| **Patterns**   | Form, layout, navigation, modal, and state-management patterns (with when-to-use / when-not-to-use, pitfalls) | 15    |
+
 
 
 ---
