@@ -102,9 +102,11 @@ export function validateSchema(data: unknown): ValidationError[] {
   validateTopLevelFields(data, errors);
   validateContentArrays(data, errors);
   validateComponents(data, errors);
+  validateUtilities(data, errors);
 
   return errors;
 }
+
 
 /**
  * Convenience predicate: true when a schema has zero `error`-severity findings.
@@ -282,10 +284,98 @@ function validateComponents(
         seenIds.add(component.id);
       }
     }
+
+    // Advisory: enhanced.propGuidance entries should reference real props.
+    validatePropGuidance(component, path, errors);
   });
 
   validateStats(data, errors);
 }
+
+/**
+ * Validate that each `enhanced.propGuidance[].prop` references a prop that
+ * actually exists on the component. Bad references are warnings (the guidance
+ * is still kept in the output) per AR #2.
+ *
+ * @param component - The component entry (already confirmed a plain object).
+ * @param path - The component's dotted path (e.g. `components[0]`).
+ * @param errors - The accumulator list to append findings to.
+ */
+function validatePropGuidance(
+  component: Record<string, unknown>,
+  path: string,
+  errors: ValidationError[],
+): void {
+  const enhanced = component.enhanced;
+  if (!isPlainObject(enhanced)) return;
+
+  const guidance = enhanced.propGuidance;
+  if (!Array.isArray(guidance)) return;
+
+  const propNames = new Set(
+    (Array.isArray(component.props) ? component.props : [])
+      .filter(isPlainObject)
+      .map((p) => p.name)
+      .filter((name): name is string => typeof name === 'string'),
+  );
+
+  guidance.forEach((entry, i) => {
+    if (!isPlainObject(entry)) return;
+    if (typeof entry.prop !== 'string') return;
+    if (!propNames.has(entry.prop)) {
+      errors.push({
+        path: `${path}.enhanced.propGuidance[${i}].prop`,
+        message: `propGuidance references unknown prop "${entry.prop}"`,
+        severity: 'warning',
+      });
+    }
+  });
+}
+
+/**
+ * Validate each utility entry's `enhanced.exportGuidance` references.
+ * Bad references (an export name that does not exist on the utility) are
+ * warnings, mirroring the component propGuidance check.
+ *
+ * @param data - The schema object.
+ * @param errors - The accumulator list to append findings to.
+ */
+function validateUtilities(
+  data: Record<string, unknown>,
+  errors: ValidationError[],
+): void {
+  const utilities = data.utilities;
+  if (!Array.isArray(utilities)) return;
+
+  utilities.forEach((utility, index) => {
+    if (!isPlainObject(utility)) return;
+    const enhanced = utility.enhanced;
+    if (!isPlainObject(enhanced)) return;
+
+    const guidance = enhanced.exportGuidance;
+    if (!Array.isArray(guidance)) return;
+
+    const exportNames = new Set(
+      (Array.isArray(utility.exports) ? utility.exports : [])
+        .filter(isPlainObject)
+        .map((e) => e.name)
+        .filter((name): name is string => typeof name === 'string'),
+    );
+
+    guidance.forEach((entry, i) => {
+      if (!isPlainObject(entry)) return;
+      if (typeof entry.export !== 'string') return;
+      if (!exportNames.has(entry.export)) {
+        errors.push({
+          path: `utilities[${index}].enhanced.exportGuidance[${i}].export`,
+          message: `exportGuidance references unknown export "${entry.export}"`,
+          severity: 'warning',
+        });
+      }
+    });
+  });
+}
+
 
 /**
  * Cross-check the declared `stats` totals against the actual array lengths.

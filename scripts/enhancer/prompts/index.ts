@@ -47,6 +47,8 @@ export {
   resolveTargetComponents,
   estimateTokens,
   GROUNDING_INPUT_BUDGET_TOKENS,
+  GROUNDING_SELF_CHECK,
 } from './shared.js';
+
 export type { BudgetedSerializeOptions } from './shared.js';
 

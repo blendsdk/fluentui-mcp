@@ -3,7 +3,10 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-06-02 15:23 (preflight fixes folded in — see 00-preflight-report.md)
-> **Progress**: 17/32 tasks (53%) — Phases 1-2 complete (2026-06-02)
+> **Progress**: Phases 1-6 complete (2026-06-03) — 779 tests pass
+
+
+
 
 
 > **CodeOps Version**: (codeops-mcp unavailable this session)
@@ -236,36 +239,38 @@ spec-test-first ordering.
 - [x] 2.1.7 Full verification (build clean; 752 tests pass)
 
 
-### Phase 3: Schema Expansion
-- [ ] 3.1.1 Write mapping spec tests ST-18..ST-19
+### Phase 3: Schema Expansion ✅ (2026-06-03)
+- [x] 3.1.1 Write mapping spec tests ST-18..ST-19
+- [x] 3.1.2 Verify FAIL (red)
+- [x] 3.1.3 Add new types/fields (ComponentEnhanced/UtilityEnhanced/GuideEntry/PatternEntry + PropGuidance/AntiPattern/ExportGuidance; barrel export)
+- [x] 3.1.4 Extend Raw interfaces + mapXxx
+- [x] 3.1.5 Verify mapping spec tests PASS (green)
+- [x] 3.1.6 Full verification (build clean; 764 tests pass)
 
-- [ ] 3.1.2 Verify FAIL (red)
-- [ ] 3.1.3 Add new types/fields
-- [ ] 3.1.4 Extend Raw interfaces + mapXxx
-- [ ] 3.1.5 Verify mapping spec tests PASS (green)
-- [ ] 3.1.6 Full verification
+### Phase 4: Schema Validator ✅ (2026-06-03)
+- [x] 4.1.1 Write spec tests ST-20..ST-22
+- [x] 4.1.2 Verify FAIL (red)
+- [x] 4.1.3 Validate new fields (warnings for bad prop/export refs)
+- [x] 4.1.4 Verify PASS (green)
+- [x] 4.1.5 Full verification (build clean; 764 tests pass)
 
-### Phase 4: Schema Validator
-- [ ] 4.1.1 Write spec tests ST-20..ST-22
-- [ ] 4.1.2 Verify FAIL (red)
-- [ ] 4.1.3 Validate new fields (warnings for bad prop refs)
-- [ ] 4.1.4 Verify PASS (green)
-- [ ] 4.1.5 Full verification
 
-### Phase 5: Prompt Rewrites
-- [ ] 5.1.1 Write spec tests ST-23..ST-26
-- [ ] 5.1.2 Verify FAIL (red)
-- [ ] 5.1.3 Rewrite component + utility prompts
-- [ ] 5.1.4 Rewrite foundation + pattern prompts
-- [ ] 5.1.5 Rewrite enterprise + quick-ref prompts
-- [ ] 5.1.6 Verify PASS (green) + update prompts.test.ts
-- [ ] 5.1.7 Full verification
+### Phase 5: Prompt Rewrites ✅ (2026-06-03)
+- [x] 5.1.1 Write spec tests ST-23..ST-26 (prompts-max.spec.test.ts, 13 tests)
+- [x] 5.1.2 Verify FAIL (red) — 10/13 failing
+- [x] 5.1.3 Rewrite component + utility prompts (new fields + quotas + self-check)
+- [x] 5.1.4 Rewrite foundation + pattern prompts
+- [x] 5.1.5 Rewrite enterprise + quick-ref prompts
+- [x] 5.1.6 Verify PASS (green) — existing prompts.test.ts unchanged & passing
+- [x] 5.1.7 Full verification (build clean; 777 tests pass)
 
-### Phase 6: Orchestrator Wiring
-- [ ] 6.1.1 Replace provider.chat with chatComplete (maxTokens)
-- [ ] 6.1.2 Resolve targetComponents for guides/patterns
-- [ ] 6.1.3 Update enhancer integration test
-- [ ] 6.1.4 Full verification
+
+### Phase 6: Orchestrator Wiring ✅ (2026-06-03)
+- [x] 6.1.1 Replace provider.chat with chatComplete (maxTokens) in all four batches
+- [x] 6.1.2 Resolve targetComponents for guides/patterns (resolveTargetComponents)
+- [x] 6.1.3 Update enhancer integration test (new-fields + truncation/continuation)
+- [x] 6.1.4 Full verification (build clean; 779 tests pass)
+
 
 ### Phase 7: Formatters & Tools
 - [ ] 7.1.1 Write spec tests ST-27..ST-31 (incl. guide/pattern formatters)

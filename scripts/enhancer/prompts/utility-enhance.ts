@@ -11,31 +11,48 @@
 import type { UtilityEntry } from '../../../src/types/schema.js';
 import type { EnhancementContext } from '../types.js';
 import type { LLMMessage } from '../llm/provider.js';
+import { GROUNDING_SELF_CHECK } from './shared.js';
 
 /**
  * System prompt instructing the model to document a utility package as JSON.
  * The required shape mirrors {@link UtilityEnhanced}.
+ *
+ * Maximum-richness: explicit quotas, per-export guidance, and the new schema
+ * fields (exportGuidance, performanceNotes, edgeCases).
  */
 export const UTILITY_ENHANCE_SYSTEM_PROMPT = `You are a FluentUI React (v9) utilities documentation expert.
-Given a utility package's exported hooks/functions/types, generate documentation.
+Given a utility package's exported hooks/functions/types, generate the richest
+possible grounded documentation. Prioritize completeness and accuracy.
 
 You MUST return ONLY valid JSON (no markdown fences) matching this exact structure:
 {
-  "description": "2-3 sentence description of what this utility package provides",
+  "description": "Rich description of what this utility package provides",
   "whenToUse": "When and why to reach for this utility",
   "commonPatterns": [
     {
       "name": "Pattern name",
       "description": "What this pattern demonstrates",
-      "code": "// TypeScript code example using the real exports"
+      "code": "// Complete TypeScript example using the real exports"
     }
-  ]
+  ],
+  "exportGuidance": [
+    {"export": "usePositioning", "guidance": "How/when to use this export", "example": "// short usage snippet"}
+  ],
+  "performanceNotes": "Performance considerations when using these exports",
+  "edgeCases": ["Edge case or gotcha to be aware of"]
 }
+
+Content quotas (minimums — produce MORE when warranted):
+- commonPatterns: at least 4, each with complete TS/TSX using the real export names.
+- exportGuidance: cover every exported hook/function in the data.
+- edgeCases: at least 3 where applicable.
 
 Rules:
 - Use ONLY the exports provided — do NOT invent functions or hooks.
 - Code examples MUST use the correct import path and export names from the data.
-- Keep the description concise and focused on practical usage.`;
+
+${GROUNDING_SELF_CHECK}`;
+
 
 /**
  * Serialize a utility's export surface for the prompt.

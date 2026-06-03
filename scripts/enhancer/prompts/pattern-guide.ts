@@ -11,14 +11,17 @@
 
 import type { GuideGenerationContext } from '../types.js';
 import type { LLMMessage } from '../llm/provider.js';
-import { serializeComponentSummaries } from './shared.js';
+import { serializeComponentSummaries, GROUNDING_SELF_CHECK } from './shared.js';
 
 /**
  * System prompt for pattern guide generation.
+ *
+ * Maximum-richness: high example quota and the new schema fields (whenToUse,
+ * whenNotToUse, accessibilityNotes, pitfalls).
  */
 export const PATTERN_GUIDE_SYSTEM_PROMPT = `You are a FluentUI v9 patterns expert.
-Generate a comprehensive pattern guide that composes FluentUI components for a
-real-world use case.
+Generate the most comprehensive pattern guide possible that composes FluentUI
+components for a real-world use case. Prioritize depth and completeness.
 
 You MUST return ONLY valid JSON (no markdown fences) matching this structure:
 {
@@ -31,15 +34,26 @@ You MUST return ONLY valid JSON (no markdown fences) matching this structure:
       "components": ["Input", "Button", "Field"]
     }
   ],
-  "referencedComponents": ["Input", "Button", "Field"]
+  "referencedComponents": ["Input", "Button", "Field"],
+  "whenToUse": "When this pattern is the right choice",
+  "whenNotToUse": "When to avoid this pattern and what to use instead",
+  "accessibilityNotes": "Accessibility considerations for this pattern",
+  "pitfalls": ["Common mistakes and how to avoid them"]
 }
+
+Content quotas (minimums — produce MORE when warranted):
+- examples: at least 3 complete compositions; each "components" array accurate.
+- pitfalls: at least 3 where applicable.
 
 Rules:
 - ONLY use components and props that exist in the provided inventory.
 - ONLY use import paths documented in the inventory.
 - Examples must be complete and ready to use, not pseudocode.
 - The "components" array on each example must list the real components used.
-- Include TypeScript types where appropriate.`;
+- Include TypeScript types where appropriate.
+
+${GROUNDING_SELF_CHECK}`;
+
 
 /**
  * Build the message array for generating a pattern guide.

@@ -24,6 +24,7 @@ import type {
 } from '../../src/types/schema.js';
 import type { LLMProvider } from './llm/provider.js';
 import { runBatch } from './llm/batch.js';
+import { chatComplete } from './llm/complete.js';
 import { diffSchemas } from './diff.js';
 import { buildHashIndex, computeComponentHash, computeUtilityHash } from './hasher.js';
 import { parseJsonResponse } from './parse.js';
@@ -35,7 +36,9 @@ import {
   buildEnterpriseGuideMessages,
   buildQuickReferenceMessages,
   buildComponentSummaries,
+  resolveTargetComponents,
 } from './prompts/index.js';
+
 import type { ComponentSummary, GuideSpec } from './types.js';
 import {
   FOUNDATION_GUIDES,
@@ -63,6 +66,18 @@ interface RawComponentEnhancement {
   commonPatterns?: { name: string; description: string; code: string }[];
   stylingTips?: string;
   migrationNotes?: string;
+  propGuidance?: { prop: string; guidance: string; example?: string }[];
+  antiPatterns?: {
+    title: string;
+    problem: string;
+    solution: string;
+    code?: string;
+  }[];
+  performanceNotes?: string;
+  themingNotes?: string;
+  compositionExamples?: { name: string; description: string; code: string }[];
+  relatedPatterns?: string[];
+  edgeCases?: string[];
 }
 
 /** Raw JSON shape returned by the utility enhancement prompt. */
@@ -70,6 +85,9 @@ interface RawUtilityEnhancement {
   description?: string;
   whenToUse?: string;
   commonPatterns?: { name: string; description: string; code: string }[];
+  exportGuidance?: { export: string; guidance: string; example?: string }[];
+  performanceNotes?: string;
+  edgeCases?: string[];
 }
 
 /** Raw JSON shape returned by guide-style prompts. */
@@ -82,6 +100,9 @@ interface RawGuide {
     language: string;
   }[];
   referencedComponents?: string[];
+  keyTakeaways?: string[];
+  pitfalls?: string[];
+  accessibilityNotes?: string;
 }
 
 /** Raw JSON shape returned by the pattern-guide prompt. */
@@ -94,7 +115,12 @@ interface RawPattern {
     components: string[];
   }[];
   referencedComponents?: string[];
+  whenToUse?: string;
+  whenNotToUse?: string;
+  accessibilityNotes?: string;
+  pitfalls?: string[];
 }
+
 
 // ============================================================================
 // Result Type
@@ -198,11 +224,14 @@ export async function runEnhancement(
           allComponentNames,
           version: config.version,
         });
-        const response = await provider.chat(messages, {
+        const response = await chatComplete(provider, messages, {
           temperature: config.temperature,
+          maxTokens: config.maxTokens,
           responseFormat: 'json',
+          log,
         });
         const raw = parseJsonResponse<RawComponentEnhancement>(response.content);
+
         return {
           id: component.id,
           enhanced: mapComponentEnhanced(raw, hashIndex[component.id]),
@@ -272,11 +301,14 @@ export async function runEnhancement(
           allComponentNames,
           version: config.version,
         });
-        const response = await provider.chat(messages, {
+        const response = await chatComplete(provider, messages, {
           temperature: config.temperature,
+          maxTokens: config.maxTokens,
           responseFormat: 'json',
+          log,
         });
         const raw = parseJsonResponse<RawUtilityEnhancement>(response.content);
+
         return {
           id: utility.id,
           enhanced: mapUtilityEnhanced(raw, hashIndex[utility.id]),
@@ -340,6 +372,7 @@ export async function runEnhancement(
       FOUNDATION_GUIDES,
       provider,
       config,
+      rawSchema.components,
       summaries,
       buildFoundationGuideMessages,
       log,
@@ -349,6 +382,7 @@ export async function runEnhancement(
       ENTERPRISE_GUIDES,
       provider,
       config,
+      rawSchema.components,
       summaries,
       buildEnterpriseGuideMessages,
       log,
@@ -358,6 +392,7 @@ export async function runEnhancement(
       QUICK_REFERENCE_GUIDES,
       provider,
       config,
+      rawSchema.components,
       summaries,
       buildQuickReferenceMessages,
       log,
@@ -367,9 +402,11 @@ export async function runEnhancement(
       PATTERN_GUIDES,
       provider,
       config,
+      rawSchema.components,
       summaries,
       log,
     );
+
 
 
     stats.guidesGenerated =
@@ -406,11 +443,16 @@ type GuideMessageBuilder = (context: {
 
 /**
  * Generate a set of GuideEntry items for a catalog using a message builder.
+ *
+ * Each spec's `targetComponentIds` are resolved against the full component
+ * inventory so the prompt receives those components at full fidelity. LLM
+ * calls go through {@link chatComplete} so large guides are never truncated.
  */
 async function generateGuides(
   specs: GuideSpec[],
   provider: LLMProvider,
   config: EnhancerConfig,
+  components: ComponentEntry[],
   summaries: ComponentSummary[],
   buildMessages: GuideMessageBuilder,
   log?: (msg: string) => void,
@@ -428,13 +470,18 @@ async function generateGuides(
         spec,
         allComponentNames,
         componentSummaries: summaries,
-        targetComponents: [],
+        targetComponents: resolveTargetComponents(
+          components,
+          spec.targetComponentIds,
+        ),
         version: config.version,
       });
 
-      const response = await provider.chat(messages, {
+      const response = await chatComplete(provider, messages, {
         temperature: config.temperature,
+        maxTokens: config.maxTokens,
         responseFormat: 'json',
+        log,
       });
       const raw = parseJsonResponse<RawGuide>(response.content);
       return mapGuideEntry(spec, raw);
@@ -452,13 +499,18 @@ async function generateGuides(
 }
 
 
+
 /**
  * Generate PatternEntry items for the pattern catalog.
+ *
+ * Resolves each spec's `targetComponentIds` to full component data and routes
+ * LLM calls through {@link chatComplete} so large patterns are never truncated.
  */
 async function generatePatterns(
   specs: GuideSpec[],
   provider: LLMProvider,
   config: EnhancerConfig,
+  components: ComponentEntry[],
   summaries: ComponentSummary[],
   log?: (msg: string) => void,
 ): Promise<PatternEntry[]> {
@@ -474,17 +526,23 @@ async function generatePatterns(
         spec,
         allComponentNames,
         componentSummaries: summaries,
-        targetComponents: [],
+        targetComponents: resolveTargetComponents(
+          components,
+          spec.targetComponentIds,
+        ),
         version: config.version,
       });
 
-      const response = await provider.chat(messages, {
+      const response = await chatComplete(provider, messages, {
         temperature: config.temperature,
+        maxTokens: config.maxTokens,
         responseFormat: 'json',
+        log,
       });
       const raw = parseJsonResponse<RawPattern>(response.content);
       return mapPatternEntry(spec, raw);
     }),
+
     {
       ...batchOptions(config),
       onProgress: (completed, t) =>
@@ -525,6 +583,13 @@ export function mapComponentEnhanced(
     commonPatterns: raw.commonPatterns ?? [],
     stylingTips: raw.stylingTips ?? '',
     migrationNotes: raw.migrationNotes,
+    propGuidance: raw.propGuidance,
+    antiPatterns: raw.antiPatterns,
+    performanceNotes: raw.performanceNotes,
+    themingNotes: raw.themingNotes,
+    compositionExamples: raw.compositionExamples,
+    relatedPatterns: raw.relatedPatterns,
+    edgeCases: raw.edgeCases,
     sourceHash,
     enhancedAt: new Date().toISOString(),
   };
@@ -541,6 +606,9 @@ export function mapUtilityEnhanced(
     description: raw.description ?? '',
     whenToUse: raw.whenToUse ?? '',
     commonPatterns: raw.commonPatterns ?? [],
+    exportGuidance: raw.exportGuidance,
+    performanceNotes: raw.performanceNotes,
+    edgeCases: raw.edgeCases,
     sourceHash,
     enhancedAt: new Date().toISOString(),
   };
@@ -558,6 +626,9 @@ export function mapGuideEntry(spec: GuideSpec, raw: RawGuide): GuideEntry {
     content,
     codeExamples: raw.codeExamples ?? [],
     referencedComponents: raw.referencedComponents ?? [],
+    keyTakeaways: raw.keyTakeaways,
+    pitfalls: raw.pitfalls,
+    accessibilityNotes: raw.accessibilityNotes,
     sourceHash: hashString(content),
     enhancedAt: new Date().toISOString(),
   };
@@ -575,10 +646,15 @@ export function mapPatternEntry(spec: GuideSpec, raw: RawPattern): PatternEntry 
     content,
     examples: raw.examples ?? [],
     referencedComponents: raw.referencedComponents ?? [],
+    whenToUse: raw.whenToUse,
+    whenNotToUse: raw.whenNotToUse,
+    accessibilityNotes: raw.accessibilityNotes,
+    pitfalls: raw.pitfalls,
     sourceHash: hashString(content),
     enhancedAt: new Date().toISOString(),
   };
 }
+
 
 // ============================================================================
 // Internal Utilities

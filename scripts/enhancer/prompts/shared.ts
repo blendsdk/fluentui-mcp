@@ -18,6 +18,22 @@ import type { ComponentEntry } from '../../../src/types/schema.js';
 import type { ComponentSummary } from '../types.js';
 
 /**
+ * Shared GROUNDING SELF-CHECK block appended to every system prompt.
+ *
+ * This is the safe, legitimate form of a "review before returning" instruction:
+ * the model silently drops any reference not present in the provided data so it
+ * cannot hallucinate APIs, props, or import paths (AR-2). It also restates the
+ * non-negotiable strict-JSON contract the parser depends on.
+ */
+export const GROUNDING_SELF_CHECK = `GROUNDING SELF-CHECK (perform silently before returning):
+- Verify every component, prop, slot, hook, and import you reference appears in
+  the provided data.
+- Remove anything not present — never invent APIs, props, or import paths.
+- Ensure all code examples would compile against the real API surface.
+Return ONLY the final valid JSON object. No prose, no markdown fences.`;
+
+
+/**
  * Rough token estimate (~4 chars/token). Good enough for input budgeting;
  * not a substitute for a real tokenizer, just a guard against context overflow.
  *

@@ -38,7 +38,22 @@ const COMPONENT_RESPONSE = JSON.stringify({
     { name: 'Basic', description: 'Basic usage', code: '<X />' },
   ],
   stylingTips: 'Use tokens.',
+  // New Phase 3 enrichment fields — exercised by the new-fields test below.
+  propGuidance: [
+    { prop: 'appearance', guidance: 'Use primary for the main action.' },
+  ],
+  antiPatterns: [
+    { title: 'Avoid X', problem: 'It is wrong.', solution: 'Do Y instead.' },
+  ],
+  performanceNotes: 'Memoize handlers.',
+  themingNotes: 'Respects tokens.colorBrandBackground.',
+  compositionExamples: [
+    { name: 'With icon', description: 'Slot override', code: '<X icon={<I/>} />' },
+  ],
+  relatedPatterns: ['login-form'],
+  edgeCases: ['Disabled state suppresses onClick.'],
 });
+
 
 const UTILITY_RESPONSE = JSON.stringify({
   description: 'A test utility description.',
@@ -128,7 +143,68 @@ describe('runEnhancement — first run', () => {
     // generatedAt refreshed.
     expect(schema.generatedAt).not.toBe(raw.generatedAt);
   });
+
+  it('maps the new enrichment fields end-to-end', async () => {
+    const raw = createMinimalTestSchema();
+    const provider = makeProvider();
+    const config = resolveEnhancerConfig({ version: 'v9', full: true });
+
+    const { schema } = await runEnhancement(raw, null, provider, config);
+
+    const button = schema.components.find((c) => c.name === 'Button');
+    expect(button?.enhanced?.propGuidance?.[0]?.prop).toBe('appearance');
+    expect(button?.enhanced?.antiPatterns?.[0]?.title).toBe('Avoid X');
+    expect(button?.enhanced?.performanceNotes).toBe('Memoize handlers.');
+    expect(button?.enhanced?.themingNotes).toContain('colorBrandBackground');
+    expect(button?.enhanced?.compositionExamples?.[0]?.name).toBe('With icon');
+    expect(button?.enhanced?.relatedPatterns).toContain('login-form');
+    expect(button?.enhanced?.edgeCases?.length).toBeGreaterThan(0);
+  });
+
+  it('stitches a truncated component response via chatComplete', async () => {
+    // Split COMPONENT_RESPONSE into two parts so the first turn looks
+    // truncated (no closing brace) and the continuation completes it.
+    // Detect the continuation turn from the messages (not a shared counter)
+    // so the test stays deterministic under concurrency.
+    const splitAt = Math.floor(COMPONENT_RESPONSE.length / 2);
+    const head = COMPONENT_RESPONSE.slice(0, splitAt);
+    const tail = COMPONENT_RESPONSE.slice(splitAt);
+
+    let sawContinuation = false;
+    const provider = new MockLLMProvider({
+      response: (messages) => {
+        const system = messages[0]?.content ?? '';
+        if (system.includes('component documentation expert')) {
+          const last = messages[messages.length - 1]?.content ?? '';
+          if (last.includes('Continue the JSON')) {
+            sawContinuation = true;
+            return tail;
+          }
+          return head;
+        }
+        return routeResponse(messages);
+      },
+    });
+
+    const raw = createMinimalTestSchema();
+    const config = resolveEnhancerConfig({
+      version: 'v9',
+      full: true,
+      generateGuides: false,
+    });
+
+    const { schema, stats } = await runEnhancement(raw, null, provider, config);
+
+    // A continuation turn must have happened to complete the JSON.
+    expect(sawContinuation).toBe(true);
+    // The stitched JSON parsed into a complete enhancement.
+    const button = schema.components.find((c) => c.name === 'Button');
+    expect(button?.enhanced?.description).toBe('A test component description.');
+    expect(stats.failures).toBe(0);
+  });
+
 });
+
 
 // ============================================================================
 // Incremental Run (carry forward unchanged enhancements)

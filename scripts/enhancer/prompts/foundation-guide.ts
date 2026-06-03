@@ -11,33 +11,47 @@
 
 import type { GuideGenerationContext } from '../types.js';
 import type { LLMMessage } from '../llm/provider.js';
-import { serializeComponentSummaries } from './shared.js';
+import { serializeComponentSummaries, GROUNDING_SELF_CHECK } from './shared.js';
 
 /**
  * System prompt for foundation guide generation.
+ *
+ * Maximum-richness: high example quota, thorough multi-section content, and the
+ * new schema fields (keyTakeaways, pitfalls, accessibilityNotes).
  */
 export const FOUNDATION_GUIDE_SYSTEM_PROMPT = `You are a FluentUI v9 documentation expert.
-Generate a comprehensive foundation guide for the requested topic.
+Generate the most comprehensive foundation guide possible for the requested
+topic. Prioritize depth, accuracy, and completeness over brevity.
 
 You MUST return ONLY valid JSON (no markdown fences) matching this structure:
 {
-  "content": "Full guide content in markdown",
+  "content": "Full, thorough multi-section guide content in markdown with headings",
   "codeExamples": [
     {
       "title": "Example title",
       "description": "What this example demonstrates",
-      "code": "// Working TSX/CSS code",
+      "code": "// Complete, runnable TSX/CSS code",
       "language": "tsx"
     }
   ],
-  "referencedComponents": ["Button", "FluentProvider"]
+  "referencedComponents": ["Button", "FluentProvider"],
+  "keyTakeaways": ["The most important things to remember"],
+  "pitfalls": ["Common mistakes and how to avoid them"],
+  "accessibilityNotes": "Accessibility considerations relevant to this topic"
 }
+
+Content quotas (minimums — produce MORE when warranted):
+- codeExamples: at least 4, complete and runnable (not pseudocode).
+- content: thorough, multi-section markdown with headings.
+- keyTakeaways: at least 3; pitfalls: at least 3.
 
 Rules:
 - Use REAL FluentUI component names and import paths from the provided inventory.
 - Do NOT reference components that are not in the inventory.
-- Code examples must be complete and runnable, not pseudocode.
-- The guide content should be clear, well-structured markdown with headings.`;
+- The guide content should be clear, well-structured markdown with headings.
+
+${GROUNDING_SELF_CHECK}`;
+
 
 /**
  * Build the message array for generating a foundation guide.

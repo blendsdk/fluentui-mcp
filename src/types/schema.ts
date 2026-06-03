@@ -336,6 +336,27 @@ export interface ComponentEnhanced {
   /** Migration notes from previous version (if applicable) */
   migrationNotes?: string;
 
+  /** Per-prop usage guidance keyed by prop name. */
+  propGuidance?: PropGuidance[];
+
+  /** Anti-patterns: things people commonly get wrong, with the correct fix. */
+  antiPatterns?: AntiPattern[];
+
+  /** Performance considerations (memoization, re-render costs, virtualization). */
+  performanceNotes?: string;
+
+  /** Theming & design-token guidance (which tokens to use, dark mode, RTL). */
+  themingNotes?: string;
+
+  /** Slot-composition examples demonstrating slot overrides/children. */
+  compositionExamples?: PatternExample[];
+
+  /** Related-pattern links (pattern/guide ids this component participates in). */
+  relatedPatterns?: string[];
+
+  /** Edge cases & gotchas (controlled/uncontrolled, async, empty states). */
+  edgeCases?: string[];
+
   /**
    * Hash of the component's raw data when this enhancement was generated.
    * Used for diff-based updates — if the hash matches, skip re-enhancement.
@@ -345,6 +366,40 @@ export interface ComponentEnhanced {
   /** ISO 8601 timestamp of when this enhancement was generated */
   enhancedAt: string;
 }
+
+/**
+ * Per-prop usage guidance for a component prop.
+ * The `prop` should match a prop name on the component; the validator emits a
+ * warning (not an error) when it does not.
+ */
+export interface PropGuidance {
+  /** Prop name (must exist in the component's props). */
+  prop: string;
+
+  /** When/why to set this prop and recommended values. */
+  guidance: string;
+
+  /** Example values or a short snippet. */
+  example?: string;
+}
+
+/**
+ * A common mistake people make with a component, paired with the correct fix.
+ */
+export interface AntiPattern {
+  /** Short title of the mistake. */
+  title: string;
+
+  /** What people do wrong. */
+  problem: string;
+
+  /** The correct approach. */
+  solution: string;
+
+  /** Optional corrected code snippet. */
+  code?: string;
+}
+
 
 /**
  * A keyboard interaction entry for accessibility documentation.
@@ -426,6 +481,15 @@ export interface UtilityEnhanced {
   /** Common usage patterns with code examples */
   commonPatterns: PatternExample[];
 
+  /** Per-export usage guidance. */
+  exportGuidance?: ExportGuidance[];
+
+  /** Performance considerations. */
+  performanceNotes?: string;
+
+  /** Edge cases & gotchas. */
+  edgeCases?: string[];
+
   /** Hash for diff-based updates */
   sourceHash: string;
 
@@ -434,8 +498,25 @@ export interface UtilityEnhanced {
 }
 
 /**
+ * Per-export usage guidance for a utility export.
+ * The `export` should match an export name on the utility; the validator emits
+ * a warning (not an error) when it does not.
+ */
+export interface ExportGuidance {
+  /** Export name (must exist in the utility's exports). */
+  export: string;
+
+  /** When/why to use this export. */
+  guidance: string;
+
+  /** Example values or a short snippet. */
+  example?: string;
+}
+
+/**
  * A single export from a utility package.
  */
+
 export interface UtilityExport {
   /** Export name (e.g., 'usePositioning', 'createArrowStyles') */
   name: string;
@@ -506,6 +587,15 @@ export interface GuideEntry {
   /** Component names referenced in this guide */
   referencedComponents: string[];
 
+  /** Key takeaways / TL;DR bullets. */
+  keyTakeaways?: string[];
+
+  /** Common pitfalls for this topic. */
+  pitfalls?: string[];
+
+  /** Accessibility callouts relevant to the guide. */
+  accessibilityNotes?: string;
+
   /** Hash for diff-based updates */
   sourceHash: string;
 
@@ -516,6 +606,7 @@ export interface GuideEntry {
 /**
  * A code example embedded within a guide.
  */
+
 export interface GuideCodeExample {
   /** Example title */
   title: string;
@@ -556,6 +647,18 @@ export interface PatternEntry {
   /** Component names this pattern uses */
   referencedComponents: string[];
 
+  /** When to use this pattern. */
+  whenToUse?: string;
+
+  /** When NOT to use this pattern. */
+  whenNotToUse?: string;
+
+  /** Accessibility callouts for the composed pattern. */
+  accessibilityNotes?: string;
+
+  /** Pitfalls specific to this pattern. */
+  pitfalls?: string[];
+
   /** Hash for diff-based updates */
   sourceHash: string;
 
@@ -565,6 +668,7 @@ export interface PatternEntry {
 
 /**
  * A complete working example within a pattern entry.
+
  * Includes references to which components are used.
  */
 export interface PatternEntryExample {
