@@ -110,6 +110,7 @@ jobs:
               run: |
                   npm pack --dry-run 2>&1 | tee pack-output.txt
                   grep -q "data/" pack-output.txt || { echo "::error::data/ not included in npm package"; exit 1; }
+                  grep -q "dist/index.js" pack-output.txt || { echo "::error::dist/index.js (bin entry) not included in npm package — build did not emit"; exit 1; }
 
 
             - name: Publish to npm (dry run)
