@@ -1,0 +1,383 @@
+# Execution Plan: Maximum Enhancement
+
+> **Document**: 99-execution-plan.md
+> **Parent**: [Index](00-index.md)
+> **Last Updated**: 2026-06-02 15:23 (preflight fixes folded in — see 00-preflight-report.md)
+> **Progress**: ✅ ALL PHASES COMPLETE (2026-06-03). Full `--full` pipeline run by user: 62/62 components + 4 utilities + 31 guides/patterns enriched; validator 0 errors/0 warnings; bundle 3.5M; 797 tests pass. Only Success Criterion #8 (re-analyze project) remains.
+
+
+
+
+
+
+
+
+> **CodeOps Version**: (codeops-mcp unavailable this session)
+
+
+## Overview
+
+Implement the maximum-richness enhancer overhaul: never-truncate output
+capacity, full grounding data, expanded schema, rewritten prompts, validator,
+formatters/tools, and a live verification run. Each feature phase follows
+spec-test-first ordering.
+
+**🚨 Update this document after EACH completed task!**
+
+---
+
+## Implementation Phases
+
+| Phase | Title | Sessions | Est. Time |
+| ----- | ----- | -------- | --------- |
+| 1 | LLM Output Capacity (maxTokens + continuation/repair) | 1 | 90 min |
+| 2 | Grounding Data Layer (remove cap, enrich, targeted) | 1 | 90 min |
+| 3 | Schema Expansion (new types + raw mapping) | 1 | 60 min |
+| 4 | Schema Validator updates | 1 | 45 min |
+| 5 | Prompt Rewrites (all six) | 1-2 | 90 min |
+| 6 | Orchestrator wiring (maxTokens + new fields + targeted) | 1 | 60 min |
+| 7 | Formatters & Tools | 1 | 75 min |
+| 8 | Tests pass + regressions | 1 | 45 min |
+| 9 | Verify + live `--full` run | 1 | 45 min |
+
+**Total: ~9 sessions, ~9-10 hours**
+
+---
+
+## Phase 1: LLM Output Capacity
+
+**Reference**: `03-llm-capacity.md`
+**Objective**: Thread `maxTokens`, raise ceilings, add continuation/repair so output is never truncated.
+
+| # | Task | File |
+|---|------|------|
+| 1.1.1 | Write spec tests ST-1..ST-10, ST-9b/9c, ST-6b/6c | `src/__tests__/enhancer/capacity.spec.test.ts` |
+| 1.1.2 | Verify spec tests FAIL (red) | — |
+| 1.1.3 | Add `findJsonEnd`/`isLikelyComplete`/`repairJson` | `scripts/enhancer/parse.ts` |
+| 1.1.4 | Add optional `maxTokens` to config + env resolution (NaN-guarded) | `scripts/enhancer/config.ts` |
+| 1.1.5a | Add model-aware ceiling lookup (`MODEL_OUTPUT_CEILINGS`, `resolveMaxTokens`) | `scripts/enhancer/llm/ceilings.ts` |
+| 1.1.5b | Wire `resolveMaxTokens` into both providers (clamp; send `max_tokens` always) | `scripts/enhancer/llm/openai.ts`, `llm/anthropic.ts` |
+| 1.1.6 | Add `chatComplete` escalation ladder (provider-aware continuation → re-request → repair + `repairsUsed`) | `scripts/enhancer/llm/complete.ts` |
+| 1.1.7 | Verify spec tests PASS (green) | — |
+| 1.1.8 | Write impl tests | `src/__tests__/enhancer/capacity.impl.test.ts` |
+| 1.1.9 | Full verification | `yarn build && yarn test` |
+
+
+**Verify**: `clear && sleep 3 && yarn build && yarn test`
+
+---
+
+## Phase 2: Grounding Data Layer
+
+**Reference**: `04-grounding-data.md`
+**Objective**: Remove `KEY_PROPS_LIMIT`, enrich `ComponentSummary`, full stories, targeted guide data.
+
+| # | Task | File |
+|---|------|------|
+| 2.1.1 | Write spec tests ST-11..ST-17 | `src/__tests__/enhancer/grounding.spec.test.ts` |
+| 2.1.2 | Verify spec tests FAIL (red) | — |
+| 2.1.3 | Remove cap; enrich `ComponentSummary`; rewrite serializers | `scripts/enhancer/prompts/shared.ts`, `scripts/enhancer/types.ts` |
+| 2.1.4 | Full story `code` + compositions in component serialization | `scripts/enhancer/prompts/component-enhance.ts` |
+| 2.1.5 | Add `targetComponentIds`/`targetComponents` plumbing | `scripts/enhancer/config.ts`, `scripts/enhancer/types.ts` |
+| 2.1.6 | Verify spec tests PASS (green) | — |
+| 2.1.7 | Full verification | `yarn build && yarn test` |
+
+**Verify**: `clear && sleep 3 && yarn build && yarn test`
+
+---
+
+## Phase 3: Schema Expansion
+
+**Reference**: `05-schema-expansion.md`
+**Objective**: Add new optional enhanced fields + raw mapping.
+
+| # | Task | File |
+|---|------|------|
+| 3.1.1 | Write spec tests ST-18..ST-19 (mapping) | `src/__tests__/schema/schema-expansion.spec.test.ts` |
+| 3.1.2 | Verify FAIL (red) | — |
+| 3.1.3 | Add new types/fields | `src/types/schema.ts` |
+| 3.1.4 | Extend Raw interfaces + `mapXxx` | `scripts/enhancer/enhancer.ts` |
+| 3.1.5 | Verify mapping spec tests PASS (green) | — |
+| 3.1.6 | Full verification | `yarn build && yarn test` |
+
+**Verify**: `clear && sleep 3 && yarn build && yarn test`
+
+---
+
+## Phase 4: Schema Validator
+
+**Reference**: `05-schema-expansion.md`
+**Objective**: Validate new fields; back-compat + warnings.
+
+| # | Task | File |
+|---|------|------|
+| 4.1.1 | Write spec tests ST-20..ST-22 | `src/__tests__/schema/schema-expansion.spec.test.ts` |
+| 4.1.2 | Verify FAIL (red) | — |
+| 4.1.3 | Validate new fields (warnings for bad prop refs) | `src/schema/schema-validator.ts` |
+| 4.1.4 | Verify PASS (green) | — |
+| 4.1.5 | Full verification | `yarn build && yarn test` |
+
+**Verify**: `clear && sleep 3 && yarn build && yarn test`
+
+---
+
+## Phase 5: Prompt Rewrites
+
+**Reference**: `06-prompt-rewrites.md`
+**Objective**: Rewrite all six prompts with quotas, self-check, new fields.
+
+| # | Task | File |
+|---|------|------|
+| 5.1.1 | Write spec tests ST-23..ST-26 | `src/__tests__/enhancer/prompts-max.spec.test.ts` |
+| 5.1.2 | Verify FAIL (red) | — |
+| 5.1.3 | Rewrite component + utility prompts | `prompts/component-enhance.ts`, `prompts/utility-enhance.ts` |
+| 5.1.4 | Rewrite foundation + pattern prompts | `prompts/foundation-guide.ts`, `prompts/pattern-guide.ts` |
+| 5.1.5 | Rewrite enterprise + quick-ref prompts | `prompts/enterprise-guide.ts`, `prompts/quick-reference.ts` |
+| 5.1.6 | Verify PASS (green) + update `prompts.test.ts` | `src/__tests__/enhancer/prompts.test.ts` |
+| 5.1.7 | Full verification | `yarn build && yarn test` |
+
+**Verify**: `clear && sleep 3 && yarn build && yarn test`
+
+---
+
+## Phase 6: Orchestrator Wiring
+
+**Reference**: `03`, `04`, `05`
+**Objective**: Pass `maxTokens` via `chatComplete`; resolve targeted components; map new fields end-to-end.
+
+| # | Task | File |
+|---|------|------|
+| 6.1.1 | Replace `provider.chat` with `chatComplete` (maxTokens) in all batches | `scripts/enhancer/enhancer.ts` |
+| 6.1.2 | Resolve `targetComponents` for guides/patterns | `scripts/enhancer/enhancer.ts` |
+| 6.1.3 | Update enhancer integration test (mock truncation + new fields) | `src/__tests__/enhancer/enhancer.test.ts` |
+| 6.1.4 | Full verification | `yarn build && yarn test` |
+
+**Verify**: `clear && sleep 3 && yarn build && yarn test`
+
+---
+
+## Phase 7: Formatters & Tools
+
+**Reference**: `08-formatters-tools.md`
+**Objective**: Surface new fields in tool output.
+
+| # | Task | File |
+|---|------|------|
+| 7.1.1 | Write spec tests ST-27..ST-31 (incl. guide/pattern formatters) | `src/__tests__/formatters/enriched-formatter.spec.test.ts` |
+| 7.1.2 | Verify FAIL (red) | — |
+| 7.1.3 | Render new fields in component/props formatters | `src/formatters/component-formatter.ts`, `props-formatter.ts` |
+| 7.1.4 | Render new fields in guide/pattern formatters (ST-30/31) | `src/formatters/guide-formatter.ts`, `pattern-formatter.ts` |
+| 7.1.5 | Verify tools pass full entries | `src/tools/*` |
+| 7.1.6 | Verify PASS (green) + update existing formatter tests | `src/__tests__/formatters/*` |
+
+| 7.1.7 | Full verification | `yarn build && yarn test` |
+
+**Verify**: `clear && sleep 3 && yarn build && yarn test`
+
+---
+
+## Phase 8: Tests Pass + Regressions
+
+**Reference**: `07-testing-strategy.md`
+**Objective**: Whole suite green; no regressions.
+
+| # | Task | File |
+|---|------|------|
+| 8.1.1 | Run full suite, fix any regressions | — |
+| 8.1.2 | Confirm `KEY_PROPS_LIMIT` gone (ST-17) | repo-wide search |
+| 8.1.3 | Full verification | `yarn build && yarn test` |
+
+**Verify**: `clear && sleep 3 && yarn build && yarn test`
+
+---
+
+## Phase 9: Verify + Live `--full` Run
+
+**Reference**: `01-requirements.md` acceptance criteria
+**Objective**: Real enhancement run with gpt-4o; validate richness/validity/size.
+
+| # | Task | File |
+|---|------|------|
+| 9.1.1 | Run `yarn enhance --version v9 --full --verbose` (gpt-4o, .env) | `data/v9/fluentui-schema-enhanced.json` |
+| 9.1.2 | Validate output: 0 errors; new fields populated; note bundle size | — |
+| 9.1.3 | Spot-check 2-3 components/guides for richness | — |
+| 9.1.4 | Final full verification | `yarn build && yarn test` |
+
+**Verify**: `clear && sleep 3 && yarn build && yarn test`
+
+---
+
+## 🚨 Master Progress Checklist (All Phases) — MANDATORY
+
+> **⚠️ EXECUTION RULE — APPLIES TO EVERY AGENT EXECUTING THIS PLAN:**
+>
+> This checklist is the **single source of truth** for tracking progress.
+> 1. After completing each task: mark it `[x]` with a timestamp.
+> 2. After each phase: confirm all its tasks are `[x]`.
+> 3. Update the Progress header after every update.
+> 4. If missing/incomplete, reconstruct from the phase tables above.
+> 5. Never batch updates — update immediately after each task.
+
+### Phase 1: LLM Output Capacity ✅ (2026-06-02)
+- [x] 1.1.1 Write spec tests ST-1..ST-10, ST-9b/9c, ST-6b/6c
+- [x] 1.1.2 Verify spec tests FAIL (red)
+- [x] 1.1.3 Add parse.ts JSON-completeness/repair helpers
+- [x] 1.1.4 Add optional maxTokens to config + env resolution (NaN-guarded)
+- [x] 1.1.5a Add model-aware ceiling lookup (ceilings.ts)
+- [x] 1.1.5b Wire resolveMaxTokens into both providers (clamp; send max_tokens always)
+- [x] 1.1.6 Add chatComplete escalation ladder (continuation → re-request → repair + repairsUsed)
+- [x] 1.1.7 Verify spec tests PASS (green)
+- [x] 1.1.8 Write impl tests
+- [x] 1.1.9 Full verification (build clean; 739 tests pass)
+
+
+### Phase 2: Grounding Data Layer ✅ (2026-06-02)
+- [x] 2.1.1 Write spec tests ST-11..ST-17, ST-17b/17c
+- [x] 2.1.2 Verify spec tests FAIL (red)
+- [x] 2.1.3 Remove cap; enrich ComponentSummary; rewrite serializers
+- [x] 2.1.4 Full story code + compositions in component serialization
+- [x] 2.1.5 Add targetComponentIds/targetComponents plumbing
+- [x] 2.1.5b Add input-budget guard (estimateTokens + degrade non-targeted inventory)
+- [x] 2.1.6 Verify spec tests PASS (green)
+- [x] 2.1.7 Full verification (build clean; 752 tests pass)
+
+
+### Phase 3: Schema Expansion ✅ (2026-06-03)
+- [x] 3.1.1 Write mapping spec tests ST-18..ST-19
+- [x] 3.1.2 Verify FAIL (red)
+- [x] 3.1.3 Add new types/fields (ComponentEnhanced/UtilityEnhanced/GuideEntry/PatternEntry + PropGuidance/AntiPattern/ExportGuidance; barrel export)
+- [x] 3.1.4 Extend Raw interfaces + mapXxx
+- [x] 3.1.5 Verify mapping spec tests PASS (green)
+- [x] 3.1.6 Full verification (build clean; 764 tests pass)
+
+### Phase 4: Schema Validator ✅ (2026-06-03)
+- [x] 4.1.1 Write spec tests ST-20..ST-22
+- [x] 4.1.2 Verify FAIL (red)
+- [x] 4.1.3 Validate new fields (warnings for bad prop/export refs)
+- [x] 4.1.4 Verify PASS (green)
+- [x] 4.1.5 Full verification (build clean; 764 tests pass)
+
+
+### Phase 5: Prompt Rewrites ✅ (2026-06-03)
+- [x] 5.1.1 Write spec tests ST-23..ST-26 (prompts-max.spec.test.ts, 13 tests)
+- [x] 5.1.2 Verify FAIL (red) — 10/13 failing
+- [x] 5.1.3 Rewrite component + utility prompts (new fields + quotas + self-check)
+- [x] 5.1.4 Rewrite foundation + pattern prompts
+- [x] 5.1.5 Rewrite enterprise + quick-ref prompts
+- [x] 5.1.6 Verify PASS (green) — existing prompts.test.ts unchanged & passing
+- [x] 5.1.7 Full verification (build clean; 777 tests pass)
+
+
+### Phase 6: Orchestrator Wiring ✅ (2026-06-03)
+- [x] 6.1.1 Replace provider.chat with chatComplete (maxTokens) in all four batches
+- [x] 6.1.2 Resolve targetComponents for guides/patterns (resolveTargetComponents)
+- [x] 6.1.3 Update enhancer integration test (new-fields + truncation/continuation)
+- [x] 6.1.4 Full verification (build clean; 779 tests pass)
+
+
+### Phase 7: Formatters & Tools ✅ (2026-06-03)
+- [x] 7.1.1 Write spec tests ST-27..ST-31 (enriched-formatter.spec.test.ts, 9 tests)
+- [x] 7.1.2 Verify FAIL (red) — 4/9 "present" tests failing
+- [x] 7.1.3 Render new fields in component/props formatters (propGuidance, antiPatterns, performance, theming, edgeCases, relatedPatterns, composition)
+- [x] 7.1.4 Render new fields in guide/pattern formatters (keyTakeaways, pitfalls, accessibilityNotes, whenToUse/whenNotToUse)
+- [x] 7.1.5 Verify tools pass full entries (no signature change — query-component/get-props-reference already pass full ComponentEntry)
+- [x] 7.1.6 Verify PASS (green) — existing formatter tests unchanged & passing
+- [x] 7.1.7 Full verification (build clean; 788 tests pass)
+
+### Phase 8: Tests Pass + Regressions ✅ (2026-06-03)
+- [x] 8.1.1 Run full suite, fix regressions (no regressions; 788 pass)
+- [x] 8.1.2 Confirm KEY_PROPS_LIMIT gone (ST-17) — only in plan docs + tests asserting absence
+- [x] 8.1.3 Full verification (build clean; 788 tests pass)
+
+
+### Phase 9: Verify + Live Run ✅ (2026-06-03)
+- [x] 9.1.1 Run `yarn pipeline:full` (scrape + `enhance --full --verbose`, gpt-4o) — **DONE by user**.
+      Result: 62/62 components + 4 utilities + 31 guides/patterns (6 foundation, 15 patterns,
+      5 enterprise, 5 quick-reference) enriched; 0 failures.
+- [x] 9.1.2 Validate output: 0 errors — **wired into the CLI** so it runs automatically on every
+      `yarn enhance` write (`scripts/enhancer/cli.ts`: post-write `validateSchema`, prints
+      "Validation errors/warnings" counts, surfaces first 10 findings, hard-exits non-zero on any
+      error). Full bundled schema validated: **0 errors / 0 warnings**. Bundle size **2.6M → 3.5M**.
+      Field coverage: enhanced 62/62; antiPatterns 62; edgeCases 62; performanceNotes 62;
+      themingNotes 62; compositionExamples 59; propGuidance 57. Guides 16/16 keyTakeaways+pitfalls
+      (11/16 a11y notes); patterns 15/15 whenToUse/whenNotToUse/pitfalls; utilities 4/4 perf notes.
+- [x] 9.1.3 Spot-check richness — verified end-to-end via real `dispatchToolCall("query_component",
+      {Button})`: all enriched sections render (Prop Guidance, Composition Examples, Anti-Patterns,
+      Performance, Theming & Tokens, Edge Cases, Related Patterns). Earlier limited runs (9.1.5/9.1.6)
+      confirmed content accuracy (real props, working imports, genuine a11y guidance).
+- [x] 9.1.4 Final full verification (build clean; 797 tests pass, 2026-06-03)
+
+
+- [x] 9.1.5 **Limited live verification — gpt-5.5** (3 components: avatar/badge/breadcrumb via
+      `--components-only --input /tmp/enh-test`) — 3 enhanced, **0 failures**, ~108s real
+      LLM calls. All new fields populated (propGuidance 12, antiPatterns 4, compositionExamples 4,
+      relatedPatterns 6, edgeCases 9, performanceNotes/themingNotes strings). Content spot-checked:
+      accurate, grounded v9 content (real props, working imports, genuine a11y guidance).
+- [x] 9.1.6 **Limited live verification — gpt-4o** (3 components: button/card/spinner) — 3 enhanced,
+      **0 failures**, ~60s real LLM calls. All new fields populated (propGuidance 4-9, antiPatterns 3,
+      compositionExamples 2, edgeCases 3, perf/theming strings; relatedPatterns optional/empty here).
+      Confirms the provider fix is **model-agnostic**: GPT-4o uses the legacy `max_tokens`+`temperature`
+      path; GPT-5.x/o-series use `max_completion_tokens` and omit `temperature`. Both work end-to-end.
+
+
+#### Phase 9 bug fix — newer OpenAI models (gpt-5.x / o-series) (2026-06-03)
+The first limited live run failed all 3 components instantly. Root cause: configured model
+`gpt-5.5` rejects the legacy `max_tokens` param (HTTP 400: "use `max_completion_tokens`") and
+also rejects any non-default `temperature`. Fix (spec-test-first):
+- `scripts/enhancer/llm/ceilings.ts`: added `MODEL_FAMILY_CEILINGS` + `ceilingForModel`
+  (exact match → longest family prefix → fallback), `usesMaxCompletionTokens(model)`,
+  `supportsCustomTemperature(model)`. GPT-5 ceiling 32768, o3/o4 65536, o1 32768.
+- `scripts/enhancer/llm/openai.ts`: send `max_completion_tokens` (not `max_tokens`) and omit
+  `temperature` for GPT-5/o-series; GPT-4o and earlier unchanged.
+- `scripts/enhancer/llm/index.ts`: export the new helpers.
+- `src/__tests__/enhancer/capacity.spec.test.ts`: added ST-9d (family prefixes), ST-9e/9f
+  (param/temperature compatibility flags), ST-9g (provider request shaping). +8 tests → 796 pass.
+
+
+
+---
+
+## Session Protocol
+
+### Starting a Session
+1. If `scripts/agent.sh` exists: `clear && sleep 3 && scripts/agent.sh start`
+2. "Implement Phase X per `plans/maximum-enhancement/99-execution-plan.md`"
+
+### Ending a Session
+1. Run verify command
+2. Handle commit per active commit mode
+3. If `scripts/agent.sh` exists: `clear && sleep 3 && scripts/agent.sh finished`
+4. `/compact`
+
+---
+
+## Dependencies
+
+```
+Phase 1 (capacity)
+    ↓
+Phase 2 (grounding) ── Phase 3 (schema) ── Phase 4 (validator)
+    ↓                        ↓
+Phase 5 (prompts) ←──────────┘
+    ↓
+Phase 6 (orchestrator wiring)
+    ↓
+Phase 7 (formatters/tools)
+    ↓
+Phase 8 (regressions) → Phase 9 (live run)
+```
+
+---
+
+## Success Criteria
+
+**Feature is complete when:**
+
+1. ✅ All phases completed
+2. ✅ All verification passing (`yarn build && yarn test`)
+3. ✅ No warnings/errors
+4. ✅ No dead code — `KEY_PROPS_LIMIT` removed; no unused params/functions
+5. ✅ Security: no new input surface; defensive JSON parsing/repair
+6. ✅ Documentation updated (README schema-coverage if fields change output)
+7. ✅ Live `--full` run yields a valid enhanced schema (0 validation errors)
+8. ✅ **Post-completion:** Ask user to re-analyze project and update `.clinerules/project.md`

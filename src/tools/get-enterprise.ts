@@ -8,61 +8,60 @@
  * - data: Virtualization, filtering/sorting, export/import
  * - accessibility: WCAG compliance, keyboard/focus, screen readers
  *
- * Enterprise docs are organized by topic groups. Requesting a topic
- * returns all related documents (e.g., "dashboard" returns KPI cards,
- * charts, and real-time docs).
+ * Enterprise guides are stored individually in the schema. Requesting a topic
+ * returns all related guides (matched by id prefix), rendered from schema data.
  *
  * @module tools/get-enterprise
  */
 
-import type { DocumentStore } from '../indexer/document-store.js';
-import type { GetEnterpriseArgs, DocumentEntry } from '../types/index.js';
+import type { SchemaStore } from '../schema/schema-store.js';
+import type { GetEnterpriseArgs, GuideEntry } from '../types/index.js';
+import { formatGuide } from '../formatters/guide-formatter.js';
 
 /**
  * Enterprise topic groups.
  *
- * Each group maps to one or more files in the 04-enterprise/ folder.
- * The key is the user-facing topic name, the value contains display info
- * and a matcher function for filtering docs.
+ * Each group maps to one or more enterprise guides. The key is the user-facing
+ * topic name; `matchesGuide` tests whether a guide belongs to the group based
+ * on its id/title.
  */
 const ENTERPRISE_TOPICS: Record<string, {
   /** Display name for the topic group */
   displayName: string;
   /** Brief description of what this topic covers */
   description: string;
-  /** Test if a document belongs to this topic (based on filename) */
-  matchesDoc: (filename: string) => boolean;
+  /** Test if a guide belongs to this topic (based on id/title) */
+  matchesGuide: (idOrTitle: string) => boolean;
 }> = {
   'app-shell': {
     displayName: 'Application Shell',
     description: 'Application shell patterns — layout, navigation, and overall app structure.',
-    matchesDoc: (f) => f.includes('app-shell'),
+    matchesGuide: (s) => s.includes('app-shell') || s.includes('shell'),
   },
   'dashboard': {
     displayName: 'Dashboard Patterns',
     description: 'Dashboard components — KPI cards, charts/widgets, and real-time data updates.',
-    matchesDoc: (f) => f.includes('dashboard'),
+    matchesGuide: (s) => s.includes('dashboard'),
   },
   'admin': {
     displayName: 'Admin Panel Patterns',
     description: 'Admin interfaces — CRUD operations, user management, and settings panels.',
-    matchesDoc: (f) => f.includes('admin'),
+    matchesGuide: (s) => s.includes('admin'),
   },
   'data': {
     displayName: 'Data Management',
     description: 'Data handling at scale — virtualization, filtering/sorting, and export/import.',
-    matchesDoc: (f) => f.includes('data-'),
+    matchesGuide: (s) => s.includes('data'),
   },
   'accessibility': {
     displayName: 'Enterprise Accessibility',
     description: 'Accessibility at scale — WCAG compliance, keyboard/focus management, and screen readers.',
-    matchesDoc: (f) => f.includes('accessibility'),
+    matchesGuide: (s) => s.includes('accessibility'),
   },
 };
 
 /**
  * Aliases for enterprise topics.
- * Enables users to use shorthand or alternate names.
  */
 const ENTERPRISE_TOPIC_ALIASES: Record<string, string> = {
   'shell': 'app-shell',
@@ -91,53 +90,56 @@ const ENTERPRISE_TOPIC_ALIASES: Record<string, string> = {
 /**
  * Execute the get_enterprise tool.
  *
- * If a topic is provided, returns all enterprise docs for that topic group.
+ * If a topic is provided, returns all enterprise guides for that topic group.
  * If no topic is provided, returns an overview of all enterprise topics.
  *
- * @param store - The populated document store to query
+ * @param store - The populated schema store to query
  * @param args - Tool arguments with the enterprise topic
  * @returns Formatted markdown string with enterprise documentation
  *
  * @example
  * ```typescript
- * // Get all dashboard enterprise docs
  * const result = getEnterprise(store, { topic: "dashboard" });
- *
- * // Get overview
  * const overview = getEnterprise(store, { topic: "" });
  * ```
  */
 export function getEnterprise(
-  store: DocumentStore,
+  store: SchemaStore,
   args: GetEnterpriseArgs
 ): string {
   const { topic } = args;
 
-  // No topic — show overview of all enterprise topics
+  // No topic — show overview of all enterprise topics.
   if (!topic || topic.trim().length === 0) {
     return formatEnterpriseOverview(store);
   }
 
-  // Resolve topic (with alias support)
   const resolvedTopic = resolveTopic(topic.trim().toLowerCase());
 
   if (!resolvedTopic) {
     return formatInvalidTopic(topic);
   }
 
-  // Get matching enterprise docs
   const topicConfig = ENTERPRISE_TOPICS[resolvedTopic];
-  const enterpriseDocs = store.getByModule('enterprise');
-  const matchingDocs = enterpriseDocs.filter((doc) => {
-    const filename = doc.relativePath.split('/').pop() || '';
-    return topicConfig.matchesDoc(filename);
-  });
+  const matchingGuides = matchGuides(store, topicConfig.matchesGuide);
 
-  if (matchingDocs.length === 0) {
-    return `No enterprise documentation found for topic "${resolvedTopic}". The docs directory may be incomplete.`;
+  if (matchingGuides.length === 0) {
+    return `No enterprise documentation found for topic "${resolvedTopic}". The schema may be incomplete.`;
   }
 
-  return formatEnterpriseTopicResponse(resolvedTopic, topicConfig.displayName, matchingDocs);
+  return formatEnterpriseTopicResponse(resolvedTopic, topicConfig.displayName, matchingGuides);
+}
+
+/**
+ * Get all enterprise guides matching a predicate (on lowercased id/title).
+ */
+function matchGuides(
+  store: SchemaStore,
+  matches: (idOrTitle: string) => boolean
+): GuideEntry[] {
+  return store.getAllEnterpriseGuides().filter((g) => {
+    return matches(g.id.toLowerCase()) || matches(g.title.toLowerCase());
+  });
 }
 
 /**
@@ -147,18 +149,15 @@ export function getEnterprise(
  * @returns Canonical topic key, or null if not recognized
  */
 function resolveTopic(input: string): string | null {
-  // Direct match
   if (ENTERPRISE_TOPICS[input]) {
     return input;
   }
 
-  // Alias match
   const aliased = ENTERPRISE_TOPIC_ALIASES[input];
   if (aliased) {
     return aliased;
   }
 
-  // Partial match — find a topic key that contains the input
   for (const key of Object.keys(ENTERPRISE_TOPICS)) {
     if (key.includes(input) || input.includes(key)) {
       return key;
@@ -171,10 +170,10 @@ function resolveTopic(input: string): string | null {
 /**
  * Format an overview of all enterprise topic groups.
  *
- * @param store - Document store for doc counts
+ * @param store - Schema store for guide counts
  * @returns Formatted markdown overview
  */
-function formatEnterpriseOverview(store: DocumentStore): string {
+function formatEnterpriseOverview(store: SchemaStore): string {
   const parts: string[] = [];
 
   parts.push('## FluentUI Enterprise Documentation');
@@ -182,21 +181,15 @@ function formatEnterpriseOverview(store: DocumentStore): string {
   parts.push('Enterprise-scale application patterns and best practices.');
   parts.push('');
 
-  const enterpriseDocs = store.getByModule('enterprise');
-
   for (const [topicKey, config] of Object.entries(ENTERPRISE_TOPICS)) {
-    const matchingDocs = enterpriseDocs.filter((doc) => {
-      const filename = doc.relativePath.split('/').pop() || '';
-      return config.matchesDoc(filename);
-    });
+    const matchingGuides = matchGuides(store, config.matchesGuide);
 
     parts.push(`### ${config.displayName}`);
     parts.push(config.description);
-    parts.push(`*${matchingDocs.length} document${matchingDocs.length === 1 ? '' : 's'} available*`);
+    parts.push(`*${matchingGuides.length} document${matchingGuides.length === 1 ? '' : 's'} available*`);
 
-    // Show doc titles
-    if (matchingDocs.length > 0) {
-      const titles = matchingDocs.map((doc) => doc.title).join(', ');
+    if (matchingGuides.length > 0) {
+      const titles = matchingGuides.map((g) => g.title).join(', ');
       parts.push(`Topics: ${titles}`);
     }
 
@@ -210,17 +203,15 @@ function formatEnterpriseOverview(store: DocumentStore): string {
 /**
  * Format the response for an enterprise topic group.
  *
- * Concatenates all matching documents with separators between them.
- *
  * @param topicKey - The enterprise topic key
  * @param displayName - Human-readable topic name
- * @param docs - Matching documents
- * @returns Formatted markdown with all docs in the topic
+ * @param guides - Matching guides
+ * @returns Formatted markdown with all guides in the topic
  */
 function formatEnterpriseTopicResponse(
   topicKey: string,
   displayName: string,
-  docs: DocumentEntry[]
+  guides: GuideEntry[]
 ): string {
   const parts: string[] = [];
 
@@ -228,35 +219,27 @@ function formatEnterpriseTopicResponse(
   parts.push('');
   parts.push('**Module:** enterprise');
   parts.push(`**Topic:** ${topicKey}`);
-  parts.push(`**Documents:** ${docs.length}`);
+  parts.push(`**Documents:** ${guides.length}`);
   parts.push('');
 
-  // Sort by relative path (preserves numeric ordering: 02a, 02b, 02c)
-  const sorted = [...docs].sort((a, b) =>
-    a.relativePath.localeCompare(b.relativePath)
-  );
+  const sorted = [...guides].sort((a, b) => a.id.localeCompare(b.id));
 
-  // If multiple docs, show a table of contents first
   if (sorted.length > 1) {
     parts.push('## Table of Contents');
     parts.push('');
-    for (const doc of sorted) {
-      parts.push(`- ${doc.title}`);
+    for (const guide of sorted) {
+      parts.push(`- ${guide.title}`);
     }
     parts.push('');
   }
 
-  // Output each document with a separator
   for (let i = 0; i < sorted.length; i++) {
-    const doc = sorted[i];
-
     if (i > 0) {
       parts.push('');
       parts.push('---');
       parts.push('');
     }
-
-    parts.push(doc.content);
+    parts.push(formatGuide(sorted[i]));
   }
 
   return parts.join('\n');
@@ -275,7 +258,6 @@ function formatInvalidTopic(topic: string): string {
   parts.push('**Available enterprise topics:**');
 
   for (const [key, config] of Object.entries(ENTERPRISE_TOPICS)) {
-    // Find aliases for this topic
     const aliases = Object.entries(ENTERPRISE_TOPIC_ALIASES)
       .filter(([, target]) => target === key)
       .map(([alias]) => alias);

@@ -1,0 +1,279 @@
+{
+  "schemaVersion": "1.0",
+  "version": "v9",
+  "generatedAt": "2025-06-01T10:00:00Z",
+  "sources": {
+    "fluentui": {
+      "repo": "https://github.com/microsoft/fluentui",
+      "ref": "main",
+      "commit": "abc123def456789",
+      "scrapedAt": "2025-06-01T10:00:00Z"
+    }
+  },
+  "components": [
+    {
+      "name": "Button",
+      "id": "button",
+      "packageName": "@fluentui/react-button",
+      "packageVersion": "9.9.1",
+      "importPath": "@fluentui/react-components",
+      "importStatement": "import { Button } from '@fluentui/react-components'",
+      "category": "buttons",
+      "stability": "stable",
+      "deprecated": false,
+      "props": [
+        {
+          "name": "appearance",
+          "type": "'primary' | 'secondary' | 'outline' | 'subtle' | 'transparent'",
+          "required": false,
+          "description": "A button can have its content and borders styled for greater emphasis or to be subtle.",
+          "deprecated": false,
+          "inherited": false,
+          "source": "ButtonProps"
+        },
+        {
+          "name": "size",
+          "type": "'small' | 'medium' | 'large'",
+          "required": false,
+          "defaultValue": "'medium'",
+          "description": "A button supports different sizes.",
+          "deprecated": false,
+          "inherited": false,
+          "source": "ButtonProps"
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "required": false,
+          "description": "Whether the button is disabled.",
+          "deprecated": false,
+          "inherited": false,
+          "source": "ButtonProps"
+        },
+        {
+          "name": "icon",
+          "type": "Slot<\"span\">",
+          "required": false,
+          "description": "Icon that renders before the content.",
+          "deprecated": false,
+          "inherited": false,
+          "source": "ButtonProps"
+        }
+      ],
+      "slots": [
+        {
+          "name": "root",
+          "elementType": "button",
+          "required": true,
+          "description": "The root element of the button."
+        },
+        {
+          "name": "icon",
+          "elementType": "span",
+          "required": false,
+          "description": "The icon slot."
+        }
+      ],
+      "stories": [
+        {
+          "name": "Default",
+          "description": "A default Button.",
+          "code": "export const Default = () => <Button>Default</Button>;",
+          "renderCode": "<Button>Default</Button>",
+          "sourceFile": "packages/react-button/stories/src/Button/ButtonDefault.stories.tsx",
+          "imports": ["import { Button } from '@fluentui/react-components'"]
+        },
+        {
+          "name": "Appearance",
+          "description": "A button can have different appearances.",
+          "code": "export const Appearance = () => (\n  <>\n    <Button appearance=\"primary\">Primary</Button>\n    <Button appearance=\"secondary\">Secondary</Button>\n  </>\n);",
+          "renderCode": "<>\n  <Button appearance=\"primary\">Primary</Button>\n  <Button appearance=\"secondary\">Secondary</Button>\n</>",
+          "sourceFile": "packages/react-button/stories/src/Button/ButtonAppearance.stories.tsx",
+          "imports": ["import { Button } from '@fluentui/react-components'"]
+        }
+      ],
+      "relatedComponents": ["CompoundButton", "ToggleButton", "SplitButton", "MenuButton"],
+      "additionalExports": ["buttonClassNames", "useButtonStyles_unstable"]
+    },
+    {
+      "name": "Input",
+      "id": "input",
+      "packageName": "@fluentui/react-input",
+      "packageVersion": "9.5.0",
+      "importPath": "@fluentui/react-components",
+      "importStatement": "import { Input } from '@fluentui/react-components'",
+      "category": "forms",
+      "stability": "stable",
+      "deprecated": false,
+      "props": [
+        {
+          "name": "value",
+          "type": "string",
+          "required": false,
+          "description": "The controlled value of the input.",
+          "deprecated": false,
+          "inherited": false,
+          "source": "InputProps"
+        },
+        {
+          "name": "defaultValue",
+          "type": "string",
+          "required": false,
+          "description": "The default value for an uncontrolled input.",
+          "deprecated": false,
+          "inherited": false,
+          "source": "InputProps"
+        },
+        {
+          "name": "type",
+          "type": "'text' | 'password' | 'email' | 'number' | 'search' | 'tel' | 'url'",
+          "required": false,
+          "defaultValue": "'text'",
+          "description": "The type of the input element.",
+          "deprecated": false,
+          "inherited": false,
+          "source": "InputProps"
+        },
+        {
+          "name": "appearance",
+          "type": "'outline' | 'underline' | 'filled-darker' | 'filled-lighter'",
+          "required": false,
+          "defaultValue": "'outline'",
+          "description": "Controls the colors and borders of the input.",
+          "deprecated": false,
+          "inherited": false,
+          "source": "InputProps"
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "required": false,
+          "description": "Whether the input is disabled.",
+          "deprecated": false,
+          "inherited": false,
+          "source": "InputProps"
+        }
+      ],
+      "slots": [
+        {
+          "name": "root",
+          "elementType": "span",
+          "required": true,
+          "description": "The root wrapper element."
+        },
+        {
+          "name": "input",
+          "elementType": "input",
+          "required": true,
+          "description": "The actual input element."
+        },
+        {
+          "name": "contentBefore",
+          "elementType": "span",
+          "required": false,
+          "description": "Content rendered before the input."
+        },
+        {
+          "name": "contentAfter",
+          "elementType": "span",
+          "required": false,
+          "description": "Content rendered after the input."
+        }
+      ],
+      "stories": [
+        {
+          "name": "Default",
+          "description": "A default Input.",
+          "code": "export const Default = () => <Input />;",
+          "renderCode": "<Input />",
+          "sourceFile": "packages/react-input/stories/src/Input/InputDefault.stories.tsx",
+          "imports": ["import { Input } from '@fluentui/react-components'"]
+        }
+      ],
+      "relatedComponents": ["Textarea", "SearchBox", "SpinButton"],
+      "additionalExports": ["inputClassNames", "useInputStyles_unstable"]
+    },
+    {
+      "name": "Dialog",
+      "id": "dialog",
+      "packageName": "@fluentui/react-dialog",
+      "packageVersion": "9.11.0",
+      "importPath": "@fluentui/react-components",
+      "importStatement": "import { Dialog } from '@fluentui/react-components'",
+      "category": "feedback",
+      "stability": "stable",
+      "deprecated": false,
+      "props": [
+        {
+          "name": "open",
+          "type": "boolean",
+          "required": false,
+          "description": "Controls the open/closed state of the dialog.",
+          "deprecated": false,
+          "inherited": false,
+          "source": "DialogProps"
+        },
+        {
+          "name": "modalType",
+          "type": "'modal' | 'non-modal' | 'alert'",
+          "required": false,
+          "defaultValue": "'modal'",
+          "description": "The type of modal behavior.",
+          "deprecated": false,
+          "inherited": false,
+          "source": "DialogProps"
+        },
+        {
+          "name": "onOpenChange",
+          "type": "(event: DialogOpenChangeEvent, data: DialogOpenChangeData) => void",
+          "required": false,
+          "description": "Callback when the open state changes.",
+          "deprecated": false,
+          "inherited": false,
+          "source": "DialogProps"
+        }
+      ],
+      "slots": [
+        {
+          "name": "root",
+          "elementType": "div",
+          "required": true,
+          "description": "The root dialog container."
+        }
+      ],
+      "stories": [
+        {
+          "name": "Default",
+          "description": "A default Dialog.",
+          "code": "export const Default = () => (\n  <Dialog>\n    <DialogTrigger><Button>Open</Button></DialogTrigger>\n    <DialogSurface>\n      <DialogBody>\n        <DialogTitle>Title</DialogTitle>\n        <DialogContent>Content</DialogContent>\n        <DialogActions><Button>Close</Button></DialogActions>\n      </DialogBody>\n    </DialogSurface>\n  </Dialog>\n);",
+          "renderCode": "<Dialog>...</Dialog>",
+          "sourceFile": "packages/react-dialog/stories/src/Dialog/DialogDefault.stories.tsx",
+          "imports": [
+            "import { Dialog, DialogTrigger, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions } from '@fluentui/react-components'",
+            "import { Button } from '@fluentui/react-components'"
+          ]
+        }
+      ],
+      "relatedComponents": ["DialogTrigger", "DialogSurface", "DialogBody", "DialogTitle", "DialogContent", "DialogActions"],
+      "additionalExports": ["dialogClassNames", "useDialogStyles_unstable"]
+    }
+  ],
+  "utilities": [],
+  "foundation": [],
+  "patterns": [],
+  "enterprise": [],
+  "quickReference": [],
+  "stats": {
+    "totalComponents": 3,
+    "totalUtilities": 0,
+    "totalContrib": 0,
+    "totalPreview": 0,
+    "totalStories": 4,
+    "totalProps": 12,
+    "categoryCounts": {
+      "buttons": 1,
+      "forms": 1,
+      "feedback": 1
+    }
+  }
+}

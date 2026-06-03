@@ -1,0 +1,155 @@
+# =============================================================================
+# FluentUI MCP Server — Update Docs Pipeline
+# =============================================================================
+#
+# Manually-triggered workflow that runs the full schema pipeline:
+#   1. Sparse-clone the FluentUI source (and contrib) repos
+#   2. Scrape components/utilities into a raw schema
+#   3. Enhance the schema with the configured LLM provider
+#   4. Build + test against the regenerated schema
+#   5. Open a pull request with the updated data/ schema files
+#
+# Required secrets (see plans/schema-driven-pipeline/07-cicd-automation.md):
+#   LLM_PROVIDER, OPENAI_API_KEY and/or ANTHROPIC_API_KEY, LLM_MODEL (optional)
+# =============================================================================
+
+name: Update FluentUI Docs
+
+on:
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "FluentUI version to update (v9, v8)"
+                required: true
+                default: "v9"
+                type: choice
+                options: ["v9", "v8"]
+            fluentui_ref:
+                description: "FluentUI git ref (branch/tag/commit)"
+                required: false
+                default: "master"
+            contrib_ref:
+                description: "FluentUI-contrib git ref"
+                required: false
+                default: "main"
+            full_enhance:
+                description: "Full LLM re-enhancement (ignore diff)"
+                required: false
+                default: "false"
+                type: choice
+                options: ["true", "false"]
+            dry_run:
+                description: "Dry run (scrape only, no enhance/commit)"
+                required: false
+                default: "false"
+                type: choice
+                options: ["true", "false"]
+
+env:
+    FLUENTUI_VERSION: ${{ github.event.inputs.version }}
+
+jobs:
+    update:
+        name: Scrape, Enhance & Open PR
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+
+        steps:
+            # --- Setup ---
+            - name: Checkout fluentui-mcp
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: "yarn"
+
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+
+            # --- Clone FluentUI source (sparse) ---
+            - name: Clone FluentUI (sparse checkout)
+              run: |
+                  git clone --depth 1 --filter=blob:none --sparse \
+                    https://github.com/microsoft/fluentui.git \
+                    /tmp/fluentui
+                  cd /tmp/fluentui
+                  git sparse-checkout set packages/react-components
+                  git checkout ${{ github.event.inputs.fluentui_ref || 'master' }}
+
+            - name: Clone FluentUI-contrib
+              run: |
+                  git clone --depth 1 \
+                    https://github.com/microsoft/fluentui-contrib.git \
+                    /tmp/fluentui-contrib
+                  cd /tmp/fluentui-contrib
+                  git checkout ${{ github.event.inputs.contrib_ref || 'main' }}
+
+            # --- Stage 1: Scrape ---
+            - name: Run scraper
+              run: |
+                  yarn scrape \
+                    --version ${{ env.FLUENTUI_VERSION }} \
+                    --source /tmp/fluentui \
+                    --contrib /tmp/fluentui-contrib \
+                    --verbose
+
+            # --- Stage 2: Enhance (skip on dry run) ---
+            - name: Run enhancer
+              if: ${{ github.event.inputs.dry_run != 'true' }}
+              env:
+                  LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+                  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+                  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+                  LLM_MODEL: ${{ secrets.LLM_MODEL }}
+              run: |
+                  ENHANCE_FLAGS=""
+                  if [ "${{ github.event.inputs.full_enhance }}" = "true" ]; then
+                    ENHANCE_FLAGS="--full"
+                  fi
+                  yarn enhance --version ${{ env.FLUENTUI_VERSION }} $ENHANCE_FLAGS --verbose
+
+            # --- Build & Test ---
+            - name: Build
+              run: yarn build
+
+            - name: Test
+              run: yarn test
+
+            # --- Commit & PR (skip on dry run) ---
+            - name: Create Pull Request
+              if: ${{ github.event.inputs.dry_run != 'true' }}
+              uses: peter-evans/create-pull-request@v6
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  commit-message: "chore(${{ env.FLUENTUI_VERSION }}): update FluentUI docs schema"
+                  title: "chore(${{ env.FLUENTUI_VERSION }}): Update FluentUI docs to latest"
+                  body: |
+                      ## Automated FluentUI Docs Update
+
+                      **Version**: ${{ env.FLUENTUI_VERSION }}
+                      **FluentUI ref**: ${{ github.event.inputs.fluentui_ref || 'master' }}
+                      **Contrib ref**: ${{ github.event.inputs.contrib_ref || 'main' }}
+                      **Full enhancement**: ${{ github.event.inputs.full_enhance }}
+
+                      This PR was automatically generated by the update-docs workflow.
+                      Review the schema changes in `data/${{ env.FLUENTUI_VERSION }}/`.
+                  branch: "update-docs/${{ env.FLUENTUI_VERSION }}"
+                  delete-branch: true
+                  labels: |
+                      automated
+                      documentation
+
+            # --- Summary ---
+            - name: Upload schema artifacts
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: schema-${{ env.FLUENTUI_VERSION }}
+                  path: |
+                      data/${{ env.FLUENTUI_VERSION }}/fluentui-schema.json
+                      data/${{ env.FLUENTUI_VERSION }}/fluentui-schema-enhanced.json
+                  if-no-files-found: warn

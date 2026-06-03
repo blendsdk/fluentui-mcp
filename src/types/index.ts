@@ -7,6 +7,38 @@
  * @module types
  */
 
+// Re-export all schema types for the schema-driven pipeline
+export type {
+  FluentUISchema,
+  SourceInfo,
+  SchemaStats,
+  ComponentEntry,
+  SchemaComponentCategory,
+  StabilityLevel,
+  KnownComponentCategory,
+  PropEntry,
+  SlotEntry,
+  StoryEntry,
+  ComponentEnhanced,
+  PropGuidance,
+  AntiPattern,
+  KeyboardEntry,
+  PatternExample,
+  UtilityEntry,
+  UtilityEnhanced,
+  ExportGuidance,
+  UtilityExport,
+  UtilityExportKind,
+  ParameterEntry,
+
+  GuideEntry,
+  GuideCodeExample,
+  PatternEntry,
+  PatternEntryExample,
+} from './schema.js';
+
+export { KNOWN_COMPONENT_CATEGORIES } from './schema.js';
+
 // ============================================================================
 // Document Types
 // ============================================================================
@@ -122,8 +154,8 @@ export interface ServerConfig {
   /** Which FluentUI version to serve (e.g., "v9", "v10") */
   version: string;
 
-  /** Absolute path to the documentation folder for the selected version */
-  docsPath: string;
+  /** Absolute path to the enhanced JSON schema file for the selected version */
+  schemaPath: string;
 
   /** Server name used in MCP registration (e.g., "fluentui-v9-docs") */
   serverName: string;
@@ -131,6 +163,7 @@ export interface ServerConfig {
   /** Server version string from package.json */
   serverVersion: string;
 }
+
 
 // ============================================================================
 // Tool Argument Types

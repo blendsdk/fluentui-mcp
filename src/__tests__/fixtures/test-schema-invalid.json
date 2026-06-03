@@ -1,0 +1,411 @@
+{
+  "_description": "Collection of invalid schema variants for validation testing. Each key is a test case name with a description and the invalid data.",
+
+  "missing_schema_version": {
+    "description": "Missing required schemaVersion field",
+    "data": {
+      "version": "v9",
+      "generatedAt": "2025-06-01T10:00:00Z",
+      "sources": {
+        "fluentui": {
+          "repo": "https://github.com/microsoft/fluentui",
+          "ref": "main",
+          "commit": "abc123",
+          "scrapedAt": "2025-06-01T10:00:00Z"
+        }
+      },
+      "components": [],
+      "utilities": [],
+      "foundation": [],
+      "patterns": [],
+      "enterprise": [],
+      "quickReference": [],
+      "stats": {
+        "totalComponents": 0,
+        "totalUtilities": 0,
+        "totalContrib": 0,
+        "totalPreview": 0,
+        "totalStories": 0,
+        "totalProps": 0,
+        "categoryCounts": {}
+      }
+    }
+  },
+
+  "wrong_schema_version": {
+    "description": "Invalid schemaVersion value (not '1.0')",
+    "data": {
+      "schemaVersion": "2.0",
+      "version": "v9",
+      "generatedAt": "2025-06-01T10:00:00Z",
+      "sources": {
+        "fluentui": {
+          "repo": "https://github.com/microsoft/fluentui",
+          "ref": "main",
+          "commit": "abc123",
+          "scrapedAt": "2025-06-01T10:00:00Z"
+        }
+      },
+      "components": [],
+      "utilities": [],
+      "foundation": [],
+      "patterns": [],
+      "enterprise": [],
+      "quickReference": [],
+      "stats": {
+        "totalComponents": 0,
+        "totalUtilities": 0,
+        "totalContrib": 0,
+        "totalPreview": 0,
+        "totalStories": 0,
+        "totalProps": 0,
+        "categoryCounts": {}
+      }
+    }
+  },
+
+  "missing_version": {
+    "description": "Missing required version field",
+    "data": {
+      "schemaVersion": "1.0",
+      "generatedAt": "2025-06-01T10:00:00Z",
+      "sources": {
+        "fluentui": {
+          "repo": "https://github.com/microsoft/fluentui",
+          "ref": "main",
+          "commit": "abc123",
+          "scrapedAt": "2025-06-01T10:00:00Z"
+        }
+      },
+      "components": [],
+      "utilities": [],
+      "foundation": [],
+      "patterns": [],
+      "enterprise": [],
+      "quickReference": [],
+      "stats": {
+        "totalComponents": 0,
+        "totalUtilities": 0,
+        "totalContrib": 0,
+        "totalPreview": 0,
+        "totalStories": 0,
+        "totalProps": 0,
+        "categoryCounts": {}
+      }
+    }
+  },
+
+  "missing_sources": {
+    "description": "Missing required sources.fluentui field",
+    "data": {
+      "schemaVersion": "1.0",
+      "version": "v9",
+      "generatedAt": "2025-06-01T10:00:00Z",
+      "sources": {},
+      "components": [],
+      "utilities": [],
+      "foundation": [],
+      "patterns": [],
+      "enterprise": [],
+      "quickReference": [],
+      "stats": {
+        "totalComponents": 0,
+        "totalUtilities": 0,
+        "totalContrib": 0,
+        "totalPreview": 0,
+        "totalStories": 0,
+        "totalProps": 0,
+        "categoryCounts": {}
+      }
+    }
+  },
+
+  "missing_components_array": {
+    "description": "Missing required components array",
+    "data": {
+      "schemaVersion": "1.0",
+      "version": "v9",
+      "generatedAt": "2025-06-01T10:00:00Z",
+      "sources": {
+        "fluentui": {
+          "repo": "https://github.com/microsoft/fluentui",
+          "ref": "main",
+          "commit": "abc123",
+          "scrapedAt": "2025-06-01T10:00:00Z"
+        }
+      },
+      "utilities": [],
+      "foundation": [],
+      "patterns": [],
+      "enterprise": [],
+      "quickReference": [],
+      "stats": {
+        "totalComponents": 0,
+        "totalUtilities": 0,
+        "totalContrib": 0,
+        "totalPreview": 0,
+        "totalStories": 0,
+        "totalProps": 0,
+        "categoryCounts": {}
+      }
+    }
+  },
+
+  "component_missing_name": {
+    "description": "Component entry missing required name field",
+    "data": {
+      "schemaVersion": "1.0",
+      "version": "v9",
+      "generatedAt": "2025-06-01T10:00:00Z",
+      "sources": {
+        "fluentui": {
+          "repo": "https://github.com/microsoft/fluentui",
+          "ref": "main",
+          "commit": "abc123",
+          "scrapedAt": "2025-06-01T10:00:00Z"
+        }
+      },
+      "components": [
+        {
+          "id": "button",
+          "packageName": "@fluentui/react-button",
+          "packageVersion": "9.9.1",
+          "importPath": "@fluentui/react-components",
+          "importStatement": "import { Button } from '@fluentui/react-components'",
+          "category": "buttons",
+          "stability": "stable",
+          "deprecated": false,
+          "props": [],
+          "slots": [],
+          "stories": [],
+          "relatedComponents": [],
+          "additionalExports": []
+        }
+      ],
+      "utilities": [],
+      "foundation": [],
+      "patterns": [],
+      "enterprise": [],
+      "quickReference": [],
+      "stats": {
+        "totalComponents": 1,
+        "totalUtilities": 0,
+        "totalContrib": 0,
+        "totalPreview": 0,
+        "totalStories": 0,
+        "totalProps": 0,
+        "categoryCounts": { "buttons": 1 }
+      }
+    }
+  },
+
+  "invalid_stability": {
+    "description": "Component with invalid stability value",
+    "data": {
+      "schemaVersion": "1.0",
+      "version": "v9",
+      "generatedAt": "2025-06-01T10:00:00Z",
+      "sources": {
+        "fluentui": {
+          "repo": "https://github.com/microsoft/fluentui",
+          "ref": "main",
+          "commit": "abc123",
+          "scrapedAt": "2025-06-01T10:00:00Z"
+        }
+      },
+      "components": [
+        {
+          "name": "Button",
+          "id": "button",
+          "packageName": "@fluentui/react-button",
+          "packageVersion": "9.9.1",
+          "importPath": "@fluentui/react-components",
+          "importStatement": "import { Button } from '@fluentui/react-components'",
+          "category": "buttons",
+          "stability": "INVALID_STABILITY",
+          "deprecated": false,
+          "props": [],
+          "slots": [],
+          "stories": [],
+          "relatedComponents": [],
+          "additionalExports": []
+        }
+      ],
+      "utilities": [],
+      "foundation": [],
+      "patterns": [],
+      "enterprise": [],
+      "quickReference": [],
+      "stats": {
+        "totalComponents": 1,
+        "totalUtilities": 0,
+        "totalContrib": 0,
+        "totalPreview": 0,
+        "totalStories": 0,
+        "totalProps": 0,
+        "categoryCounts": { "buttons": 1 }
+      }
+    }
+  },
+
+  "stats_mismatch": {
+    "description": "Stats counts don't match actual array lengths",
+    "data": {
+      "schemaVersion": "1.0",
+      "version": "v9",
+      "generatedAt": "2025-06-01T10:00:00Z",
+      "sources": {
+        "fluentui": {
+          "repo": "https://github.com/microsoft/fluentui",
+          "ref": "main",
+          "commit": "abc123",
+          "scrapedAt": "2025-06-01T10:00:00Z"
+        }
+      },
+      "components": [
+        {
+          "name": "Button",
+          "id": "button",
+          "packageName": "@fluentui/react-button",
+          "packageVersion": "9.9.1",
+          "importPath": "@fluentui/react-components",
+          "importStatement": "import { Button } from '@fluentui/react-components'",
+          "category": "buttons",
+          "stability": "stable",
+          "deprecated": false,
+          "props": [],
+          "slots": [],
+          "stories": [],
+          "relatedComponents": [],
+          "additionalExports": []
+        }
+      ],
+      "utilities": [],
+      "foundation": [],
+      "patterns": [],
+      "enterprise": [],
+      "quickReference": [],
+      "stats": {
+        "totalComponents": 99,
+        "totalUtilities": 50,
+        "totalContrib": 10,
+        "totalPreview": 5,
+        "totalStories": 999,
+        "totalProps": 500,
+        "categoryCounts": { "buttons": 99 }
+      }
+    }
+  },
+
+  "empty_object": {
+    "description": "Completely empty object (no schema fields at all)",
+    "data": {}
+  },
+
+  "not_an_object": {
+    "description": "Schema data is not an object",
+    "data": "this is a string, not a schema"
+  },
+
+  "null_value": {
+    "description": "Schema data is null",
+    "data": null
+  },
+
+  "components_not_array": {
+    "description": "Components field is not an array",
+    "data": {
+      "schemaVersion": "1.0",
+      "version": "v9",
+      "generatedAt": "2025-06-01T10:00:00Z",
+      "sources": {
+        "fluentui": {
+          "repo": "https://github.com/microsoft/fluentui",
+          "ref": "main",
+          "commit": "abc123",
+          "scrapedAt": "2025-06-01T10:00:00Z"
+        }
+      },
+      "components": "not-an-array",
+      "utilities": [],
+      "foundation": [],
+      "patterns": [],
+      "enterprise": [],
+      "quickReference": [],
+      "stats": {
+        "totalComponents": 0,
+        "totalUtilities": 0,
+        "totalContrib": 0,
+        "totalPreview": 0,
+        "totalStories": 0,
+        "totalProps": 0,
+        "categoryCounts": {}
+      }
+    }
+  },
+
+  "duplicate_component_ids": {
+    "description": "Two components with the same ID",
+    "data": {
+      "schemaVersion": "1.0",
+      "version": "v9",
+      "generatedAt": "2025-06-01T10:00:00Z",
+      "sources": {
+        "fluentui": {
+          "repo": "https://github.com/microsoft/fluentui",
+          "ref": "main",
+          "commit": "abc123",
+          "scrapedAt": "2025-06-01T10:00:00Z"
+        }
+      },
+      "components": [
+        {
+          "name": "Button",
+          "id": "button",
+          "packageName": "@fluentui/react-button",
+          "packageVersion": "9.9.1",
+          "importPath": "@fluentui/react-components",
+          "importStatement": "import { Button } from '@fluentui/react-components'",
+          "category": "buttons",
+          "stability": "stable",
+          "deprecated": false,
+          "props": [],
+          "slots": [],
+          "stories": [],
+          "relatedComponents": [],
+          "additionalExports": []
+        },
+        {
+          "name": "ButtonDuplicate",
+          "id": "button",
+          "packageName": "@fluentui/react-button-dup",
+          "packageVersion": "1.0.0",
+          "importPath": "@fluentui/react-components",
+          "importStatement": "import { ButtonDuplicate } from '@fluentui/react-components'",
+          "category": "buttons",
+          "stability": "stable",
+          "deprecated": false,
+          "props": [],
+          "slots": [],
+          "stories": [],
+          "relatedComponents": [],
+          "additionalExports": []
+        }
+      ],
+      "utilities": [],
+      "foundation": [],
+      "patterns": [],
+      "enterprise": [],
+      "quickReference": [],
+      "stats": {
+        "totalComponents": 2,
+        "totalUtilities": 0,
+        "totalContrib": 0,
+        "totalPreview": 0,
+        "totalStories": 0,
+        "totalProps": 0,
+        "categoryCounts": { "buttons": 2 }
+      }
+    }
+  }
+}

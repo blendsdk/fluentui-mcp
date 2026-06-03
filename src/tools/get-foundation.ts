@@ -3,94 +3,88 @@
  *
  * Returns documentation for core FluentUI topics like getting started,
  * FluentProvider setup, theming, styling with Griffel, component architecture,
- * and accessibility.
+ * and accessibility — rendered from the structured schema's foundation guides.
  *
  * Supports topic aliases for convenience (e.g., "theme" → "theming",
  * "a11y" → "accessibility", "css" → "styling-griffel").
  *
  * When called without a topic, returns an overview of all available
- * foundation topics.
+ * foundation guides present in the schema.
  *
  * @module tools/get-foundation
  */
 
-import type { DocumentStore } from '../indexer/document-store.js';
-import type { GetFoundationArgs, DocumentEntry } from '../types/index.js';
+import type { SchemaStore } from '../schema/schema-store.js';
+import type { GetFoundationArgs, GuideEntry } from '../types/index.js';
 import {
   FOUNDATION_TOPICS,
   FOUNDATION_TOPIC_ALIASES,
-  FOUNDATION_TOPIC_FILE_MAP,
 } from '../types/index.js';
 import type { FoundationTopic } from '../types/index.js';
+import { formatGuide } from '../formatters/guide-formatter.js';
 
 /**
  * Execute the get_foundation tool.
  *
- * If a topic is provided, returns the full documentation for that topic.
- * If no topic is provided, returns an overview listing all available topics.
+ * If a topic is provided, returns the full guide for that topic.
+ * If no topic is provided, returns an overview listing all available guides.
  *
- * @param store - The populated document store to query
+ * @param store - The populated schema store to query
  * @param args - Tool arguments with optional topic name
  * @returns Formatted markdown string with the foundation documentation
  *
  * @example
  * ```typescript
- * // Get specific topic
  * const result = getFoundation(store, { topic: "theming" });
- *
- * // Get overview of all topics
  * const overview = getFoundation(store, {});
  * ```
  */
 export function getFoundation(
-  store: DocumentStore,
+  store: SchemaStore,
   args: GetFoundationArgs
 ): string {
   const { topic } = args;
 
-  // No topic specified — return overview of all foundation docs
+  // No topic specified — return overview of all foundation guides.
   if (!topic || topic.trim().length === 0) {
     return formatFoundationOverview(store);
   }
 
-  // Resolve topic aliases (e.g., "theme" → "theming", "a11y" → "accessibility")
+  // Resolve topic aliases (e.g., "theme" → "theming", "a11y" → "accessibility").
   const resolvedTopic = resolveTopic(topic.trim().toLowerCase());
 
   if (!resolvedTopic) {
     return formatInvalidTopic(topic);
   }
 
-  // Find the document for this topic in the store
-  const doc = findFoundationDoc(store, resolvedTopic);
+  // Find the guide for this topic. Guide ids match canonical topic names.
+  const guide = findFoundationGuide(store, resolvedTopic);
 
-  if (!doc) {
+  if (!guide) {
     return formatTopicNotIndexed(resolvedTopic);
   }
 
-  return formatFoundationResponse(doc);
+  return [`> **Module:** foundation`, '', formatGuide(guide)].join('\n');
 }
 
 /**
  * Resolve a user-provided topic string to a canonical FoundationTopic.
  *
- * Tries exact match first, then checks the alias map.
+ * Tries exact match first, then the alias map, then partial matching.
  *
  * @param input - User-provided topic string (lowercase, trimmed)
  * @returns The canonical FoundationTopic, or null if not recognized
  */
 function resolveTopic(input: string): FoundationTopic | null {
-  // Exact match against known topics
   if ((FOUNDATION_TOPICS as readonly string[]).includes(input)) {
     return input as FoundationTopic;
   }
 
-  // Check aliases (e.g., "theme" → "theming", "a11y" → "accessibility")
   const aliased = FOUNDATION_TOPIC_ALIASES[input];
   if (aliased) {
     return aliased;
   }
 
-  // Try partial matching — find a topic that contains the input
   for (const topic of FOUNDATION_TOPICS) {
     if (topic.includes(input) || input.includes(topic)) {
       return topic;
@@ -101,52 +95,41 @@ function resolveTopic(input: string): FoundationTopic | null {
 }
 
 /**
- * Find the foundation document in the store by topic name.
+ * Find the foundation guide in the store for a resolved topic.
  *
- * Uses the FOUNDATION_TOPIC_FILE_MAP to build the expected document ID,
- * then falls back to fuzzy name matching if the exact ID isn't found.
+ * Tries the exact guide id (which matches the canonical topic name), then
+ * falls back to matching against guide ids/titles.
  *
- * @param store - The document store to search
+ * @param store - The schema store to search
  * @param topic - The resolved foundation topic name
- * @returns The matching DocumentEntry, or undefined if not found
+ * @returns The matching guide, or undefined if not found
  */
-function findFoundationDoc(
-  store: DocumentStore,
+function findFoundationGuide(
+  store: SchemaStore,
   topic: FoundationTopic
-): DocumentEntry | undefined {
-  // Try the expected document ID based on the file map
-  // The ID is built as: "foundation/{topic}" (without numeric prefix)
-  const expectedId = `foundation/${topic}`;
-  const byId = store.getById(expectedId);
+): GuideEntry | undefined {
+  const byId = store.getFoundationGuide(topic);
   if (byId) {
     return byId;
   }
 
-  // Fallback: search by filename pattern in the foundation module
-  const fileName = FOUNDATION_TOPIC_FILE_MAP[topic];
-  if (fileName) {
-    const foundationDocs = store.getByModule('foundation');
-    const match = foundationDocs.find((doc) =>
-      doc.relativePath.includes(fileName)
-    );
-    if (match) {
-      return match;
-    }
-  }
-
-  // Last resort: fuzzy name match
-  return store.findByName(topic);
+  // Fallback: fuzzy match against id/title for guides whose id differs.
+  const guides = store.getAllFoundationGuides();
+  return guides.find(
+    (g) =>
+      g.id.includes(topic) ||
+      topic.includes(g.id) ||
+      g.title.toLowerCase().includes(topic)
+  );
 }
 
 /**
- * Format the overview of all available foundation topics.
+ * Format the overview of all available foundation guides.
  *
- * Shows each topic with its description and available aliases.
- *
- * @param store - The document store for getting actual doc descriptions
+ * @param store - The schema store for getting actual guide data
  * @returns Formatted markdown overview
  */
-function formatFoundationOverview(store: DocumentStore): string {
+function formatFoundationOverview(store: SchemaStore): string {
   const parts: string[] = [];
 
   parts.push('## FluentUI Foundation Documentation');
@@ -154,43 +137,24 @@ function formatFoundationOverview(store: DocumentStore): string {
   parts.push('Core topics covering FluentUI setup, architecture, and design principles.');
   parts.push('');
 
-  // List each topic with description from the store (if available)
-  for (const topic of FOUNDATION_TOPICS) {
-    const doc = findFoundationDoc(store, topic);
-    const description = doc?.metadata.description || getTopicFallbackDescription(topic);
+  const guides = store.getAllFoundationGuides();
 
-    parts.push(`### ${formatTopicName(topic)}`);
-    parts.push(description);
+  if (guides.length === 0) {
+    parts.push('*No foundation guides are available in the current schema.*');
+    return parts.join('\n');
+  }
 
-    // Show aliases for this topic
-    const aliases = getAliasesForTopic(topic);
+  for (const guide of guides) {
+    parts.push(`### ${guide.title}`);
+
+    const aliases = getAliasesForTopic(guide.id);
     if (aliases.length > 0) {
       parts.push(`*Aliases: ${aliases.join(', ')}*`);
     }
 
-    parts.push(`*Use \`get_foundation("${topic}")\` for full documentation*`);
+    parts.push(`*Use \`get_foundation("${guide.id}")\` for full documentation*`);
     parts.push('');
   }
-
-  return parts.join('\n');
-}
-
-/**
- * Format a foundation document response with metadata header.
- *
- * @param doc - The foundation document entry
- * @returns Formatted markdown with header and full content
- */
-function formatFoundationResponse(doc: DocumentEntry): string {
-  const parts: string[] = [];
-
-  parts.push(`# ${doc.title}`);
-  parts.push('');
-  parts.push('**Module:** foundation');
-  parts.push('');
-  parts.push('---');
-  parts.push('');
-  parts.push(doc.content);
 
   return parts.join('\n');
 }
@@ -220,15 +184,13 @@ function formatInvalidTopic(topic: string): string {
 }
 
 /**
- * Format an error for a topic that is recognized but not in the index.
- *
- * This can happen if the docs directory is incomplete.
+ * Format an error for a topic that is recognized but not present in the schema.
  *
  * @param topic - The recognized but missing topic
  * @returns Error message
  */
 function formatTopicNotIndexed(topic: string): string {
-  return `Foundation topic "${topic}" is recognized but no documentation was found in the index. The docs directory may be incomplete.`;
+  return `Foundation topic "${topic}" is recognized but no guide was found in the schema. The schema may be incomplete.`;
 }
 
 /**
@@ -237,7 +199,7 @@ function formatTopicNotIndexed(topic: string): string {
  * @param topic - The canonical foundation topic
  * @returns Array of alias strings
  */
-function getAliasesForTopic(topic: FoundationTopic): string[] {
+function getAliasesForTopic(topic: string): string[] {
   const aliases: string[] = [];
   for (const [alias, target] of Object.entries(FOUNDATION_TOPIC_ALIASES)) {
     if (target === topic) {
@@ -245,35 +207,4 @@ function getAliasesForTopic(topic: FoundationTopic): string[] {
     }
   }
   return aliases;
-}
-
-/**
- * Format a topic identifier into a human-readable name.
- *
- * @param topic - Topic identifier (e.g., "getting-started")
- * @returns Human-readable name (e.g., "Getting Started")
- */
-function formatTopicName(topic: string): string {
-  return topic
-    .split('-')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-/**
- * Get a fallback description for a topic when the store has no data.
- *
- * @param topic - The foundation topic
- * @returns A brief fallback description
- */
-function getTopicFallbackDescription(topic: FoundationTopic): string {
-  const descriptions: Record<FoundationTopic, string> = {
-    'getting-started': 'Installation, setup, and first steps with FluentUI v9.',
-    'fluent-provider': 'The FluentProvider component for theme and direction context.',
-    'theming': 'Design tokens, custom themes, and theme customization.',
-    'styling-griffel': 'Styling with Griffel — makeStyles, mergeClasses, and CSS-in-JS.',
-    'component-architecture': 'Hooks, slots, and the FluentUI component architecture.',
-    'accessibility': 'Accessibility patterns, ARIA attributes, and keyboard navigation.',
-  };
-  return descriptions[topic];
 }

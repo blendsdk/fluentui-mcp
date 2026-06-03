@@ -4,6 +4,10 @@ node_modules/
 # Build output
 dist/
 
+# Scraper clone cache
+.cache/
+
+
 # Coverage
 coverage/
 

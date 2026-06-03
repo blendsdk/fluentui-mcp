@@ -1,0 +1,15 @@
+{
+  "name": "@fluentui/react-dialog",
+  "version": "9.11.0",
+  "description": "FluentUI React Dialog component",
+  "main": "lib-commonjs/index.js",
+  "module": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "dependencies": {
+    "@fluentui/react-shared-contexts": "^9.0.0",
+    "@fluentui/react-theme": "^9.0.0",
+    "@fluentui/react-utilities": "^9.0.0",
+    "@fluentui/react-portal": "^9.0.0",
+    "@griffel/react": "^1.5.0"
+  }
+}

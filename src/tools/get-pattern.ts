@@ -1,148 +1,105 @@
 /**
  * Tool: get_pattern — Get FluentUI pattern documentation.
  *
- * Returns documentation for implementation patterns organized by category:
+ * Returns documentation for implementation patterns organized by group:
  * composition, data, forms, layout, modals, navigation, state.
  *
  * When called with just a category, returns an index of all patterns
- * in that category. When called with a specific pattern name,
- * returns the full documentation for that pattern.
+ * in that group. When called with a specific pattern name, returns the
+ * full documentation for that pattern (rendered from the structured schema).
  *
  * @module tools/get-pattern
  */
 
-import type { DocumentStore } from '../indexer/document-store.js';
-import type { GetPatternArgs, DocumentEntry } from '../types/index.js';
+import type { SchemaStore } from '../schema/schema-store.js';
+import type { GetPatternArgs, PatternEntry } from '../types/index.js';
 import { PATTERN_CATEGORIES } from '../types/index.js';
+import { formatPattern } from '../formatters/pattern-formatter.js';
 
 /**
  * Execute the get_pattern tool.
  *
- * If only a category is provided, lists all patterns in that category.
+ * If only a category is provided, lists all patterns in that group.
  * If a specific pattern name is also given, returns its full documentation.
  * If neither is provided, shows all available pattern categories.
  *
- * @param store - The populated document store to query
+ * @param store - The populated schema store to query
  * @param args - Tool arguments with pattern category and optional pattern name
  * @returns Formatted markdown string with pattern documentation
  *
  * @example
  * ```typescript
- * // List all form patterns
  * const list = getPattern(store, { patternCategory: "forms" });
- *
- * // Get a specific pattern
  * const doc = getPattern(store, { patternCategory: "forms", patternName: "validation" });
  * ```
  */
 export function getPattern(
-  store: DocumentStore,
+  store: SchemaStore,
   args: GetPatternArgs
 ): string {
   const { patternCategory, patternName } = args;
 
-  // No category — show all pattern categories
+  // No category — show all pattern categories.
   if (!patternCategory || patternCategory.trim().length === 0) {
     return formatPatternOverview(store);
   }
 
   const normalizedCategory = patternCategory.trim().toLowerCase();
 
-  // Validate category
   if (!isValidPatternCategory(normalizedCategory)) {
     return formatInvalidPatternCategory(normalizedCategory);
   }
 
-  // Get all pattern docs in this category
-  const categoryDocs = getPatternDocsForCategory(store, normalizedCategory);
+  const categoryPatterns = store.getPatternsByGroup(normalizedCategory);
 
-  // If a specific pattern was requested, find and return it
+  // If a specific pattern was requested, find and return it.
   if (patternName && patternName.trim().length > 0) {
-    return findAndFormatPattern(categoryDocs, patternName.trim(), normalizedCategory);
+    return findAndFormatPattern(categoryPatterns, patternName.trim(), normalizedCategory);
   }
 
-  // No specific pattern — list all patterns in the category
-  return formatPatternCategoryList(normalizedCategory, categoryDocs);
+  // No specific pattern — list all patterns in the category.
+  return formatPatternCategoryList(normalizedCategory, categoryPatterns);
 }
 
 /**
- * Get all pattern documents that belong to a specific pattern category.
+ * Find a specific pattern by name within a group's patterns.
  *
- * Pattern docs are in the "patterns" module and their relative path
- * contains the category folder name (e.g., "03-patterns/forms/...").
+ * Tries match on title, id, then partial matching.
  *
- * @param store - The document store to query
- * @param category - The pattern category folder name
- * @returns Array of documents in the pattern category
- */
-function getPatternDocsForCategory(
-  store: DocumentStore,
-  category: string
-): DocumentEntry[] {
-  const allPatterns = store.getByModule('patterns');
-
-  // Filter to docs whose relative path contains the category folder
-  return allPatterns.filter((doc) => {
-    const pathParts = doc.relativePath.split('/');
-    // Pattern paths: "03-patterns/{category}/{file}.md"
-    // pathParts[1] should be the category folder name
-    return pathParts.length >= 2 && pathParts[1] === category;
-  });
-}
-
-/**
- * Find a specific pattern by name within a set of category docs.
- *
- * Tries exact match on title, then partial/fuzzy matching.
- *
- * @param docs - Pattern documents in the category
+ * @param patterns - Patterns in the group
  * @param name - Pattern name to find
- * @param category - The category (for error messages)
+ * @param category - The group (for error messages)
  * @returns Formatted markdown for the pattern, or error if not found
  */
 function findAndFormatPattern(
-  docs: DocumentEntry[],
+  patterns: PatternEntry[],
   name: string,
   category: string
 ): string {
   const normalized = name.toLowerCase();
 
-  // Strategy 1: Match title contains the name
-  let match = docs.find((doc) =>
-    doc.title.toLowerCase().includes(normalized)
-  );
+  let match = patterns.find((p) => p.title.toLowerCase().includes(normalized));
 
-  // Strategy 2: Match filename contains the name
   if (!match) {
-    match = docs.find((doc) => {
-      const filename = doc.relativePath.split('/').pop()?.replace('.md', '') || '';
-      // Strip numeric prefix from filename (e.g., "02-validation" → "validation")
-      const cleanFilename = filename.replace(/^\d+-/, '');
-      return cleanFilename.includes(normalized) || normalized.includes(cleanFilename);
-    });
-  }
-
-  // Strategy 3: Match document ID contains the name
-  if (!match) {
-    match = docs.find((doc) =>
-      doc.id.toLowerCase().includes(normalized)
+    match = patterns.find(
+      (p) => p.id.toLowerCase().includes(normalized) || normalized.includes(p.id.toLowerCase())
     );
   }
 
   if (!match) {
-    return formatPatternNotFound(name, category, docs);
+    return formatPatternNotFound(name, category, patterns);
   }
 
-  return formatPatternResponse(match);
+  return formatPattern(match);
 }
 
 /**
  * Format an overview of all available pattern categories.
  *
- * @param store - The document store for getting doc counts per category
+ * @param store - The schema store for getting pattern counts per group
  * @returns Formatted markdown overview
  */
-function formatPatternOverview(store: DocumentStore): string {
+function formatPatternOverview(store: SchemaStore): string {
   const parts: string[] = [];
 
   parts.push('## FluentUI Pattern Documentation');
@@ -151,15 +108,14 @@ function formatPatternOverview(store: DocumentStore): string {
   parts.push('');
 
   for (const category of PATTERN_CATEGORIES) {
-    const docs = getPatternDocsForCategory(store, category);
-    const count = docs.length;
+    const patterns = store.getPatternsByGroup(category);
+    const count = patterns.length;
 
     parts.push(`### ${capitalize(category)} Patterns`);
     parts.push(`*${count} pattern${count === 1 ? '' : 's'} available*`);
 
-    // Show brief list of pattern titles
-    if (docs.length > 0) {
-      const titles = docs.map((doc) => doc.title).join(', ');
+    if (patterns.length > 0) {
+      const titles = patterns.map((p) => p.title).join(', ');
       parts.push(`Topics: ${titles}`);
     }
 
@@ -171,73 +127,34 @@ function formatPatternOverview(store: DocumentStore): string {
 }
 
 /**
- * Format a list of all patterns within a specific category.
+ * Format a list of all patterns within a specific group.
  *
- * @param category - The pattern category name
- * @param docs - Documents in this category
+ * @param category - The pattern group name
+ * @param patterns - Patterns in this group
  * @returns Formatted markdown list
  */
 function formatPatternCategoryList(
   category: string,
-  docs: DocumentEntry[]
+  patterns: PatternEntry[]
 ): string {
   const parts: string[] = [];
 
   parts.push(`## ${capitalize(category)} Patterns`);
-  parts.push(`*${docs.length} pattern${docs.length === 1 ? '' : 's'} in this category*`);
+  parts.push(`*${patterns.length} pattern${patterns.length === 1 ? '' : 's'} in this category*`);
   parts.push('');
 
-  if (docs.length === 0) {
+  if (patterns.length === 0) {
     parts.push('No patterns found in this category.');
     return parts.join('\n');
   }
 
-  // Sort by filename (which is ordered by numeric prefix)
-  const sorted = [...docs].sort((a, b) =>
-    a.relativePath.localeCompare(b.relativePath)
-  );
+  const sorted = [...patterns].sort((a, b) => a.title.localeCompare(b.title));
 
-  for (const doc of sorted) {
-    const indicators: string[] = [];
-    if (doc.metadata.hasCodeExamples) {
-      indicators.push('💻 examples');
-    }
-    const indicatorStr = indicators.length > 0 ? ` (${indicators.join(', ')})` : '';
-
-    parts.push(`### ${doc.title}${indicatorStr}`);
-
-    if (doc.metadata.description) {
-      parts.push(doc.metadata.description);
-    }
-
-    // Extract a clean pattern name for the tool hint
-    const patternName = extractPatternName(doc);
-    parts.push(`*Use \`get_pattern("${category}", "${patternName}")\` for full documentation*`);
+  for (const pattern of sorted) {
+    parts.push(`### ${pattern.title}`);
+    parts.push(`*Use \`get_pattern("${category}", "${pattern.id}")\` for full documentation*`);
     parts.push('');
   }
-
-  return parts.join('\n');
-}
-
-/**
- * Format the full documentation for a single pattern.
- *
- * @param doc - The pattern document entry
- * @returns Formatted markdown with header and full content
- */
-function formatPatternResponse(doc: DocumentEntry): string {
-  const parts: string[] = [];
-
-  parts.push(`# ${doc.title}`);
-  parts.push('');
-  parts.push('**Module:** patterns');
-  if (doc.metadata.hasCodeExamples) {
-    parts.push('**Has code examples:** yes');
-  }
-  parts.push('');
-  parts.push('---');
-  parts.push('');
-  parts.push(doc.content);
 
   return parts.join('\n');
 }
@@ -246,24 +163,23 @@ function formatPatternResponse(doc: DocumentEntry): string {
  * Format an error message when a specific pattern is not found.
  *
  * @param name - The pattern name that wasn't found
- * @param category - The category that was searched
- * @param availableDocs - Documents available in the category (for suggestions)
+ * @param category - The group that was searched
+ * @param available - Patterns available in the group (for suggestions)
  * @returns Formatted error message
  */
 function formatPatternNotFound(
   name: string,
   category: string,
-  availableDocs: DocumentEntry[]
+  available: PatternEntry[]
 ): string {
   const parts: string[] = [];
   parts.push(`Pattern "${name}" not found in category "${category}".`);
   parts.push('');
 
-  if (availableDocs.length > 0) {
+  if (available.length > 0) {
     parts.push('**Available patterns in this category:**');
-    for (const doc of availableDocs) {
-      const patternName = extractPatternName(doc);
-      parts.push(`- ${doc.title} → \`get_pattern("${category}", "${patternName}")\``);
+    for (const pattern of available) {
+      parts.push(`- ${pattern.title} → \`get_pattern("${category}", "${pattern.id}")\``);
     }
   }
 
@@ -290,20 +206,6 @@ function formatInvalidPatternCategory(category: string): string {
   parts.push('*Omit the category to see an overview of all pattern categories.*');
 
   return parts.join('\n');
-}
-
-/**
- * Extract a clean pattern name from a document for use in tool hints.
- *
- * Strips numeric prefix and extension from the filename.
- *
- * @param doc - The document entry
- * @returns Clean pattern name string
- */
-function extractPatternName(doc: DocumentEntry): string {
-  const filename = doc.relativePath.split('/').pop()?.replace('.md', '') || '';
-  // Remove numeric prefix (e.g., "02-validation" → "validation")
-  return filename.replace(/^\d+-/, '');
 }
 
 /**

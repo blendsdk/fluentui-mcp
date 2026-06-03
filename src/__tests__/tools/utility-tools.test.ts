@@ -1,30 +1,34 @@
 /**
  * Tests for utility tools: list_all_docs, reindex.
  *
- * Uses the real docs/v9/ index for integration-level validation.
+ * Uses the enhanced test schema via the shared schema-driven tools-setup, plus
+ * the on-disk enhanced fixture JSON for reindex file-reload tests.
  *
  * @module __tests__/tools/utility-tools
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { join } from 'path';
-import type { DocumentStore } from '../../indexer/document-store.js';
-import type { SearchEngine } from '../../indexer/search-engine.js';
-import { getTestIndex } from './tools-setup.js';
+import type { SchemaStore } from '../../schema/schema-store.js';
+import { getTestIndex, createTestServerState } from './tools-setup.js';
 
 import { listAllDocs } from '../../tools/list-all-docs.js';
 import { reindex } from '../../tools/reindex.js';
 
-/** Absolute path to the bundled v9 docs directory */
-const DOCS_V9_PATH = join(process.cwd(), 'docs', 'v9');
+/** Absolute path to the on-disk enhanced test schema fixture. */
+const ENHANCED_SCHEMA_PATH = join(
+  process.cwd(),
+  'src',
+  '__tests__',
+  'fixtures',
+  'test-schema-enhanced.json',
+);
 
-let store: DocumentStore;
-let searchEngine: SearchEngine;
+let store: SchemaStore;
 
-beforeAll(async () => {
-  const index = await getTestIndex();
+beforeAll(() => {
+  const index = getTestIndex();
   store = index.store;
-  searchEngine = index.searchEngine;
 });
 
 // ============================================================================
@@ -47,7 +51,6 @@ describe('listAllDocs', () => {
 
   it('should include document count information', () => {
     const result = listAllDocs(store);
-    // Should contain numeric counts
     expect(result).toMatch(/\d+/);
   });
 
@@ -62,26 +65,38 @@ describe('listAllDocs', () => {
 // ============================================================================
 
 describe('reindex', () => {
-  it('should successfully reindex the documentation', async () => {
-    const result = await reindex(store, searchEngine, DOCS_V9_PATH);
+  it('should successfully reindex from the schema file', async () => {
+    const state = createTestServerState();
+    state.schemaPath = ENHANCED_SCHEMA_PATH;
+    const result = await reindex(state);
     expect(result).toContain('Reindex');
-    // Should report indexed file counts
     expect(result).toMatch(/\d+/);
   });
 
-  it('should preserve search functionality after reindex', async () => {
-    await reindex(store, searchEngine, DOCS_V9_PATH);
-    // Store and engine should still work
-    const doc = store.findByName('Button');
-    expect(doc).toBeDefined();
+  it('should preserve store/search functionality after reindex', async () => {
+    const state = createTestServerState();
+    state.schemaPath = ENHANCED_SCHEMA_PATH;
+    await reindex(state);
 
-    const results = searchEngine.search('dialog');
+    const component = state.store.findComponent('Button');
+    expect(component).toBeDefined();
+
+    const results = state.searchEngine.search('dialog');
     expect(results.length).toBeGreaterThan(0);
   });
 
-  it('should report zero failed files for valid docs directory', async () => {
-    const result = await reindex(store, searchEngine, DOCS_V9_PATH);
-    // Result should not contain any failure warnings
+  it('should report no failure for a valid schema file', async () => {
+    const state = createTestServerState();
+    state.schemaPath = ENHANCED_SCHEMA_PATH;
+    const result = await reindex(state);
+    expect(result).toContain('Reindex Complete');
     expect(result).not.toContain('Failed');
+  });
+
+  it('should report an error for a missing schema file', async () => {
+    const state = createTestServerState();
+    state.schemaPath = join(process.cwd(), 'does-not-exist.json');
+    const result = await reindex(state);
+    expect(result).toContain('Reindex Failed');
   });
 });

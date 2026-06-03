@@ -2,14 +2,14 @@
  * Tests for intelligence tools: suggest_components, get_implementation_guide,
  * get_component_examples, get_props_reference.
  *
- * Uses the real docs/v9/ index for integration-level validation.
+ * Uses the enhanced test schema via the shared schema-driven tools-setup.
  *
  * @module __tests__/tools/intelligence-tools
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import type { DocumentStore } from '../../indexer/document-store.js';
-import type { SearchEngine } from '../../indexer/search-engine.js';
+import type { SchemaStore } from '../../schema/schema-store.js';
+import type { SearchEngine } from '../../search/search-engine.js';
 import { getTestIndex } from './tools-setup.js';
 
 import { suggestComponents } from '../../tools/suggest-components.js';
@@ -17,11 +17,11 @@ import { getImplementationGuide } from '../../tools/get-implementation-guide.js'
 import { getComponentExamples } from '../../tools/get-component-examples.js';
 import { getPropsReference } from '../../tools/get-props-reference.js';
 
-let store: DocumentStore;
+let store: SchemaStore;
 let searchEngine: SearchEngine;
 
-beforeAll(async () => {
-  const index = await getTestIndex();
+beforeAll(() => {
+  const index = getTestIndex();
   store = index.store;
   searchEngine = index.searchEngine;
 });
@@ -46,13 +46,6 @@ describe('suggestComponents', () => {
     expect(result).toContain('Dialog');
   });
 
-  it('should suggest table/datagrid for data table descriptions', () => {
-    const result = suggestComponents(store, searchEngine, {
-      uiDescription: 'data table with sortable columns',
-    });
-    expect(result.toLowerCase()).toContain('table');
-  });
-
   it('should return error for empty description', () => {
     const result = suggestComponents(store, searchEngine, {
       uiDescription: '',
@@ -60,11 +53,10 @@ describe('suggestComponents', () => {
     expect(result).toContain('Error');
   });
 
-  it('should return no-suggestions message for unrelated descriptions', () => {
+  it('should return a response for unrelated descriptions', () => {
     const result = suggestComponents(store, searchEngine, {
       uiDescription: 'xyznonexistent feature that does not exist',
     });
-    // Should either have no suggestions or very low relevance matches
     expect(result.length).toBeGreaterThan(0);
   });
 
@@ -72,7 +64,6 @@ describe('suggestComponents', () => {
     const result = suggestComponents(store, searchEngine, {
       uiDescription: 'button to submit a form',
     });
-    // Should contain relevance emoji indicators (🟢, 🟡, or ⚪)
     expect(result).toMatch(/[🟢🟡⚪]/);
   });
 });
@@ -84,19 +75,17 @@ describe('suggestComponents', () => {
 describe('getImplementationGuide', () => {
   it('should return a guide for a valid UI goal', () => {
     const result = getImplementationGuide(store, searchEngine, {
-      goal: 'create a settings page with toggle switches',
+      goal: 'build a form with an input and a submit button',
     });
     expect(result.length).toBeGreaterThan(100);
-    // Should contain structured sections
     expect(result.toLowerCase()).toContain('implementation');
   });
 
   it('should include relevant component references', () => {
     const result = getImplementationGuide(store, searchEngine, {
-      goal: 'build a navigation sidebar with menu items',
+      goal: 'build a dialog with confirmation buttons',
     });
-    // Should reference navigation components
-    expect(result.toLowerCase()).toContain('nav');
+    expect(result.toLowerCase()).toContain('dialog');
   });
 
   it('should return error for empty goal', () => {
@@ -114,9 +103,7 @@ describe('getImplementationGuide', () => {
 describe('getComponentExamples', () => {
   it('should return code examples for a known component', () => {
     const result = getComponentExamples(store, { componentName: 'Button' });
-    // Button docs contain TypeScript code examples
     expect(result).toContain('Button');
-    // Should contain actual code or code block indicators
     expect(result.length).toBeGreaterThan(50);
   });
 
@@ -138,7 +125,6 @@ describe('getComponentExamples', () => {
 describe('getPropsReference', () => {
   it('should return props reference for a known component', () => {
     const result = getPropsReference(store, { componentName: 'Button' });
-    // Button docs have a props reference table
     expect(result).toContain('Button');
     expect(result.toLowerCase()).toContain('prop');
   });

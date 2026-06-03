@@ -1,0 +1,14 @@
+{
+  "name": "@fluentui/react-button",
+  "version": "9.9.1",
+  "description": "FluentUI React Button component",
+  "main": "lib-commonjs/index.js",
+  "module": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "dependencies": {
+    "@fluentui/react-shared-contexts": "^9.0.0",
+    "@fluentui/react-theme": "^9.0.0",
+    "@fluentui/react-utilities": "^9.0.0",
+    "@griffel/react": "^1.5.0"
+  }
+}
