@@ -11,7 +11,7 @@ Three GitHub Actions workflows automate the project lifecycle: CI (build & test 
 
 ### 1. CI Workflow (`.github/workflows/ci.yml`)
 
-**Trigger**: Push to main, pull requests to main
+**Trigger**: Push to master, pull requests to master
 **Purpose**: Build and test on every change
 
 ```yaml
@@ -19,9 +19,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
   build-and-test:

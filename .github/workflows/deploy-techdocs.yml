@@ -18,7 +18,7 @@ name: Deploy Tech Docs
 
 on:
     push:
-        branches: [main]
+        branches: [master]
         paths:
             - "techdocs/**"
             - ".github/workflows/deploy-techdocs.yml"
