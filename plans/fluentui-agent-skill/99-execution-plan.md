@@ -332,6 +332,12 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 **Verify**: `yarn build && yarn test`
 
+> **Review outcome**: correctness and security reviews both PASS WITH MINOR FINDINGS; no critical or
+> major. The phase adds `src/__tests__/integration/nonfunctional.test.ts` (offline self-containment
+> and link resolution, plus a no-execution sentinel). Minors recorded report-only: the no-execution
+> assertion is weak, the link check does not confine targets, `walk` skips symlinks, and there is no
+> automated performance bound. See `phase-07-review.md`.
+
 ---
 
 ## Phase 8: Docs, decisions & evaluation (RD-08)
