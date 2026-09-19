@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 22:37
-> **Progress**: 98/103 tasks (95%)
+> **Last Updated**: 2026-09-19 23:21
+> **Progress**: 99/103 tasks (96%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -356,7 +356,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 - [x] 8.2.1 Rewrite `README.md` skill-first — `README.md` ✅ (completed: 2026-09-19 22:37)
 - [x] 8.2.2 Write ADR-001..ADR-005 — `requirements/decisions/ADR-00X-*.md` ✅ (completed: 2026-09-19 22:37)
 - [x] 8.2.3 Update `AGENTS.md` commands and scope — `AGENTS.md` ✅ (completed: 2026-09-19 22:37)
-- [ ] 8.2.4 Produce the skill-vs-MCP evaluation report — `requirements/decisions/evaluation-report.md`
+- [x] 8.2.4 Produce the skill-vs-MCP evaluation report — `requirements/decisions/evaluation-report.md` ✅ (completed: 2026-09-19 23:21)
 
 ### Step 8.3: Green phase
 
