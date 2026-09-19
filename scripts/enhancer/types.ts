@@ -305,6 +305,9 @@ export interface EnhancerCliOptions {
   /** Show diff without calling LLM */
   dryRun: boolean;
 
+  /** Skip the interactive cost-confirmation prompt */
+  yes?: boolean;
+
   /** Input schema path */
   input?: string;
 

@@ -137,6 +137,13 @@ export interface EnhancementRunStats {
   guidesGenerated: number;
   patternsGenerated: number;
   failures: number;
+
+  /**
+   * Human-readable messages for each failed item, in the order the batches
+   * settled. Populated so callers can fail-fast with the underlying cause
+   * (for example a truncated provider response) instead of a bare count.
+   */
+  failureDetails: string[];
 }
 
 /**
@@ -181,6 +188,7 @@ export async function runEnhancement(
     guidesGenerated: 0,
     patternsGenerated: 0,
     failures: 0,
+    failureDetails: [],
   };
 
   const hashIndex = buildHashIndex(rawSchema.components, rawSchema.utilities);
@@ -252,6 +260,11 @@ export async function runEnhancement(
       }
     }
     stats.failures += componentResults.failed.length;
+    stats.failureDetails.push(
+      ...componentResults.failed.map(
+        (item) => item.error?.message ?? `component #${item.index} failed`,
+      ),
+    );
 
     for (let i = 0; i < enhancedComponents.length; i += 1) {
       const comp = enhancedComponents[i];
@@ -329,6 +342,11 @@ export async function runEnhancement(
       }
     }
     stats.failures += utilityResults.failed.length;
+    stats.failureDetails.push(
+      ...utilityResults.failed.map(
+        (item) => item.error?.message ?? `utility #${item.index} failed`,
+      ),
+    );
 
     for (let i = 0; i < enhancedUtilities.length; i += 1) {
       const util = enhancedUtilities[i];
