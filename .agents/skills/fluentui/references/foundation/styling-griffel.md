@@ -2,8 +2,6 @@
 
 > **Category**: foundation
 
-# Styling with Griffel
-
 Griffel is the CSS-in-JS engine that powers every Fluent UI v9 component. `Button`, `Card`, `Input`, `Dialog` — all of them are styled with it — and it is also the recommended way to style your own components so they participate in the same theming, RTL, and specificity rules as the library.
 
 Griffel is **atomic CSS-in-JS**:

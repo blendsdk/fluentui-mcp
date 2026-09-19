@@ -2,8 +2,6 @@
 
 > **Category**: quick-reference
 
-# Common Patterns — Fluent UI v9
-
 Everything imports from `@fluentui/react-components` unless noted (compat/preview packages in §11).
 
 ## 1. Universal state pattern: `default*` ↔ controlled

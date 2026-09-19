@@ -20,6 +20,24 @@
 /** Placeholder rendered when a value is missing. */
 export const EMPTY_CELL = '—';
 
+/** Collapse newlines and trim, so a value always stays on one line. */
+function singleLine(value: string): string {
+  return value.replace(/\r?\n/g, ' ').trim();
+}
+
+/**
+ * Escape a value used as the visible label of a Markdown link.
+ *
+ * Collapses newlines and escapes the square brackets that delimit the label,
+ * so a label cannot break out of its link.
+ *
+ * @param value - Raw label text.
+ * @returns The escaped, single-line label.
+ */
+export function escapeLinkLabel(value: string): string {
+  return singleLine(value).replace(/\\/g, '\\\\').replace(/([[\]])/g, '\\$1');
+}
+
 /**
  * Join the non-empty parts with a single blank line between them.
  *
@@ -39,13 +57,16 @@ export function joinSections(parts: Array<string | undefined | false>): string {
 /**
  * Render an ATX heading, clamping the level to the valid 1–6 range.
  *
+ * Newlines are collapsed to spaces so a multi-line value cannot inject an
+ * extra heading or paragraph.
+ *
  * @param level - Requested heading level.
  * @param text - Heading text.
  * @returns The heading line.
  */
 export function heading(level: number, text: string): string {
   const safeLevel = Math.min(Math.max(Math.trunc(level), 1), 6);
-  return `${'#'.repeat(safeLevel)} ${text.trim()}`;
+  return `${'#'.repeat(safeLevel)} ${singleLine(text)}`;
 }
 
 /**

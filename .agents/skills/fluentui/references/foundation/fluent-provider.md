@@ -2,8 +2,6 @@
 
 > **Category**: foundation
 
-# FluentProvider Setup
-
 ## What the provider is
 
 Every Fluent UI v9 render tree starts with a provider. In `@fluentui/react-components` it is exported as `Provider`:

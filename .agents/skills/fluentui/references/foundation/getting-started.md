@@ -2,8 +2,6 @@
 
 > **Category**: foundation
 
-# Getting Started with FluentUI (v9)
-
 FluentUI v9 is Microsoft's React component library for building accessible, themeable, production-grade experiences. Almost everything you need ships from a single entry point — `@fluentui/react-components` — and every component follows the same handful of conventions: a root `Provider`, a slots-based composition model, state props such as `appearance`/`size`/`shape` instead of ad-hoc styling, and `(event, data)` change callbacks.
 
 This guide takes you from a blank project to a working, accessible screen, and then walks the whole component catalog so you know which building block to reach for.

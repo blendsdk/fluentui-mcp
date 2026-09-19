@@ -2,8 +2,6 @@
 
 > **Category**: quick-reference
 
-# Fluent UI v9 — Accessibility Checklist
-
 **Verify order for every component:** Name → Role → State → Keyboard → Focus → Announce.
 
 **Import note:** everything below comes from `@fluentui/react-components`, except `CalendarCompat` (`@fluentui/react-calendar-compat`), `DatepickerCompat` (`@fluentui/react-datepicker-compat`) and `TimepickerCompat` (`@fluentui/react-timepicker-compat`).

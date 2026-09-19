@@ -2,8 +2,6 @@
 
 > **Category**: foundation
 
-# Accessibility Guide
-
 Fluent UI v9 ships accessibility as a default, not an add-on. Every interactive component implements the matching WAI-ARIA Authoring Practices pattern: correct roles and states, full keyboard interaction, focus management, and support for right-to-left layouts and high-contrast (forced-colors) modes. What is left to you is small but essential: give every control an accessible name, compose components without fighting their built-in behavior, announce what changes on screen, and verify the result with a keyboard and a screen reader.
 
 ## What the library gives you out of the box

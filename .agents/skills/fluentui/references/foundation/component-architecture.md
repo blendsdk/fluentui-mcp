@@ -2,8 +2,6 @@
 
 > **Category**: foundation
 
-# Component Architecture
-
 Fluent UI v9 does not ship one bespoke widget per concept. It ships a small set of architectural ideas — **slots**, **appearance props**, **owned state**, **provider context**, **portals**, and **motion** — and every component in the library is assembled from them. Once you internalize those ideas, learning a new component is mostly a matter of reading its slot table and its `default*` / `on*Change` pairs.
 
 This guide describes the architecture that is visible in the public API surface of the v9 components: how components are structured, how state is owned and shared, how content gets rendered into layers, and how you should build your own components so they behave like first-party ones.

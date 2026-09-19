@@ -2,8 +2,6 @@
 
 > **Category**: quick-reference
 
-# FluentUI v9 — Setup & Imports Cheatsheet
-
 ## 1. Packages — install what you use
 
 | Area | Package | Entry import |

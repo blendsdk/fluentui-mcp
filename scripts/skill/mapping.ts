@@ -31,6 +31,7 @@ import {
   appendMarker,
   bulletList,
   bulletSection,
+  escapeLinkLabel,
   escapeTableCell,
   fencedCode,
   heading,
@@ -107,6 +108,17 @@ function assertSafeId(kind: string, id: string): void {
 function finalize(markdown: string): string {
   const normalized = markdown.replace(/\r\n?/g, '\n').trimEnd();
   return appendMarker(normalized, GENERATED_MARKER);
+}
+
+/**
+ * Drop a leading level-1 heading from authored content.
+ *
+ * Guide and recipe prose often starts with its own `# Title`. The renderer
+ * adds a title from the schema, so keeping both would produce two H1s. Removing
+ * the embedded one keeps a single document title and consistent metadata.
+ */
+function stripLeadingHeading(content: string): string {
+  return content.replace(/^\s*#\s+[^\n]*\n+/, '').trim();
 }
 
 // ============================================================================
@@ -216,18 +228,22 @@ function renderComponentLinks(
 ): string {
   const links: string[] = [];
   if (categoryIds.has(component.category)) {
-    links.push(
-      `- [${component.category} category](../categories/${component.category}.md)`,
-    );
+    const label = escapeLinkLabel(`${component.category} category`);
+    links.push(`[${label}](../categories/${component.category}.md)`);
   }
   for (const recipeId of component.enhanced?.relatedRecipes ?? []) {
     const group = recipeGroups.get(recipeId);
     if (group) {
-      links.push(`- [${recipeId} recipe](../recipes/${group}/${recipeId}.md)`);
+      const label = escapeLinkLabel(`${recipeId} recipe`);
+      links.push(`[${label}](../recipes/${group}/${recipeId}.md)`);
     }
   }
   if (component.relatedComponents.length > 0) {
-    links.push(...component.relatedComponents.map((name) => `- ${name}`));
+    links.push(
+      ...component.relatedComponents.map((name) =>
+        name.replace(/\r?\n/g, ' ').trim(),
+      ),
+    );
   }
   if (links.length === 0) {
     return '';
@@ -274,13 +290,12 @@ function renderGuideFile(guide: GuideEntry): string {
         example.description?.trim() ?? '',
         fencedCode(example.code, example.language || 'tsx'),
       ]),
-    )
-    .filter((block) => block !== '');
+    );
   return finalize(
     joinSections([
       heading(1, guide.title),
       guide.category ? `> **Category**: ${guide.category}` : '',
-      guide.content?.trim() ?? '',
+      guide.content ? stripLeadingHeading(guide.content) : '',
       bulletSection('Key Takeaways', guide.keyTakeaways),
       examples.length > 0
         ? joinSections([heading(2, 'Examples'), ...examples])
@@ -301,7 +316,10 @@ function renderCategoryFile(
 ): string {
   const componentLinks = category.componentIds
     .filter((id) => components.has(id))
-    .map((id) => `- [${components.get(id)?.name ?? id}](../components/${id}.md)`);
+    .map((id) => {
+      const label = escapeLinkLabel(components.get(id)?.name ?? id);
+      return `[${label}](../components/${id}.md)`;
+    });
   return finalize(
     joinSections([
       heading(1, `${category.category} components`),
@@ -363,12 +381,14 @@ function renderRecipeFile(
         example.description?.trim() ?? '',
         fencedCode(example.code, example.language || 'tsx'),
       ]),
-    )
-    .filter((block) => block !== '');
+    );
   const componentLinks = recipe.referencedComponents
     .map((name) => components.get(name.trim().toLowerCase()))
     .filter((component): component is ComponentEntry => component !== undefined)
-    .map((component) => `- [${component.name}](../../components/${component.id}.md)`);
+    .map((component) => {
+      const label = escapeLinkLabel(component.name);
+      return `[${label}](../../components/${component.id}.md)`;
+    });
   return finalize(
     joinSections([
       heading(1, recipe.title),
@@ -376,7 +396,7 @@ function renderRecipeFile(
       proseSection('Goal', recipe.goal),
       proseSection('When to Use', recipe.whenToUse),
       proseSection('When Not to Use', recipe.whenNotToUse),
-      recipe.content?.trim() ?? '',
+      recipe.content ? stripLeadingHeading(recipe.content) : '',
       examples.length > 0
         ? joinSections([heading(2, 'Examples'), ...examples])
         : '',
@@ -402,7 +422,7 @@ function renderIndexFile(
     ['Task', 'Recipe', 'Group'],
     orderedRecipes.map((recipe) => [
       escapeTableCell(recipe.title),
-      `[${recipe.id}](recipes/${recipe.group}/${recipe.id}.md)`,
+      `[${escapeLinkLabel(recipe.id)}](recipes/${recipe.group}/${recipe.id}.md)`,
       escapeTableCell(recipe.group),
     ]),
   );
@@ -410,7 +430,7 @@ function renderIndexFile(
   const categoryTable = table(
     ['Category', 'Components'],
     schema.categoryGuidance.map((category) => [
-      `[${category.category}](categories/${category.id}.md)`,
+      `[${escapeLinkLabel(category.category)}](categories/${category.id}.md)`,
       String(category.componentIds.length),
     ]),
   );
@@ -426,19 +446,22 @@ function renderIndexFile(
       heading(2, 'Foundation'),
       bulletList(
         schema.foundation.map(
-          (guide) => `[${guide.title}](foundation/${guide.id}.md)`,
+          (guide) =>
+            `[${escapeLinkLabel(guide.title)}](foundation/${guide.id}.md)`,
         ),
       ),
       heading(2, 'Components'),
       bulletList(
         orderedComponents.map(
-          (component) => `[${component.name}](components/${component.id}.md)`,
+          (component) =>
+            `[${escapeLinkLabel(component.name)}](components/${component.id}.md)`,
         ),
       ),
       heading(2, 'Quick reference'),
       bulletList(
         schema.quickReference.map(
-          (guide) => `[${guide.title}](quick-reference/${guide.id}.md)`,
+          (guide) =>
+            `[${escapeLinkLabel(guide.title)}](quick-reference/${guide.id}.md)`,
         ),
       ),
     ]),
@@ -449,22 +472,36 @@ function renderIndexFile(
 // Mapping entry point
 // ============================================================================
 
+/**
+ * Compare two strings by code unit.
+ *
+ * A locale-free comparison is used on purpose: `localeCompare` can order
+ * differently depending on the host locale, which would break the promise that
+ * the same schema always produces the same bytes.
+ */
+function compareStrings(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 /** Compare two objects by their `id` field for deterministic ordering. */
 function byId(a: { id: string }, b: { id: string }): number {
-  return a.id.localeCompare(b.id);
+  return compareStrings(a.id, b.id);
 }
 
 /**
  * Turn an enhanced schema into the complete set of skill files.
  *
  * The function validates every id and recipe group first, then renders all
- * files in memory and returns them sorted by path. It never writes to disk; a
- * thrown error therefore guarantees that no partial tree can appear.
+ * files in memory. It never writes to disk; a thrown error therefore guarantees
+ * that no partial tree can appear.
+ *
+ * Order is deterministic and intentional: `index.md` first, then foundation,
+ * components, and quick references ordered by id, then categories by id, then
+ * recipes by fixed group order and id. The result is not re-sorted by path.
  *
  * @param schema - The enhanced schema to render.
- * @returns Every generated file, sorted by relative path.
- * @throws When an id is unsafe, a recipe group is unknown, or a required
- *   collection is missing.
+ * @returns Every generated file, in mapping order.
+ * @throws When an id is unsafe or a recipe group is unknown.
  */
 export function buildSkillFiles(schema: FluentUISchema): SkillFile[] {
   const components = [...(schema.components ?? [])].sort(byId);
@@ -496,7 +533,7 @@ export function buildSkillFiles(schema: FluentUISchema): SkillFile[] {
     (a, b) =>
       RECIPE_GROUP_ORDER.indexOf(a.group as (typeof RECIPE_GROUP_ORDER)[number]) -
         RECIPE_GROUP_ORDER.indexOf(b.group as (typeof RECIPE_GROUP_ORDER)[number]) ||
-      a.id.localeCompare(b.id),
+      compareStrings(a.id, b.id),
   );
 
   const componentById = new Map(components.map((c) => [c.id, c]));

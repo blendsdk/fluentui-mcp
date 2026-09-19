@@ -316,6 +316,27 @@ function seedSkillDir(skillDir: string): void {
   );
 }
 
+/**
+ * Remove fenced code blocks from a document.
+ *
+ * Example code can contain link-shaped text (for example a Storybook URL in a
+ * description string), so links are checked only in prose.
+ */
+function stripCodeFences(markdown: string): string {
+  let inFence = false;
+  const kept: string[] = [];
+  for (const line of markdown.split('\n')) {
+    if (/^\s*`{3,}/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (!inFence) {
+      kept.push(line);
+    }
+  }
+  return kept.join('\n');
+}
+
 /** List every file under a root as POSIX-style relative paths. */
 function listFiles(root: string): string[] {
   const out: string[] = [];
@@ -396,10 +417,9 @@ describe('generated link integrity', () => {
       for (const rel of files) {
         // Story code can embed Markdown links (for example a Storybook
         // description string), so ignore anything inside a code fence.
-        const content = readFileSync(join(skillDir, rel), 'utf-8')
-          .split('\n')
-          .filter((line) => !/^\s*(```|````)/.test(line))
-          .join('\n');
+        const content = stripCodeFences(
+          readFileSync(join(skillDir, rel), 'utf-8'),
+        );
         for (const match of content.matchAll(/\]\(([^)]+)\)/g)) {
           const target = match[1].split('#')[0];
           if (target === '' || /^[a-z]+:/i.test(target)) {

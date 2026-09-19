@@ -2,8 +2,6 @@
 
 > **Category**: quick-reference
 
-# FluentUI v9 — Component Quick Reference
-
 ## 1. Packages & imports
 
 | Package | Components |

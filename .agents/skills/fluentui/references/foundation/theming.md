@@ -2,8 +2,6 @@
 
 > **Category**: foundation
 
-# Theming System in Fluent UI v9
-
 ## 1. The mental model: tokens → theme → CSS variables → components
 
 Fluent UI v9 theming is built from four layers. Understanding them once makes every other theming task obvious.

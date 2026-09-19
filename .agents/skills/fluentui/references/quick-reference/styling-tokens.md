@@ -2,8 +2,6 @@
 
 > **Category**: quick-reference
 
-# FluentUI v9 — Styling Tokens Cheatsheet
-
 ## 1. Mental model
 
 ```

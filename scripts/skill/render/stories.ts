@@ -16,20 +16,18 @@ import { fencedCode, heading, joinSections } from './sections.js';
 export const MAX_COMPONENT_STORIES = 3;
 
 /**
- * Pick the best source available for a story.
+ * Read a story's example code.
  *
- * The full `code` (including imports and supporting styles) is preferred so
- * the example is runnable; `renderCode` is the fallback.
+ * Only the scraped `code` (the full story, including imports and supporting
+ * styles) is used. `renderCode` is intentionally ignored: examples must mirror
+ * what the FluentUI source actually contains, so a story without scraped code
+ * is skipped rather than partially reconstructed.
  *
  * @param story - The story to read.
  * @returns The trimmed code, or an empty string when the story has none.
  */
 export function selectStoryCode(story: StoryEntry): string {
-  const full = story.code?.trim();
-  if (full) {
-    return full;
-  }
-  return story.renderCode?.trim() ?? '';
+  return story.code?.trim() ?? '';
 }
 
 /**
