@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 21:30
-> **Progress**: 80/103 tasks (78%)
+> **Last Updated**: 2026-09-19 21:31
+> **Progress**: 81/103 tasks (79%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -286,7 +286,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 - [x] 6.2.1 Drop the MCP SDK dependency and the residual `src/types/index.ts` barrel — `package.json`, `src/types/index.ts` (the runtime files were already deleted under PR-8 before Phase 2; renderers were relocated to `scripts/skill/render/`; PR-15 keeps `src/schema/schema-validator.ts`) ✅ (completed: 2026-09-19 21:28)
 - [x] 6.2.2 Delete legacy `docs/` and `techdocs/` with the Pages workflow — `docs/**`, `techdocs/**`, `.github/workflows/deploy-techdocs.yml` ✅ (completed: 2026-09-19 21:29)
 - [x] 6.2.3 Update build/test/governance config — `tsconfig.build.json`, `vitest.config.ts`, `.gitignore`, `.github/workflows/ci.yml`, `.github/workflows/publish.yml` ✅ (completed: 2026-09-19 21:30)
-- [ ] 6.2.4 Replace `update-docs.yml` with `update-skill.yml` — `.github/workflows/update-skill.yml`
+- [x] 6.2.4 Replace `update-docs.yml` with `update-skill.yml` — `.github/workflows/update-skill.yml` ✅ (completed: 2026-09-19 21:31)
 
 ### Step 6.3: Green phase
 

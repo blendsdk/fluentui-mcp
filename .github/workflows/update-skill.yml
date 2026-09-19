@@ -1,37 +1,40 @@
 # =============================================================================
-# FluentUI MCP Server — Update Docs Pipeline
+# FluentUI Agent Skill — Update Skill Pipeline
 # =============================================================================
 #
-# Manually-triggered workflow that runs the full schema pipeline:
-#   1. Sparse-clone the FluentUI source (and contrib) repos
+# Manually-triggered workflow that runs the full content pipeline:
+#   1. Sparse-clone the FluentUI source (and optionally fluentui-contrib),
+#      pinned to the newest stable v9 release tag
 #   2. Scrape components/utilities into a raw schema
 #   3. Enhance the schema with the configured LLM provider
-#   4. Build + test against the regenerated schema
-#   5. Open a pull request with the updated data/ schema files
+#   4. Regenerate the committed skill tree
+#   5. Build, test, and run the skill integrity gates
+#   6. Open a pull request with the updated data/ and .agents/skills/ files
 #
-# Required secrets (see plans/schema-driven-pipeline/07-cicd-automation.md):
-#   LLM_PROVIDER, OPENAI_API_KEY and/or ANTHROPIC_API_KEY, LLM_MODEL (optional)
+# Required secrets:
+#   LLM_PROVIDER, DEEPSEEK_API_KEY and/or OPENAI_API_KEY/ANTHROPIC_API_KEY,
+#   DEEPSEEK_MODEL (optional)
 # =============================================================================
 
-name: Update FluentUI Docs
+name: Update FluentUI Skill
 
 on:
     workflow_dispatch:
         inputs:
             version:
-                description: "FluentUI version to update (v9, v8)"
+                description: "FluentUI version to update (v9)"
                 required: true
                 default: "v9"
                 type: choice
-                options: ["v9", "v8"]
-            fluentui_ref:
-                description: "FluentUI git ref (branch/tag/commit)"
-                required: false
-                default: "master"
+                options: ["v9"]
             contrib_ref:
-                description: "FluentUI-contrib git ref"
+                description: "FluentUI-contrib git ref (empty to skip contrib)"
                 required: false
-                default: "main"
+                default: ""
+            ref:
+                description: "Override the FluentUI git ref (empty = latest stable tag)"
+                required: false
+                default: ""
             full_enhance:
                 description: "Full LLM re-enhancement (ignore diff)"
                 required: false
@@ -39,7 +42,7 @@ on:
                 type: choice
                 options: ["true", "false"]
             dry_run:
-                description: "Dry run (scrape only, no enhance/commit)"
+                description: "Dry run (scrape only, no enhance/generate/commit)"
                 required: false
                 default: "false"
                 type: choice
@@ -50,7 +53,7 @@ env:
 
 jobs:
     update:
-        name: Scrape, Enhance & Open PR
+        name: Scrape, Enhance, Generate & Open PR
         runs-on: ubuntu-latest
         permissions:
             contents: write
@@ -70,38 +73,27 @@ jobs:
             - name: Install dependencies
               run: yarn install --frozen-lockfile
 
-            # --- Clone FluentUI source (sparse) ---
-            - name: Clone FluentUI (sparse checkout)
-              run: |
-                  git clone --depth 1 --filter=blob:none --sparse \
-                    https://github.com/microsoft/fluentui.git \
-                    /tmp/fluentui
-                  cd /tmp/fluentui
-                  git sparse-checkout set packages/react-components
-                  git checkout ${{ github.event.inputs.fluentui_ref || 'master' }}
-
-            - name: Clone FluentUI-contrib
-              run: |
-                  git clone --depth 1 \
-                    https://github.com/microsoft/fluentui-contrib.git \
-                    /tmp/fluentui-contrib
-                  cd /tmp/fluentui-contrib
-                  git checkout ${{ github.event.inputs.contrib_ref || 'main' }}
-
             # --- Stage 1: Scrape ---
+            # `--clone` lets the scraper pin the checkout to the newest stable
+            # release tag (or the explicit `ref` when one was provided).
             - name: Run scraper
               run: |
-                  yarn scrape \
-                    --version ${{ env.FLUENTUI_VERSION }} \
-                    --source /tmp/fluentui \
-                    --contrib /tmp/fluentui-contrib \
-                    --verbose
+                  SCRAPE_FLAGS=""
+                  if [ -n "${{ github.event.inputs.ref }}" ]; then
+                    SCRAPE_FLAGS="$SCRAPE_FLAGS --ref ${{ github.event.inputs.ref }}"
+                  fi
+                  if [ -n "${{ github.event.inputs.contrib_ref }}" ]; then
+                    SCRAPE_FLAGS="$SCRAPE_FLAGS --contrib-ref ${{ github.event.inputs.contrib_ref }}"
+                  fi
+                  yarn scrape --version ${{ env.FLUENTUI_VERSION }} --clone $SCRAPE_FLAGS --verbose
 
             # --- Stage 2: Enhance (skip on dry run) ---
             - name: Run enhancer
               if: ${{ github.event.inputs.dry_run != 'true' }}
               env:
                   LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+                  DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+                  DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL }}
                   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
                   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
                   LLM_MODEL: ${{ secrets.LLM_MODEL }}
@@ -112,32 +104,41 @@ jobs:
                   fi
                   yarn enhance --version ${{ env.FLUENTUI_VERSION }} $ENHANCE_FLAGS --verbose
 
-            # --- Build & Test ---
-            - name: Build
-              run: yarn build
+            # --- Stage 3: Generate the skill tree ---
+            - name: Generate the skill
+              if: ${{ github.event.inputs.dry_run != 'true' }}
+              run: yarn skill:generate
 
-            - name: Test
-              run: yarn test
+            # --- Stage 4: Build, test, and gates ---
+            - name: Build and test
+              run: yarn build && yarn test
 
-            # --- Commit & PR (skip on dry run) ---
+            - name: Run skill integrity gates
+              run: |
+                  yarn skill:check
+                  yarn skill:validate
+                  yarn skill:freshness
+
+            # --- Stage 5: Commit & PR (skip on dry run) ---
             - name: Create Pull Request
               if: ${{ github.event.inputs.dry_run != 'true' }}
               uses: peter-evans/create-pull-request@v6
               with:
                   token: ${{ secrets.GITHUB_TOKEN }}
-                  commit-message: "chore(${{ env.FLUENTUI_VERSION }}): update FluentUI docs schema"
-                  title: "chore(${{ env.FLUENTUI_VERSION }}): Update FluentUI docs to latest"
+                  commit-message: "chore(${{ env.FLUENTUI_VERSION }}): update FluentUI skill"
+                  title: "chore(${{ env.FLUENTUI_VERSION }}): Update the FluentUI skill"
                   body: |
-                      ## Automated FluentUI Docs Update
+                      ## Automated FluentUI Skill Update
 
                       **Version**: ${{ env.FLUENTUI_VERSION }}
-                      **FluentUI ref**: ${{ github.event.inputs.fluentui_ref || 'master' }}
-                      **Contrib ref**: ${{ github.event.inputs.contrib_ref || 'main' }}
+                      **FluentUI ref**: ${{ github.event.inputs.ref || 'latest stable tag' }}
+                      **Contrib ref**: ${{ github.event.inputs.contrib_ref || 'skipped' }}
                       **Full enhancement**: ${{ github.event.inputs.full_enhance }}
 
-                      This PR was automatically generated by the update-docs workflow.
-                      Review the schema changes in `data/${{ env.FLUENTUI_VERSION }}/`.
-                  branch: "update-docs/${{ env.FLUENTUI_VERSION }}"
+                      This PR was generated by the update-skill workflow. Review the schema
+                      changes in `data/${{ env.FLUENTUI_VERSION }}/` and the regenerated skill
+                      under `.agents/skills/fluentui/`.
+                  branch: "update-skill/${{ env.FLUENTUI_VERSION }}"
                   delete-branch: true
                   labels: |
                       automated
