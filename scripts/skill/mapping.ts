@@ -533,5 +533,7 @@ export function buildSkillFiles(schema: FluentUISchema): SkillFile[] {
     })),
   ];
 
-  return files.sort((a, b) => a.path.localeCompare(b.path));
+  // Order is intentionally not re-sorted by path: each collection is already
+  // deterministic (ids alphabetical), and recipes keep their fixed group order.
+  return files;
 }

@@ -3,7 +3,7 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-09-19 15:17
-> **Progress**: 41/103 tasks (40%)
+> **Progress**: 42/103 tasks (41%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -169,7 +169,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 3.4: Implementation Tests & Hardening
 
-- [ ] 3.4.1 Write generator impl tests (escaping, story selection, empty sections) — `src/__tests__/skill/render.impl.test.ts`
+- [x] 3.4.1 Write generator impl tests (escaping, story selection, empty sections) — `src/__tests__/skill/render.impl.test.ts` ✅ (completed: 2026-09-19 15:22)
 - [ ] 3.4.2 Generate the committed skill tree and review a sample of files
 - [ ] 3.4.3 Full verify (PR-1)
 
