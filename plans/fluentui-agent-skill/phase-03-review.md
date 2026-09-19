@@ -38,5 +38,15 @@ link resolution were all verified clean.
 ## Verdict
 
 **FAIL** at review time due to RV-001. The whole finding set was fixed under the user's
-ruling, the tree was regenerated, and `yarn build && yarn test` passes (641 tests). A single
-re-review of the fix diff follows.
+ruling, the tree was regenerated, and `yarn build && yarn test` passes (641 tests).
+
+## Re-review (fix diff `a42e01f..7935dd4`)
+
+One focused re-review of the fix. Verdict: **PASS — zero critical or major findings, no
+regression.** Confirmed: no `- - ` remains anywhere under `references/`; every reference file
+has exactly one H1; the spec oracles use literal required strings; the fence-aware test helper
+excludes the real in-fence link; no story examples were lost when the `renderCode` fallback was
+removed (59/59 story components carry scraped code); `localeCompare` is gone from runtime code;
+and `--check` is clean. The re-reviewer noted one latent limitation in the new test helper
+(`stripCodeFences` would mis-handle nested fences), which is not a present defect and is
+reported only.
