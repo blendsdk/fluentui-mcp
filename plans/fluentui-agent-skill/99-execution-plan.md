@@ -3,7 +3,7 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-09-19 15:17
-> **Progress**: 38/103 tasks (37%)
+> **Progress**: 41/103 tasks (40%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -160,12 +160,12 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 - [x] 3.2.2 Implement the source→destination mapping with path-safety checks — `scripts/skill/mapping.ts` ✅ (completed: 2026-09-19 15:20)
 - [x] 3.2.3 Implement the deterministic generator and `--check` mode — `scripts/skill/generate.ts` ✅ (completed: 2026-09-19 15:21)
 - [x] 3.2.4 Implement the manifest — `scripts/skill/manifest.ts` ✅ (completed: 2026-09-19 15:21)
-- [ ] 3.2.5 Hand-write `SKILL.md` — `.agents/skills/fluentui/SKILL.md`
-- [ ] 3.2.6 Hand-write the project templates — `.agents/skills/fluentui/assets/templates/*.md`
+- [x] 3.2.5 Hand-write `SKILL.md` — `.agents/skills/fluentui/SKILL.md` ✅ (completed: 2026-09-19 15:21)
+- [x] 3.2.6 Hand-write the project templates — `.agents/skills/fluentui/assets/templates/*.md` ✅ (completed: 2026-09-19 15:21)
 
 ### Step 3.3: Green phase
 
-- [ ] 3.3.1 Run generator spec tests; verify they PASS (green phase)
+- [x] 3.3.1 Run generator spec tests; verify they PASS (green phase) ✅ (completed: 2026-09-19 15:21)
 
 ### Step 3.4: Implementation Tests & Hardening
 
