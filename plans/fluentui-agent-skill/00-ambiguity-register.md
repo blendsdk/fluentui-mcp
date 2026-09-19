@@ -1,7 +1,7 @@
 # Ambiguity Register: FluentUI Agent Skill Plan
 
-> **Status**: ✅ GATE PASSED — all 8 items resolved (PR-8 resolved at runtime)
-> **Last Updated**: 2026-09-19 12:35
+> **Status**: ✅ GATE PASSED — all 9 items resolved (PR-8 and PR-9 resolved at runtime)
+> **Last Updated**: 2026-09-19 15:20
 > **CodeOps Artifact Schema**: 1
 
 Plan-local decisions. Behavioral and scope decisions already resolved in the requirements register
@@ -18,6 +18,7 @@ are recorded.
 | PR-6 | Technical | How the pinned FluentUI release tag is selected | Query latest stable tag at run time / hardcode a tag now / always master | Resolve the latest stable release tag at scrape time; record it in the schema; `--fluentui-ref` overrides | ✅ Resolved — Author (implements AR-20) |
 | PR-7 | Naming | Node engine floor | Keep `>=18` / `>=20` / `>=22` | `>=20`, matching RD-07 and global `fetch` assumptions | ✅ Resolved — Author (matches approved RD-07) |
 | PR-8 (runtime) | Technical | Phase 2 replaces root `patterns[]`/`enterprise[]` with `recipes[]` and drops code-bearing fields, but their current consumers (`src/schema/**`, `src/search/**`, `src/formatters/**`, `src/tools/**`, MCP tests/fixtures) are not deleted until Phase 6, and `yarn build` (`tsconfig.build.json` includes all `src/**`) typechecks them. How to keep every phase green? | A) Hybrid supersession / B) Full replacement now / C) Front-load MCP removal | **Delete the dead MCP runtime + MCP tests now** (pre-executes the MCP subset of RD-06 deletion; user confirmed nobody uses the MCP). Phase 2 then replaces the schema cleanly with no throwaway work. Remaining RD-06 items — `docs/**`, `techdocs/**`, `package.json`, CI workflows, README — stay in Phase 6. | ✅ Resolved — User |
+| PR-9 (runtime) | Technical | 03-02 lists a wall-clock `generatedAt` in the manifest, but RD-03 AC1 requires every generated file (including the manifest) to be byte-identical across runs, and Phase 4's `--check` drift gate compares regenerated output against the committed tree — a run timestamp would make both impossible. | A) Wall-clock `generatedAt` excluded from comparison / B) Omit `generatedAt` / C) Derive `generatedAt` from the input schema | **Derive `generatedAt` from the input schema's `generatedAt`** — the whole tree, manifest included, is then reproducible from the same input, satisfying RD-03 AC1 and making `--check` deterministic. | ✅ Resolved — Author (traces to RD-03 AC1; only reading consistent with determinism) |
 
 ## Resolution Notes
 

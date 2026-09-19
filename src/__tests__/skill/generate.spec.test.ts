@@ -1,0 +1,445 @@
+/**
+ * Specification tests for the deterministic skill generator.
+ *
+ * These tests are authored BEFORE the implementation exists. They pin the
+ * behavior required by the skill-generator requirement (RD-03): byte-identical
+ * regeneration, an exact source→destination mapping, the generated-file marker,
+ * story-only examples, and fail-closed input validation before any write.
+ * They must never be edited to match an implementation; a failing spec test
+ * means the implementation is wrong.
+ *
+ * Planned interfaces (defined here so the oracle is concrete):
+ *   - `generateSkill({ schemaPath, skillDir })` reads and validates the
+ *     enhanced schema, renders the whole tree in memory, then writes only
+ *     `references/**` and `.fluentui-skill-manifest.json`. It throws on a
+ *     missing/malformed schema or an unsafe id, writing nothing.
+ *   - `runGenerate(argv)` is the CLI entry point; it returns `0` on success and
+ *     a non-zero exit code on failure.
+ *   - `mapping.ts` exports `GENERATED_MARKER`, `RECIPE_GROUP_ORDER`, and
+ *     `isSafeSkillId()`.
+ *
+ * Spec IDs: ST-12 … ST-15, ST-17, ST-18.
+ *
+ * @module tests/skill/generate.spec
+ */
+
+import { describe, it, expect } from 'vitest';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, relative, sep } from 'node:path';
+
+import { generateSkill, runGenerate } from '../../../scripts/skill/generate.js';
+import {
+  GENERATED_MARKER,
+  RECIPE_GROUP_ORDER,
+  isSafeSkillId,
+} from '../../../scripts/skill/mapping.js';
+import type { FluentUISchema } from '../../../src/types/schema.js';
+import {
+  createCategoryGuidanceEntry,
+  createComponentEntry,
+  createFluentUISchema,
+  createGuideEntry,
+  createRecipeEntry,
+} from '../fixtures/helpers.js';
+
+// ============================================================================
+// Fixtures & helpers
+// ============================================================================
+
+/** The six foundation guide ids required by the requirement. */
+const FOUNDATION_IDS = [
+  'getting-started',
+  'fluent-provider',
+  'theming',
+  'styling-griffel',
+  'component-architecture',
+  'accessibility',
+];
+
+/** The eight category ids required by the requirement. */
+const CATEGORY_IDS = [
+  'buttons',
+  'forms',
+  'navigation',
+  'data-display',
+  'feedback',
+  'overlays',
+  'layout',
+  'utilities',
+];
+
+/** The five quick-reference ids required by the requirement. */
+const QUICK_REFERENCE_IDS = [
+  'setup-imports',
+  'component-cheatsheet',
+  'styling-tokens',
+  'common-patterns',
+  'accessibility-checklist',
+];
+
+/** The nineteen recipe ids mapped to their fixed group. */
+const RECIPE_GROUPS: Record<string, string> = {
+  'login-form': 'forms',
+  'settings-form': 'forms',
+  'multi-step-form': 'forms',
+  'form-validation': 'forms',
+  'data-table': 'data',
+  'async-data-states': 'data',
+  'virtualization': 'data',
+  'app-navigation': 'navigation',
+  'tabs': 'navigation',
+  'breadcrumb': 'navigation',
+  'pagination': 'navigation',
+  'confirm-dialog': 'modals',
+  'form-dialog': 'modals',
+  'drawer': 'modals',
+  'dashboard-shell': 'layout',
+  'responsive-layout': 'layout',
+  'controlled-uncontrolled': 'state',
+  'server-state': 'state',
+  'accessibility-basics': 'accessibility',
+};
+
+/** Minimal hand-written `SKILL.md` used to seed a temporary skill root. */
+const SKILL_MD = [
+  '---',
+  'name: fluentui',
+  'description: Test skill used by the generator specification tests.',
+  'license: MIT',
+  '---',
+  '',
+  '# FluentUI',
+  '',
+  'See `references/index.md`.',
+  '',
+].join('\n');
+
+/**
+ * Build a schema that satisfies the RD-03 mapping: 6 foundation guides,
+ * 8 categories, 19 recipes in fixed groups, 5 quick references, and a small
+ * set of components — one of which deliberately has no stories.
+ */
+function buildGeneratorSchema(): FluentUISchema {
+  return createFluentUISchema({
+    components: [
+      createComponentEntry('Button'),
+      createComponentEntry('Dialog'),
+      createComponentEntry('Input', { stories: [], category: 'forms' }),
+      createComponentEntry('CompoundButton', { stories: [] }),
+    ],
+    foundation: FOUNDATION_IDS.map((id) => createGuideEntry(id)),
+    categoryGuidance: CATEGORY_IDS.map((id) => createCategoryGuidanceEntry(id)),
+    recipes: Object.entries(RECIPE_GROUPS).map(([id, group]) =>
+      createRecipeEntry(id, { group }),
+    ),
+    quickReference: QUICK_REFERENCE_IDS.map((id) => createGuideEntry(id)),
+  });
+}
+
+/** Create a temporary directory that is removed by the caller. */
+function makeTempDir(): string {
+  return mkdtempSync(join(tmpdir(), 'fluentui-skill-'));
+}
+
+/**
+ * Seed a temporary skill root with the hand-written files the generator must
+ * preserve: `SKILL.md` and one template.
+ */
+function seedSkillDir(skillDir: string): void {
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(join(skillDir, 'SKILL.md'), SKILL_MD, 'utf-8');
+  const templates = join(skillDir, 'assets', 'templates');
+  mkdirSync(templates, { recursive: true });
+  writeFileSync(
+    join(templates, 'minimal-app.md'),
+    '# Minimal App\n\nA hand-written template.\n',
+    'utf-8',
+  );
+}
+
+/** Write a schema object to a JSON file and return its path. */
+function writeSchemaFile(dir: string, schema: unknown): string {
+  const path = join(dir, 'schema.json');
+  writeFileSync(path, JSON.stringify(schema, null, 2), 'utf-8');
+  return path;
+}
+
+/** List every file under a root as sorted, POSIX-style relative paths. */
+function listFiles(root: string): string[] {
+  if (!existsSync(root)) {
+    return [];
+  }
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else {
+        out.push(relative(root, full).split(sep).join('/'));
+      }
+    }
+  };
+  walk(root);
+  return out.sort();
+}
+
+/** Capture every file under a root as a path→content map. */
+function snapshotTree(root: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const rel of listFiles(root)) {
+    map[rel] = readFileSync(join(root, rel), 'utf-8');
+  }
+  return map;
+}
+
+// ============================================================================
+// ST-12: determinism
+// ============================================================================
+
+describe('deterministic generation (ST-12)', () => {
+  it('produces byte-identical files when run twice on the same schema', () => {
+    const root = makeTempDir();
+    try {
+      const schemaPath = writeSchemaFile(root, buildGeneratorSchema());
+      const first = join(root, 'first');
+      const second = join(root, 'second');
+      seedSkillDir(first);
+      seedSkillDir(second);
+
+      generateSkill({ schemaPath, skillDir: first });
+      generateSkill({ schemaPath, skillDir: second });
+
+      expect(listFiles(second)).toEqual(listFiles(first));
+      for (const rel of listFiles(first)) {
+        expect(readFileSync(join(second, rel), 'utf-8')).toBe(
+          readFileSync(join(first, rel), 'utf-8'),
+        );
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// ============================================================================
+// ST-13: exact mapped file set
+// ============================================================================
+
+describe('source-to-destination mapping (ST-13)', () => {
+  it('writes exactly the mapped reference files', () => {
+    const root = makeTempDir();
+    try {
+      const schemaPath = writeSchemaFile(root, buildGeneratorSchema());
+      const skillDir = join(root, 'skill');
+      seedSkillDir(skillDir);
+
+      generateSkill({ schemaPath, skillDir });
+
+      const references = listFiles(skillDir).filter((p) =>
+        p.startsWith('references/'),
+      );
+      const count = (prefix: string): number =>
+        references.filter((p) => p.startsWith(prefix)).length;
+
+      expect(count('references/foundation/')).toBe(6);
+      expect(count('references/components/')).toBe(4);
+      expect(count('references/categories/')).toBe(8);
+      expect(count('references/quick-reference/')).toBe(5);
+      expect(
+        references.filter((p) =>
+          /^references\/recipes\/[^/]+\/[^/]+\.md$/.test(p),
+        ),
+      ).toHaveLength(19);
+      expect(references).toContain('references/index.md');
+      expect(references).toContain('references/recipes/forms/login-form.md');
+      expect(references).toContain(
+        'references/recipes/accessibility/accessibility-basics.md',
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps recipe groups in the fixed order', () => {
+    expect(RECIPE_GROUP_ORDER).toEqual([
+      'forms',
+      'data',
+      'navigation',
+      'modals',
+      'layout',
+      'state',
+      'accessibility',
+    ]);
+  });
+});
+
+// ============================================================================
+// ST-14: generated marker
+// ============================================================================
+
+describe('generated-file marker (ST-14)', () => {
+  it('marks generated references and leaves hand-written files unmarked', () => {
+    const root = makeTempDir();
+    try {
+      const schemaPath = writeSchemaFile(root, buildGeneratorSchema());
+      const skillDir = join(root, 'skill');
+      seedSkillDir(skillDir);
+
+      generateSkill({ schemaPath, skillDir });
+
+      const generated = listFiles(skillDir).filter((p) =>
+        p.startsWith('references/'),
+      );
+      expect(generated.length).toBeGreaterThan(0);
+      for (const rel of generated) {
+        expect(readFileSync(join(skillDir, rel), 'utf-8').trimEnd()).toMatch(
+          new RegExp(`${GENERATED_MARKER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`),
+        );
+      }
+
+      expect(readFileSync(join(skillDir, 'SKILL.md'), 'utf-8')).not.toContain(
+        GENERATED_MARKER,
+      );
+      expect(
+        readFileSync(
+          join(skillDir, 'assets', 'templates', 'minimal-app.md'),
+          'utf-8',
+        ),
+      ).not.toContain(GENERATED_MARKER);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// ============================================================================
+// ST-15: empty stories omit the Examples section
+// ============================================================================
+
+describe('story-only examples (ST-15)', () => {
+  it('omits the Examples heading for a component with no stories', () => {
+    const root = makeTempDir();
+    try {
+      const schemaPath = writeSchemaFile(root, buildGeneratorSchema());
+      const skillDir = join(root, 'skill');
+      seedSkillDir(skillDir);
+
+      generateSkill({ schemaPath, skillDir });
+
+      const withoutStories = readFileSync(
+        join(skillDir, 'references', 'components', 'input.md'),
+        'utf-8',
+      );
+      expect(withoutStories).not.toMatch(/^##\s+Examples\b/m);
+
+      const withStories = readFileSync(
+        join(skillDir, 'references', 'components', 'button.md'),
+        'utf-8',
+      );
+      expect(withStories).toMatch(/^##\s+Examples\b/m);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// ============================================================================
+// ST-17: malformed schema fails closed
+// ============================================================================
+
+describe('fail-closed input validation (ST-17)', () => {
+  it('rejects malformed JSON without creating or modifying any file', () => {
+    const root = makeTempDir();
+    try {
+      const skillDir = join(root, 'skill');
+      seedSkillDir(skillDir);
+      const before = snapshotTree(skillDir);
+
+      const schemaPath = join(root, 'bad.json');
+      writeFileSync(schemaPath, '{ not valid json', 'utf-8');
+
+      expect(() => generateSkill({ schemaPath, skillDir })).toThrow();
+      expect(snapshotTree(skillDir)).toEqual(before);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a structurally invalid schema without writing', () => {
+    const root = makeTempDir();
+    try {
+      const skillDir = join(root, 'skill');
+      seedSkillDir(skillDir);
+      const before = snapshotTree(skillDir);
+
+      const schemaPath = writeSchemaFile(root, { schemaVersion: '1.0' });
+
+      expect(() => generateSkill({ schemaPath, skillDir })).toThrow();
+      expect(snapshotTree(skillDir)).toEqual(before);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// ============================================================================
+// ST-18: unsafe ids are rejected
+// ============================================================================
+
+describe('path-safe ids (ST-18)', () => {
+  it('classifies safe and unsafe ids', () => {
+    expect(isSafeSkillId('button')).toBe(true);
+    expect(isSafeSkillId('compound-button')).toBe(true);
+    expect(isSafeSkillId('../evil')).toBe(false);
+    expect(isSafeSkillId('a/b')).toBe(false);
+    expect(isSafeSkillId('/abs')).toBe(false);
+    expect(isSafeSkillId('')).toBe(false);
+  });
+
+  it('rejects a schema id containing ../ before any write', () => {
+    const root = makeTempDir();
+    try {
+      const schema = buildGeneratorSchema();
+      schema.components[0].id = '../evil';
+      const schemaPath = writeSchemaFile(root, schema);
+      const skillDir = join(root, 'skill');
+      seedSkillDir(skillDir);
+      const before = snapshotTree(skillDir);
+
+      expect(() => generateSkill({ schemaPath, skillDir })).toThrow();
+      expect(snapshotTree(skillDir)).toEqual(before);
+      expect(existsSync(join(root, 'evil.md'))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('returns a non-zero exit code from the CLI on invalid input', async () => {
+    const root = makeTempDir();
+    try {
+      const skillDir = join(root, 'skill');
+      seedSkillDir(skillDir);
+      const schemaPath = writeSchemaFile(root, { schemaVersion: '1.0' });
+
+      const code = await runGenerate([
+        '--schema',
+        schemaPath,
+        '--skill-dir',
+        skillDir,
+      ]);
+      expect(code).not.toBe(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

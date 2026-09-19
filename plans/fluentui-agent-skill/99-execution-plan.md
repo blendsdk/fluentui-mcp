@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 14:03
-> **Progress**: 32/103 tasks (31%)
+> **Last Updated**: 2026-09-19 15:17
+> **Progress**: 34/103 tasks (33%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -146,10 +146,13 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 **Reference**: [03-02](03-02-skill-generator.md) · AR-05, AR-06, AR-11
 
+> **Phase baseline tree**: 89d7149bf2b1a0685088d8717d7e01e245e6b59d
+> **Scope**: strict · **Expected modification set**: `scripts/skill/**`, `src/__tests__/skill/**`, `.agents/skills/fluentui/**`
+
 ### Step 3.1: Specification Tests (before implementation)
 
-- [ ] 3.1.1 [spec-author] Write generator spec tests (ST-12..ST-18) — `src/__tests__/skill/generate.spec.test.ts`, plus format test `src/__tests__/skill/skill-format.spec.test.ts`
-- [ ] 3.1.2 Run generator spec tests; verify they FAIL (red phase)
+- [x] 3.1.1 [spec-author] Write generator spec tests (ST-12..ST-18) — `src/__tests__/skill/generate.spec.test.ts`, plus format test `src/__tests__/skill/skill-format.spec.test.ts` ✅ (completed: 2026-09-19 15:17)
+- [x] 3.1.2 Run generator spec tests; verify they FAIL (red phase) ✅ (completed: 2026-09-19 15:17)
 
 ### Step 3.2: Implementation
 

@@ -1,0 +1,85 @@
+/**
+ * Specification tests for the hand-written `SKILL.md` format.
+ *
+ * The skill format requires a YAML frontmatter whose `name` equals the skill
+ * directory name and a body no longer than 500 lines. `SKILL.md` is
+ * hand-written and must never carry the generated-file marker.
+ *
+ * These tests are authored BEFORE the file exists; a failure here means the
+ * hand-written skill file does not meet the format requirement.
+ *
+ * Spec IDs: ST-16.
+ *
+ * @module tests/skill/skill-format.spec
+ */
+
+import { describe, it, expect } from 'vitest';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { GENERATED_MARKER, SKILL_NAME } from '../../../scripts/skill/mapping.js';
+
+/** Absolute path of the committed, hand-written skill file. */
+const SKILL_MD_PATH = join(process.cwd(), '.agents', 'skills', SKILL_NAME, 'SKILL.md');
+
+/**
+ * Parse a `---`-delimited YAML frontmatter block into a flat key→value map.
+ * Only simple `key: value` lines are read; nested blocks are ignored, which is
+ * sufficient for the scalar fields this test checks.
+ */
+function parseFrontmatter(markdown: string): {
+  fields: Record<string, string>;
+  bodyLines: number;
+} {
+  const lines = markdown.split('\n');
+  if (lines[0]?.trim() !== '---') {
+    return { fields: {}, bodyLines: lines.length };
+  }
+
+  const end = lines.indexOf('---', 1);
+  if (end === -1) {
+    return { fields: {}, bodyLines: lines.length };
+  }
+
+  const fields: Record<string, string> = {};
+  for (const line of lines.slice(1, end)) {
+    const match = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
+    if (match) {
+      fields[match[1]] = match[2].trim();
+    }
+  }
+
+  const body = lines.slice(end + 1);
+  // Ignore trailing blank lines so the limit measures authored content.
+  while (body.length > 0 && body[body.length - 1].trim() === '') {
+    body.pop();
+  }
+  return { fields, bodyLines: body.length };
+}
+
+describe('SKILL.md format (ST-16)', () => {
+  it('exists at the skill root', () => {
+    expect(existsSync(SKILL_MD_PATH)).toBe(true);
+  });
+
+  it('declares name fluentui with description and license', () => {
+    const markdown = readFileSync(SKILL_MD_PATH, 'utf-8');
+    const { fields } = parseFrontmatter(markdown);
+
+    expect(fields.name).toBe(SKILL_NAME);
+    expect(fields.description ?? '').not.toBe('');
+    expect(fields.license ?? '').not.toBe('');
+  });
+
+  it('keeps the body at most 500 lines', () => {
+    const markdown = readFileSync(SKILL_MD_PATH, 'utf-8');
+    const { bodyLines } = parseFrontmatter(markdown);
+
+    expect(bodyLines).toBeLessThanOrEqual(500);
+  });
+
+  it('never carries the generated-file marker', () => {
+    const markdown = readFileSync(SKILL_MD_PATH, 'utf-8');
+    expect(markdown).not.toContain(GENERATED_MARKER);
+  });
+});
