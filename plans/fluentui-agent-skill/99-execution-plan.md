@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 16:56
-> **Progress**: 61/103 tasks (59%)
+> **Last Updated**: 2026-09-19 17:21
+> **Progress**: 63/103 tasks (61%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -227,10 +227,13 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 **Reference**: [03-04](03-04-installer-packaging.md) · AR-07, AR-13, AR-14
 
+> **Phase baseline tree**: 74bc9d9599e95d82c7b0b4d2ac01bfa4fa31c2bc
+> **Scope**: strict · **Expected modification set**: `src/skill/**`, `src/bin.ts`, `scripts/skill/**`, `src/__tests__/skill/**`, `package.json`, `.gitignore`
+
 ### Step 5.1: Specification Tests (before implementation)
 
-- [ ] 5.1.1 [spec-author] Write installer spec tests (ST-27..ST-33) — `src/__tests__/skill/install-skill.spec.test.ts`
-- [ ] 5.1.2 Run installer spec tests; verify they FAIL (red phase)
+- [x] 5.1.1 [spec-author] Write installer spec tests (ST-27..ST-33) — `src/__tests__/skill/install-skill.spec.test.ts` ✅ (completed: 2026-09-19 17:21)
+- [x] 5.1.2 Run installer spec tests; verify they FAIL (red phase) ✅ (completed: 2026-09-19 17:21)
 
 ### Step 5.2: Implementation
 
