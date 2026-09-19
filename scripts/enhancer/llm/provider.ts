@@ -23,10 +23,23 @@ import type {
   LLMMessage,
   LLMResponse,
   LLMChatOptions,
+  DeepSeekReasoningEffort,
 } from '../types.js';
+import {
+  DEFAULT_DEEPSEEK_BASE_URL,
+  DEFAULT_DEEPSEEK_MODEL,
+  DEFAULT_DEEPSEEK_REASONING_EFFORT,
+  DEEPSEEK_REASONING_EFFORTS,
+} from '../config.js';
 
 // Re-export the core LLM types so callers can import them from this module.
-export type { LLMProvider, LLMMessage, LLMResponse, LLMChatOptions };
+export type {
+  LLMProvider,
+  LLMMessage,
+  LLMResponse,
+  LLMChatOptions,
+  DeepSeekReasoningEffort,
+};
 
 // ============================================================================
 // Errors
@@ -87,6 +100,24 @@ export function isRetryableStatus(status: number): boolean {
   return status >= 500 && status <= 599;
 }
 
+/**
+ * Read a Response body as text without throwing.
+ *
+ * Used to surface provider error details safely in {@link LLMError} messages;
+ * a body that cannot be read is replaced with a placeholder rather than
+ * masking the original HTTP failure.
+ *
+ * @param response - The fetch response to read
+ * @returns The response body text, or a placeholder when unreadable
+ */
+export async function readResponseBody(response: Response): Promise<string> {
+  try {
+    return await response.text();
+  } catch {
+    return '<unreadable response body>';
+  }
+}
+
 // ============================================================================
 // Provider Configuration & Factory
 // ============================================================================
@@ -95,8 +126,8 @@ export function isRetryableStatus(status: number): boolean {
  * Configuration for constructing an LLM provider.
  */
 export interface ProviderConfig {
-  /** Provider name: 'openai' or 'anthropic' */
-  provider: 'openai' | 'anthropic';
+  /** Provider name: 'openai', 'anthropic', or 'deepseek' */
+  provider: 'openai' | 'anthropic' | 'deepseek';
 
   /** API key for the provider */
   apiKey: string;
@@ -106,6 +137,57 @@ export interface ProviderConfig {
 
   /** Optional base URL override (useful for proxies / tests) */
   baseUrl?: string;
+
+  /** Thinking-mode reasoning effort (DeepSeek only) */
+  reasoningEffort?: DeepSeekReasoningEffort;
+}
+
+/** Environment variable holding each provider's API key. */
+const PROVIDER_API_KEY_ENV: Record<ProviderConfig['provider'], string> = {
+  openai: 'OPENAI_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY',
+  deepseek: 'DEEPSEEK_API_KEY',
+};
+
+/** Providers the factory understands, in the order shown in error messages. */
+const KNOWN_PROVIDERS: ReadonlyArray<ProviderConfig['provider']> = [
+  'openai',
+  'anthropic',
+  'deepseek',
+];
+
+/**
+ * Type guard: whether a string names a provider the factory supports.
+ *
+ * @param value - Candidate provider name
+ * @returns True when the value is a known provider id
+ */
+function isKnownProvider(
+  value: string,
+): value is ProviderConfig['provider'] {
+  return (KNOWN_PROVIDERS as readonly string[]).includes(value);
+}
+
+/**
+ * Resolve the reasoning effort for DeepSeek, validating the environment value.
+ *
+ * @returns The configured effort, or the documented default when unset
+ * @throws {LLMError} When the value is not one of the accepted efforts
+ */
+function resolveDeepSeekReasoningEffort(): DeepSeekReasoningEffort {
+  const raw = process.env.DEEPSEEK_REASONING_EFFORT;
+  if (!raw) return DEFAULT_DEEPSEEK_REASONING_EFFORT;
+
+  if (!(DEEPSEEK_REASONING_EFFORTS as readonly string[]).includes(raw)) {
+    throw new LLMError(
+      `Invalid DEEPSEEK_REASONING_EFFORT "${raw}". ` +
+        `Expected one of: ${DEEPSEEK_REASONING_EFFORTS.join(', ')}.`,
+      'deepseek',
+      { retryable: false },
+    );
+  }
+
+  return raw as DeepSeekReasoningEffort;
 }
 
 /**
@@ -129,17 +211,16 @@ export function resolveProviderConfig(
     ''
   ).toLowerCase();
 
-  if (providerName !== 'openai' && providerName !== 'anthropic') {
+  if (!isKnownProvider(providerName)) {
     throw new LLMError(
       `Unknown or missing LLM provider: "${providerName}". ` +
-        `Set LLM_PROVIDER (or --provider) to 'openai' or 'anthropic'.`,
+        `Set LLM_PROVIDER (or --provider) to one of: ${KNOWN_PROVIDERS.join(', ')}.`,
       providerName || 'unknown',
       { retryable: false },
     );
   }
 
-  const envKeyName =
-    providerName === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
+  const envKeyName = PROVIDER_API_KEY_ENV[providerName];
   const apiKey = overrides?.apiKey ?? process.env[envKeyName];
 
   if (!apiKey) {
@@ -150,12 +231,22 @@ export function resolveProviderConfig(
     );
   }
 
-  const model = overrides?.model ?? process.env.LLM_MODEL;
+  if (providerName === 'deepseek') {
+    // DeepSeek concretizes its defaults here so callers receive a complete
+    // configuration and tests can assert on it directly.
+    return {
+      provider: 'deepseek',
+      apiKey,
+      model: overrides?.model ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_DEEPSEEK_MODEL,
+      baseUrl: process.env.DEEPSEEK_BASE_URL ?? DEFAULT_DEEPSEEK_BASE_URL,
+      reasoningEffort: resolveDeepSeekReasoningEffort(),
+    };
+  }
 
   return {
     provider: providerName,
     apiKey,
-    model,
+    model: overrides?.model ?? process.env.LLM_MODEL,
   };
 }
 
@@ -180,6 +271,12 @@ export async function createProvider(
     case 'anthropic': {
       const { AnthropicProvider } = await import('./anthropic.js');
       return new AnthropicProvider(config);
+    }
+    case 'deepseek': {
+      const { DeepSeekProvider, toDeepSeekConfig } = await import(
+        './deepseek.js'
+      );
+      return new DeepSeekProvider(toDeepSeekConfig(config));
     }
     default: {
       // Exhaustiveness guard — should be unreachable given ProviderConfig.
