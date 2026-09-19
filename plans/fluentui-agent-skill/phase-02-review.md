@@ -45,3 +45,17 @@ key-like material; `.env` is gitignored and untracked; provider content is never
 **FAIL** at review time due to F1. After the F1 fix and F3 correction, `yarn build && yarn test`
 passes (603 tests) and the regenerated data satisfies RD-02 AC4/AC5. F2 remains open by
 explicit user ruling and is tracked to Phase 3.
+
+## Re-review (fix diff `ca961c8..840e0ec`)
+
+One focused re-review of the F1 fix. Verdict: **PASS — zero critical or major findings.**
+The generators return `{entries, failures}`, the orchestrator records all four Pass-2 batches,
+and `runEnhancer` throws before `writeSchema` whenever `stats.failures > 0`. The new spec case
+is a genuine Pass-2 (guides-only) truncation test that would have failed before the fix.
+Ordering, single-counting, and the `failures === failureDetails.length` invariant hold.
+Two informational notes only (pre-existing, non-blocking):
+
+- N1: the `failureDetails` doc says "in the order the batches settled"; the actual order is
+  catalog order grouped Pass-1 then Pass-2.
+- N2: a task resolving `undefined` with `ok: true` would be dropped unrecorded — unreachable
+  today because every generator task returns a constructed entry.
