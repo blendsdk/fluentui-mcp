@@ -51,5 +51,6 @@ and run `yarn skill:generate`; never edit them by hand. `yarn skill:check` fails
 - Public and exported APIs, and non-trivial internals, carry JSDoc. Do not reference `plans/`,
   `requirements/`, or plan IDs in code or comments.
 - Node built-ins use the `node:` prefix.
+- Commits use Conventional Commit messages with a scope, such as `test(repo):` or `docs(plan):`.
 
 <!-- CODEOPS-PROJECT:END -->
