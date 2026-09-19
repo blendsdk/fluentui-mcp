@@ -3,7 +3,7 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-09-19 15:17
-> **Progress**: 42/103 tasks (41%)
+> **Progress**: 47/103 tasks (46%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -170,13 +170,13 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 ### Step 3.4: Implementation Tests & Hardening
 
 - [x] 3.4.1 Write generator impl tests (escaping, story selection, empty sections) — `src/__tests__/skill/render.impl.test.ts` ✅ (completed: 2026-09-19 15:22)
-- [ ] 3.4.2 Generate the committed skill tree and review a sample of files
-- [ ] 3.4.3 Full verify (PR-1)
+- [x] 3.4.2 Generate the committed skill tree and review a sample of files ✅ (completed: 2026-09-19 15:24)
+- [x] 3.4.3 Full verify (PR-1) ✅ (completed: 2026-09-19 15:24)
 
 **Deliverables**:
-- [ ] Deterministic generator producing the full skill tree
-- [ ] Hand-written `SKILL.md` and templates
-- [ ] All verification passing
+- [x] Deterministic generator producing the full skill tree ✅ (completed: 2026-09-19 15:24)
+- [x] Hand-written `SKILL.md` and templates ✅ (completed: 2026-09-19 15:24)
+- [x] All verification passing ✅ (completed: 2026-09-19 15:24)
 
 **Verify**: `yarn build && yarn test`
 

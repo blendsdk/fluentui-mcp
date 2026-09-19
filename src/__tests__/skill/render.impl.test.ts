@@ -394,7 +394,12 @@ describe('generated link integrity', () => {
 
       const broken: string[] = [];
       for (const rel of files) {
-        const content = readFileSync(join(skillDir, rel), 'utf-8');
+        // Story code can embed Markdown links (for example a Storybook
+        // description string), so ignore anything inside a code fence.
+        const content = readFileSync(join(skillDir, rel), 'utf-8')
+          .split('\n')
+          .filter((line) => !/^\s*(```|````)/.test(line))
+          .join('\n');
         for (const match of content.matchAll(/\]\(([^)]+)\)/g)) {
           const target = match[1].split('#')[0];
           if (target === '' || /^[a-z]+:/i.test(target)) {
