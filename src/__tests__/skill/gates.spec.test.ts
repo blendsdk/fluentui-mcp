@@ -43,7 +43,6 @@ import { checkDrift } from '../../../scripts/skill/check-drift.js';
 import { checkFreshness } from '../../../scripts/skill/check-freshness.js';
 import { scanSecrets } from '../../../scripts/skill/secrets.js';
 import {
-  SKILL_BODY_MAX_LINES,
   parseFrontmatter,
   validateSkillFormat,
 } from '../../../scripts/skill/format.js';
@@ -137,7 +136,7 @@ const BUTTON_ONLY_EXPORTS: PackageExportResolver = (specifier) =>
 const NO_TYPE_ERRORS: TypeChecker = () => [];
 
 // ============================================================================
-// ST-19 / ST-20: example validation
+// Example validation
 // ============================================================================
 
 describe('example validation', () => {
@@ -217,7 +216,7 @@ describe('example validation', () => {
 });
 
 // ============================================================================
-// ST-21: drift
+// Drift
 // ============================================================================
 
 describe('drift gate', () => {
@@ -249,7 +248,7 @@ describe('drift gate', () => {
 });
 
 // ============================================================================
-// ST-22: freshness
+// Freshness
 // ============================================================================
 
 describe('freshness gate', () => {
@@ -280,12 +279,12 @@ describe('freshness gate', () => {
 });
 
 // ============================================================================
-// ST-23: format
+// Format
 // ============================================================================
 
 describe('format gate', () => {
   it('flags a body longer than the line limit', () => {
-    const body = Array.from({ length: SKILL_BODY_MAX_LINES + 1 }, (_, i) =>
+    const body = Array.from({ length: 501 }, (_, i) =>
       `line ${i + 1}`,
     ).join('\n');
     const findings = validateSkillFormat({
@@ -312,7 +311,7 @@ describe('format gate', () => {
 });
 
 // ============================================================================
-// ST-24: secrets
+// Secrets
 // ============================================================================
 
 describe('secrets gate', () => {
@@ -339,7 +338,7 @@ describe('secrets gate', () => {
 });
 
 // ============================================================================
-// ST-25 / ST-26: API references and coverage
+// API references and coverage
 // ============================================================================
 
 describe('API-reference gate', () => {

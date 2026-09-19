@@ -9,7 +9,8 @@
  * @module skill/secrets
  */
 
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { readTextFiles } from './files.js';
 
@@ -98,7 +99,7 @@ export function runSecrets(
     }
   }
 
-  const findings = scanSkillDir(join(cwd, skillDir));
+  const findings = scanSkillDir(resolve(cwd, skillDir));
   if (findings.length === 0) {
     process.stdout.write('No secrets found.\n');
     return 0;
@@ -110,4 +111,13 @@ export function runSecrets(
       .join('\n')}\n`,
   );
   return 1;
+}
+
+// Allow `node --import tsx scripts/skill/secrets.ts` to run the CLI.
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (invokedDirectly) {
+  process.exitCode = runSecrets();
 }

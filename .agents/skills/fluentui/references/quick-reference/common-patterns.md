@@ -337,13 +337,13 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => (
 );
 ```
 
-### Collections: controlled Accordion + Tabs, uncontrolled Carousel
+### Collections: controlled Accordion + TabList, uncontrolled Carousel
 
 Accordion and Tabs take the full state from the handler data; Carousel can run uncontrolled with defaults.
 
 ```tsx
 import * as React from 'react';
-import { Accordion, Carousel } from '@fluentui/react-components';
+import { Accordion, Carousel, TabList } from '@fluentui/react-components';
 
 export const Collections = ({
   accordionItems,
@@ -369,7 +369,7 @@ export const Collections = ({
         {accordionItems}
       </Accordion>
 
-      <Tabs
+      <TabList
         selectedValue={tab}
         onTabSelect={(_, data) => setTab(data.value)}
         appearance="subtle"
@@ -377,7 +377,7 @@ export const Collections = ({
         reserveSelectedTabSpace
       >
         {tabContent}
-      </Tabs>
+      </TabList>
 
       <Carousel
         defaultActiveIndex={0}

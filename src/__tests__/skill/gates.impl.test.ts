@@ -8,15 +8,26 @@
  * @module tests/skill/gates.impl
  */
 
-import { describe, it, expect } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
+import { generateSkill } from '../../../scripts/skill/generate.js';
 import {
   extractExamples,
   typeCheckWithTsc,
 } from '../../../scripts/skill/validate-examples.js';
+import { runCheck } from '../../../scripts/skill/check-drift.js';
+import { runFreshness } from '../../../scripts/skill/check-freshness.js';
+import { runSecrets } from '../../../scripts/skill/secrets.js';
 import {
   parseFrontmatter,
   validateSkillFormat,
@@ -245,6 +256,121 @@ describe('checkApiReferences', () => {
     expect(report.warnings.some((finding) => finding.name === 'frobnicate')).toBe(
       true,
     );
+  });
+});
+
+/** A minimal schema that the generator can render. */
+function buildSchema() {
+  return createFluentUISchema({
+    components: [createComponentEntry('Button', { id: 'button' })],
+    categoryGuidance: [createCategoryGuidanceEntry('buttons')],
+    recipes: [createRecipeEntry('login-form', { referencedComponents: [] })],
+  });
+}
+
+/** A minimal valid hand-written `SKILL.md`. */
+function skillMarkdown(): string {
+  return [
+    '---',
+    'name: fluentui',
+    'description: Test skill used by the gate command-line tests.',
+    'license: MIT',
+    '---',
+    '',
+    '# FluentUI',
+    '',
+    'See `references/index.md`.',
+    '',
+  ].join('\n');
+}
+
+describe('gate command-line entry points', () => {
+  it('runs the drift CLI and returns non-zero on drift', () => {
+    const dir = makeTempDir();
+    const sink = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    const errorSink = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    try {
+      const schemaPath = join(dir, 'schema.json');
+      writeFileSync(schemaPath, JSON.stringify(buildSchema()), 'utf-8');
+      const skillDir = join(dir, 'skill');
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(join(skillDir, 'SKILL.md'), skillMarkdown(), 'utf-8');
+      generateSkill({ schemaPath, skillDir });
+
+      expect(runCheck(['--schema', schemaPath, '--skill-dir', skillDir])).toBe(0);
+
+      const target = join(skillDir, 'references', 'components', 'button.md');
+      writeFileSync(target, `${readFileSync(target, 'utf-8')}x`, 'utf-8');
+      expect(runCheck(['--schema', schemaPath, '--skill-dir', skillDir])).toBe(1);
+    } finally {
+      sink.mockRestore();
+      errorSink.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('runs the freshness CLI and returns non-zero when the schema changed', () => {
+    const dir = makeTempDir();
+    const sink = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    const errorSink = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    try {
+      const schema = buildSchema();
+      const schemaPath = join(dir, 'schema.json');
+      writeFileSync(schemaPath, JSON.stringify(schema), 'utf-8');
+      const skillDir = join(dir, 'skill');
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(join(skillDir, 'SKILL.md'), skillMarkdown(), 'utf-8');
+      generateSkill({ schemaPath, skillDir });
+      const manifestPath = join(skillDir, '.fluentui-skill-manifest.json');
+
+      expect(runFreshness(['--schema', schemaPath, '--manifest', manifestPath])).toBe(
+        0,
+      );
+
+      schema.generatedAt = '2030-01-01T00:00:00Z';
+      writeFileSync(schemaPath, JSON.stringify(schema), 'utf-8');
+      expect(runFreshness(['--schema', schemaPath, '--manifest', manifestPath])).toBe(
+        1,
+      );
+    } finally {
+      sink.mockRestore();
+      errorSink.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('runs the secrets CLI and returns non-zero on a planted key', () => {
+    const dir = makeTempDir();
+    const sink = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    const errorSink = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    try {
+      writeTreeFile(dir, 'references/components/button.md', '# Button\n');
+      expect(runSecrets(['--skill-dir', dir])).toBe(0);
+
+      writeTreeFile(
+        dir,
+        'references/components/button.md',
+        'key: sk-abcdefghijklmnopqrstuvwxyz012345\n',
+      );
+      expect(runSecrets(['--skill-dir', dir])).toBe(1);
+    } finally {
+      sink.mockRestore();
+      errorSink.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('committed skill', () => {
+  const skillRoot = join(process.cwd(), '.agents', 'skills', 'fluentui');
+
+  it('passes the format gate', () => {
+    const markdown = readFileSync(join(skillRoot, 'SKILL.md'), 'utf-8');
+    expect(validateSkillFormat({ markdown, dirName: 'fluentui' })).toHaveLength(0);
+  });
+
+  it('ships the references index', () => {
+    expect(existsSync(join(skillRoot, 'references', 'index.md'))).toBe(true);
   });
 });
 

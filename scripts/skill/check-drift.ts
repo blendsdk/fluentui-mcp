@@ -15,6 +15,7 @@
 
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { listFiles, readTextFile } from './files.js';
 import {
@@ -161,8 +162,8 @@ export function runCheck(
 
   try {
     const report = checkDrift({
-      schemaPath: join(cwd, schemaPath),
-      skillDir: join(cwd, skillDir),
+      schemaPath: resolve(cwd, schemaPath),
+      skillDir: resolve(cwd, skillDir),
     });
 
     if (report.differences.length === 0 && report.brokenLinks.length === 0) {
@@ -193,4 +194,13 @@ export function runCheck(
     process.stderr.write(`${message}\n`);
     return 1;
   }
+}
+
+// Allow `node --import tsx scripts/skill/check-drift.ts` to run the CLI.
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (invokedDirectly) {
+  process.exitCode = runCheck();
 }

@@ -10,7 +10,8 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { isSchemaValid } from '../../src/schema/schema-validator.js';
 import { hashSchema } from './manifest.js';
@@ -78,11 +79,8 @@ export function checkFreshness(options: {
       ? (parsedManifest as { schemaHash: string }).schemaHash
       : '';
 
-  return {
-    ok: hashSchema(parsedSchema) === actual,
-    expected: hashSchema(parsedSchema),
-    actual,
-  };
+  const expected = hashSchema(parsedSchema);
+  return { ok: expected === actual, expected, actual };
 }
 
 /**
@@ -109,8 +107,8 @@ export function runFreshness(
 
   try {
     const result = checkFreshness({
-      schemaPath: join(cwd, schemaPath),
-      manifestPath: join(cwd, manifestPath),
+      schemaPath: resolve(cwd, schemaPath),
+      manifestPath: resolve(cwd, manifestPath),
     });
     if (result.ok) {
       process.stdout.write('Skill is fresh.\n');
@@ -126,4 +124,13 @@ export function runFreshness(
     process.stderr.write(`${message}\n`);
     return 1;
   }
+}
+
+// Allow `node --import tsx scripts/skill/check-freshness.ts` to run the CLI.
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (invokedDirectly) {
+  process.exitCode = runFreshness();
 }

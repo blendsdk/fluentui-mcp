@@ -1,5 +1,5 @@
 {
-  "schemaHash": "d540643bc4ef4c933064d919c5a7e371d695722e11c59415126893511b8d9a1f",
+  "schemaHash": "8c045d9514aa489c58edbcf29ce3042a569df850323a78d4787cfcb33fdad3c5",
   "generatorVersion": "1.0.0",
   "generatedAt": "2026-09-19T12:01:11.003Z",
   "files": {
@@ -100,7 +100,7 @@
     "references/recipes/state/server-state.md": "eff6c30ee05cdeddaf233904b3fbdbdff506d91c9cf903bc50d367a02ff21f97",
     "references/recipes/accessibility/accessibility-basics.md": "aaf40fe070eff5d28289ff768ed53fba61a8f014a232dc1d3ab3ced34ac7326a",
     "references/quick-reference/accessibility-checklist.md": "4d15ef13910b5954b830531b9f94255c53d827ceb095be5a0f5f86ecd5175633",
-    "references/quick-reference/common-patterns.md": "b812b6022f90f5d1420b9c24d04fe98621ce6e91be724ed33253bb9c10049517",
+    "references/quick-reference/common-patterns.md": "df8d5cfe88e1dbb73d517def9e384e60306fd516d67d8b2543ab3af206a80789",
     "references/quick-reference/component-cheatsheet.md": "1361121cef977a115a87ac25f8db80c5b82894286c35402e880b06de50763fe7",
     "references/quick-reference/setup-imports.md": "3bf00f896b1593784756cb2f02a87744cd832d31a572181f56b5cd962f228b76",
     "references/quick-reference/styling-tokens.md": "4a4e62d3d66fffa699d98af3c1d53ca6c81daa4668a81ad1e2c677fdd6d778b2"

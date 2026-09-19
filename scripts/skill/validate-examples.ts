@@ -16,7 +16,6 @@
  * @module skill/validate-examples
  */
 
-import { spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -24,9 +23,10 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { createRequire } from 'node:module';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { Project, type DiagnosticMessageChain } from 'ts-morph';
 
 import { listFiles } from './files.js';
 import { createPackageExportResolver } from './package-exports.js';
@@ -246,14 +246,42 @@ function checkImports(
 }
 
 /**
+ * Flatten a compiler diagnostic message into a single string.
+ *
+ * TypeScript reports linked messages (an outer message plus related notes) as a
+ * chain; joining them keeps the plain-language context in the report.
+ *
+ * @param message - The diagnostic message, possibly a chain.
+ * @returns The complete message text.
+ */
+function flattenDiagnostic(message: string | DiagnosticMessageChain): string {
+  if (typeof message === 'string') {
+    return message;
+  }
+  const parts: string[] = [String(message.getMessageText())];
+  let next = message.getNext();
+  while (next) {
+    for (const link of next) {
+      parts.push(String(link.getMessageText()));
+    }
+    next = next[0]?.getNext();
+  }
+  return parts.join(' ');
+}
+
+/**
  * Type-check example blocks with the TypeScript compiler.
  *
- * Blocks are written under the ignored cache directory and compiled with an
- * argument array. The diagnostics are reported, never thrown, and the cache is
- * replaced on every run so stale files cannot leak into the result.
+ * Blocks are written under the ignored cache directory and compiled through the
+ * TypeScript compiler API, not the `tsc` command line. The API is used on
+ * purpose: the command-line compiler suppresses every semantic diagnostic when
+ * the program contains a syntactic error, which would hide real type errors in
+ * the same run. The API reports both kinds. The compiler is never given
+ * extracted code to execute, and the cache is replaced on every run so stale
+ * files cannot leak into the result.
  *
  * @param blocks - Blocks to type-check.
- * @param cwd - Repository root used to place the cache and find TypeScript.
+ * @param cwd - Repository root used to place the cache and resolve packages.
  * @returns Tier 2 findings.
  */
 export function typeCheckWithTsc(
@@ -302,28 +330,27 @@ export function typeCheckWithTsc(
     'utf-8',
   );
 
-  const requireFrom = createRequire(import.meta.url);
-  const tscPath = requireFrom.resolve('typescript/bin/tsc');
-  const result = spawnSync(
-    process.execPath,
-    [tscPath, '--noEmit', '-p', tsconfigPath],
-    { encoding: 'utf-8' },
-  );
-
-  const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  const project = new Project({ tsConfigFilePath: tsconfigPath });
   const findings: ExampleFinding[] = [];
-  const diagnostic = /^(.+?)\((\d+),(\d+)\):\s+error\s+TS\d+:\s+(.*)$/gm;
-  for (const match of output.matchAll(diagnostic)) {
-    const sourceName = basename(match[1]);
-    const block = bySourceFile.get(sourceName);
+
+  // `getPreEmitDiagnostics` combines syntactic and semantic diagnostics, so a
+  // malformed block no longer hides the type errors of its neighbours.
+  for (const diagnostic of project.getPreEmitDiagnostics()) {
+    const sourceFile = diagnostic.getSourceFile();
+    if (!sourceFile) {
+      continue;
+    }
+    const block = bySourceFile.get(basename(sourceFile.getFilePath()));
     if (!block) {
       continue;
     }
+    const position = diagnostic.getStart() ?? 0;
+    const { line } = sourceFile.getLineAndColumnAtPos(position);
     findings.push({
       file: block.file,
-      line: block.line + 1 + (Number(match[2]) - 1),
+      line: block.line + line,
       tier: '2',
-      message: match[4].trim(),
+      message: flattenDiagnostic(diagnostic.getMessageText()),
     });
   }
 
@@ -413,46 +440,50 @@ export async function runValidate(
 
   const resolver = createPackageExportResolver(cwd);
   const report = validateExamples({
-    skillDir: join(cwd, skillDir),
+    skillDir: resolve(cwd, skillDir),
     resolveExports: resolver,
     typeCheck: typecheck ? undefined : () => [],
     cwd,
   });
 
-  const readJson = (path: string): unknown =>
-    JSON.parse(readFileSync(join(cwd, path), 'utf-8'));
-
-  let apiErrors: ExampleFinding[] = [];
-  let apiWarnings: ExampleFinding[] = [];
-  if (existsSync(join(cwd, enhancedPath)) && existsSync(join(cwd, rawPath))) {
-    const enhancedSchema: unknown = readJson(enhancedPath);
-    if (!isSchemaValid(enhancedSchema)) {
-      throw new Error(`Schema failed validation: ${enhancedPath}`);
+  // The API-reference check needs both schemas. A missing oracle is a failure,
+  // not a reason to skip the check silently.
+  for (const path of [enhancedPath, rawPath]) {
+    if (!existsSync(resolve(cwd, path))) {
+      throw new Error(`Schema not found: ${path}`);
     }
-    const rawSchema: unknown = readJson(rawPath);
-    if (!isComponentOracleSchema(rawSchema)) {
-      throw new Error(`Raw schema has no components array: ${rawPath}`);
-    }
-    const apiReport = checkApiReferences({
-      enhancedSchema,
-      rawSchema,
-      packageExports: resolver,
-    });
-    apiErrors = apiReport.errors.map((finding) => ({
-      file: finding.location,
-      line: 0,
-      tier: '1b' as const,
-      message: finding.message,
-    }));
-    apiWarnings = apiReport.warnings.map((finding) => ({
-      file: finding.location,
-      line: 0,
-      tier: '2' as const,
-      message: finding.message,
-    }));
   }
 
-  const secretFindings = scanSkillDir(join(cwd, skillDir));
+  const readJson = (path: string): unknown =>
+    JSON.parse(readFileSync(resolve(cwd, path), 'utf-8'));
+
+  const enhancedSchema: unknown = readJson(enhancedPath);
+  if (!isSchemaValid(enhancedSchema)) {
+    throw new Error(`Schema failed validation: ${enhancedPath}`);
+  }
+  const rawSchema: unknown = readJson(rawPath);
+  if (!isComponentOracleSchema(rawSchema)) {
+    throw new Error(`Raw schema has no components array: ${rawPath}`);
+  }
+  const apiReport = checkApiReferences({
+    enhancedSchema,
+    rawSchema,
+    packageExports: resolver,
+  });
+  const apiErrors = apiReport.errors.map((finding) => ({
+    file: finding.location,
+    line: 0,
+    tier: '1b' as const,
+    message: finding.message,
+  }));
+  const apiWarnings = apiReport.warnings.map((finding) => ({
+    file: finding.location,
+    line: 0,
+    tier: '2' as const,
+    message: finding.message,
+  }));
+
+  const secretFindings = scanSkillDir(resolve(cwd, skillDir));
 
   const lines: string[] = [];
   for (const finding of [...report.warnings, ...apiWarnings]) {
