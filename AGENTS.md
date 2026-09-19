@@ -19,7 +19,7 @@ an agent's skills directory. ESM (`"type": "module"`), package manager Yarn, lic
 | `yarn skill:generate`              | Render `.agents/skills/fluentui/` from the enhanced schema.                |
 | `yarn skill:check`                 | Drift gate: regenerate and compare with the committed tree.                |
 | `yarn skill:validate`              | Example gate: check imports, props, and members against the real package.  |
-| `yarn skill:freshness`             | Freshness gate: the schema must be newer than its source.                  |
+| `yarn skill:freshness`             | Freshness gate: the committed tree matches the current enhanced schema.    |
 | `yarn skill:secrets`               | Secret scan of the generated skill content.                                |
 | `yarn scrape --version v9 --clone` | Scrape props, slots, and stories from FluentUI source.                     |
 | `yarn enhance --version v9 --full` | Add LLM prose to the enhanced schema; needs a local `.env`.                |

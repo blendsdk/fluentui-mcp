@@ -18,8 +18,10 @@ arm produces.
 | Skill | The generated tree at `.agents/skills/fluentui/` (schema hash `8c045d9514aa489c58edbcf29ce3042a569df850323a78d4787cfcb33fdad3c5`). |
 | MCP | The enhanced schema the server served, recovered from Git history: `git show 5eeab6a:data/v9/fluentui-schema-enhanced.json`. `5eeab6a` is the last revision before the runtime was deleted at `3bfc3fb`. |
 
-Both arms derive from the same underlying FluentUI schema. The comparison therefore measures the
-**presentation** each delivery path gives an agent, not a different data source.
+Both arms trace to the same raw FluentUI source revision (`sources.fluentui`), but their enhanced
+schema layers differ: the retired server projected `patterns` and `enterprise`, while the current
+skill is generated from a `recipes` projection. The comparison therefore measures the
+**presentation** each delivery path gives an agent, holding the raw source constant.
 
 ## Fixed prompt set
 
@@ -85,8 +87,10 @@ entries whose scraped inventory was wrong.
 - **One evaluator.** A single agent produced both arms' answers. The scoring itself is mechanical
   (the shipped export resolver and the TypeScript compiler), but answer authoring is not
   independent. A future evaluation could add a second model as an independent answer producer.
-- **Shared provenance.** Both arms derive from the same schema, so the result speaks to presentation
-  quality rather than to the underlying data.
+- **Shared source, different projections.** Both arms derive from the same raw FluentUI source
+  revision, but the enhanced schema layer changed shape between them (`patterns`/`enterprise` versus
+  `recipes`). The result compares how each path presents the knowledge, not two independent data
+  sources.
 - **Five prompts.** The set is small and was chosen to cover the common themes; it is not a
   statistical sample.
 - **Component inventory.** The scraped inventory still contains non-exported names such as

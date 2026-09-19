@@ -156,9 +156,10 @@ describe('skill-first README', () => {
 // ============================================================================
 
 const DECISIONS_DIR = join(REPO_ROOT, 'requirements', 'decisions');
+const REGISTER_PATH = join(REPO_ROOT, 'requirements', '00-ambiguity-register.md');
 
 // The five decisions that authorised the skill-first architecture. Each one
-// must exist and cite the ambiguity-register entry that approved it.
+// must exist and cite an ambiguity-register entry that actually exists.
 const REQUIRED_ADR_NUMBERS = ['001', '002', '003', '004', '005'];
 
 /** Resolves the file for an ADR number, or fails with a clear message. */
@@ -170,6 +171,19 @@ function adrFile(number: string): string {
   return join(DECISIONS_DIR, match);
 }
 
+/** Reads the ambiguity register and returns the set of entry numbers. */
+function registerEntryNumbers(): Set<number> {
+  const text = readFileSync(REGISTER_PATH, 'utf-8');
+  const numbers = new Set<number>();
+  for (const line of text.split('\n')) {
+    const match = /^\|\s*(\d+)\s*\|/.exec(line);
+    if (match) {
+      numbers.add(Number(match[1]));
+    }
+  }
+  return numbers;
+}
+
 describe('architecture decision records', () => {
   it('ships ADR-001 through ADR-005', () => {
     for (const number of REQUIRED_ADR_NUMBERS) {
@@ -177,10 +191,14 @@ describe('architecture decision records', () => {
     }
   });
 
-  it('names the authorising ambiguity register entry in every ADR', () => {
+  it('cites only ambiguity register entries that exist', () => {
+    const known = registerEntryNumbers();
     for (const number of REQUIRED_ADR_NUMBERS) {
       const text = readFileSync(adrFile(number), 'utf-8');
-      expect(text, `ADR-${number} names no ambiguity register entry`).toMatch(/\bAR-\d+\b/);
+      const cited = [...text.matchAll(/\bAR-(\d+)\b/g)].map((match) => Number(match[1]));
+      expect(cited.length, `ADR-${number} names no ambiguity register entry`).toBeGreaterThan(0);
+      const unknown = cited.filter((entry) => !known.has(entry));
+      expect(unknown, `ADR-${number} cites unknown ambiguity register entries`).toEqual([]);
     }
   });
 });

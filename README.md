@@ -128,7 +128,8 @@ yarn skill:check
 # 5. Validate every example against the real package
 yarn skill:validate
 
-# 6. Confirm the schema is newer than its source and that no secret leaked
+# 6. Confirm the committed tree matches the current enhanced schema, and that
+#    no secret leaked
 yarn skill:freshness
 yarn skill:secrets
 ```
@@ -144,7 +145,7 @@ Generation is guarded by gates, and the manifest records enough to verify a tree
 | ----------------- | ------------------- | ------------------------------------------------------------------------------ |
 | Drift             | `yarn skill:check`  | Regenerating from the same schema reproduces the committed files byte-for-byte. |
 | Example           | `yarn skill:validate` | Every TypeScript example imports real exports and uses real props and members. |
-| Freshness         | `yarn skill:freshness` | The schema is newer than the FluentUI source it was scraped from.            |
+| Freshness         | `yarn skill:freshness` | The committed tree matches the current enhanced schema (manifest hash).      |
 | Secrets           | `yarn skill:secrets` | No API key or credential is embedded in the generated content.                 |
 
 `.fluentui-skill-manifest.json` contains:
