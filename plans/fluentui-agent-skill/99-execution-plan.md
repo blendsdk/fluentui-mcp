@@ -3,7 +3,7 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-09-19 21:31
-> **Progress**: 81/103 tasks (79%)
+> **Progress**: 86/103 tasks (83%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -290,16 +290,16 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 6.3: Green phase
 
-- [ ] 6.3.1 Run hygiene spec tests and full suite; verify they PASS (green phase)
+- [x] 6.3.1 Run hygiene spec tests and full suite; verify they PASS (green phase) ✅ (completed: 2026-09-19 21:31)
 
 ### Step 6.4: Implementation Tests & Hardening
 
-- [ ] 6.4.1 Full verify (PR-1)
+- [x] 6.4.1 Full verify (PR-1) ✅ (completed: 2026-09-19 21:31)
 
 **Deliverables**:
-- [ ] No MCP, `docs/`, or `techdocs/` references
-- [ ] Build and tests green on the surviving set
-- [ ] All verification passing
+- [x] No MCP, `docs/`, or `techdocs/` references ✅ (completed: 2026-09-19 21:31)
+- [x] Build and tests green on the surviving set ✅ (completed: 2026-09-19 21:31)
+- [x] All verification passing ✅ (completed: 2026-09-19 21:31)
 
 **Verify**: `yarn build && yarn test`
 
