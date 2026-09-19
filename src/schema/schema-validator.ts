@@ -2,19 +2,16 @@
  * Schema validation for the FluentUI Enhanced Schema format.
  *
  * Validates that a parsed JSON object conforms to the {@link FluentUISchema}
- * shape before it is handed to the {@link SchemaStore}. Validation is
- * intentionally lenient: it reports problems as a list of {@link ValidationError}
- * entries (with a severity) rather than throwing, so the server can choose to
- * load partial data and warn rather than crash.
- *
- * This mirrors the "Schema validation fails → load partial data, skip invalid
- * entries, warn" strategy from the MCP server refactor design doc.
+ * shape before the pipeline consumes it. Validation is intentionally lenient:
+ * it reports problems as a list of {@link ValidationError} entries (with a
+ * severity) rather than throwing, so callers can choose to continue with
+ * partial data and warn rather than stop.
  *
  * @module schema/schema-validator
  */
 
-import type { FluentUISchema } from '../types/index.js';
-import { KNOWN_COMPONENT_CATEGORIES } from '../types/index.js';
+import type { FluentUISchema } from '../types/schema.js';
+import { KNOWN_COMPONENT_CATEGORIES } from '../types/schema.js';
 
 /**
  * The set of valid stability values a component or utility may declare.

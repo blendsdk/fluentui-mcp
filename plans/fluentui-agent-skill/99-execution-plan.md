@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 21:06
-> **Progress**: 77/103 tasks (75%)
+> **Last Updated**: 2026-09-19 21:28
+> **Progress**: 78/103 tasks (76%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -283,9 +283,9 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 6.2: Implementation
 
-- [!] 6.2.1 Drop the MCP SDK dependency and the residual `src/types/index.ts` barrel — `package.json`, `src/types/index.ts` (the runtime files were already deleted under PR-8 before Phase 2; renderers were relocated to `scripts/skill/render/`) Blocked: where the shared `src/schema/schema-validator.ts` lives after retirement — PR-15 pending user ruling.
+- [x] 6.2.1 Drop the MCP SDK dependency and the residual `src/types/index.ts` barrel — `package.json`, `src/types/index.ts` (the runtime files were already deleted under PR-8 before Phase 2; renderers were relocated to `scripts/skill/render/`; PR-15 keeps `src/schema/schema-validator.ts`) ✅ (completed: 2026-09-19 21:28)
 - [ ] 6.2.2 Delete legacy `docs/` and `techdocs/` with the Pages workflow — `docs/**`, `techdocs/**`, `.github/workflows/deploy-techdocs.yml`
-- [!] 6.2.3 Update build/test/governance config — `tsconfig.build.json`, `vitest.config.ts`, `.gitignore`, `.github/workflows/ci.yml`, `.github/workflows/publish.yml` Blocked: depends on the PR-15 validator-location ruling.
+- [ ] 6.2.3 Update build/test/governance config — `tsconfig.build.json`, `vitest.config.ts`, `.gitignore`, `.github/workflows/ci.yml`, `.github/workflows/publish.yml`
 - [ ] 6.2.4 Replace `update-docs.yml` with `update-skill.yml` — `.github/workflows/update-skill.yml`
 
 ### Step 6.3: Green phase

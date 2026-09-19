@@ -36,7 +36,7 @@ Findings from the analysis that shape this plan:
 | `scripts/enhancer/prompts/shared.ts` | Grounding serializers | Keep; reused for budgeted inventories |
 | `src/types/schema.ts` | Schema types | Drop code-bearing fields; add `categoryGuidance`, `recipes` (RD-03) |
 | `src/formatters/**` | Markdown renderers | Relocate reusable renderers to `scripts/skill/render/` (RD-03, RD-06) |
-| `src/index.ts`, `src/server.ts`, `src/tools/**`, `src/schema/**`, `src/search/**` | MCP runtime | Delete (RD-06) |
+| `src/index.ts`, `src/server.ts`, `src/tools/**`, MCP runtime parts of `src/schema/**`, `src/search/**` | MCP runtime | Delete (RD-06); `src/schema/schema-validator.ts` retained (PR-15) |
 | `src/__tests__/**` | Test suite | Keep pipeline tests; delete MCP tests; add skill tests (RD-06) |
 | `package.json` | Package config | New name/bin/scripts/files; drop MCP SDK and VitePress deps (RD-05, RD-06) |
 | `.github/workflows/**` | CI/CD | Update CI, replace update-docs, delete deploy-techdocs, update publish (RD-06) |

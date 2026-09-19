@@ -36,7 +36,7 @@ import {
   type CategoryGuidanceEntry,
   type RecipeEntry,
   type RecipeExample,
-} from '../../types/index.js';
+} from '../../types/schema.js';
 
 // ============================================================================
 // KNOWN_COMPONENT_CATEGORIES constant

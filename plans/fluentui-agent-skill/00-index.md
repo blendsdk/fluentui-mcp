@@ -84,5 +84,9 @@ requirements/decisions/           # ADRs
 **Modified:** `scripts/enhancer/**`, `src/types/schema.ts`, `package.json`, `tsconfig.build.json`,
 `vitest.config.ts`, `.github/workflows/**`, `README.md`, `AGENTS.md`, `.gitignore`.
 
-**Deleted:** `src/index.ts`, `src/server.ts`, `src/config.ts`, `src/schema/**`, `src/search/**`,
-`src/formatters/**`, `src/tools/**`, `docs/**`, `techdocs/**`, `deploy-techdocs.yml`.
+**Deleted:** `src/index.ts`, `src/server.ts`, `src/config.ts`, the MCP runtime parts of
+`src/schema/**` (already removed under PR-8), `src/search/**`, `src/formatters/**`, `src/tools/**`,
+`src/types/index.ts`, `docs/**`, `techdocs/**`, `deploy-techdocs.yml`.
+
+**Retained:** `src/schema/schema-validator.ts` — shared schema validation used by the enhancer,
+generator, and gates (PR-15).

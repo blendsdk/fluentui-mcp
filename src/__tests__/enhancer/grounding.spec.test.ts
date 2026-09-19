@@ -31,7 +31,7 @@ import {
 } from '../../../scripts/enhancer/prompts/shared.js';
 import { serializeComponentForPrompt } from '../../../scripts/enhancer/prompts/component-enhance.js';
 import { createComponentEntry, createPropEntry } from '../fixtures/helpers.js';
-import type { PropEntry } from '../../types/index.js';
+import type { PropEntry } from '../../types/schema.js';
 
 // ============================================================================
 // Helpers

@@ -30,7 +30,7 @@ import type {
   RecipeExample,
   StabilityLevel,
   UtilityExportKind,
-} from '../../types/index.js';
+} from '../../types/schema.js';
 
 // ============================================================================
 // Atomic type factories

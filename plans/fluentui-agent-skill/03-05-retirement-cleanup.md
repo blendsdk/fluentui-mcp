@@ -27,11 +27,15 @@ source set.
 | Path | Reason |
 | ---- | ------ |
 | `src/index.ts`, `src/server.ts`, `src/config.ts` | MCP entry/dispatch (AR-03) |
-| `src/schema/**`, `src/search/**`, `src/formatters/**`, `src/tools/**`, `src/types/index.ts` | MCP runtime |
+| `src/schema/**` MCP runtime parts (already removed under PR-8) | MCP runtime |
+| `src/search/**`, `src/formatters/**`, `src/tools/**`, `src/types/index.ts` | MCP runtime |
 | `@modelcontextprotocol/sdk` dependency | No consumer |
 | `docs/**` | Legacy agent-generated corpus (AR-15) |
 | `techdocs/**`, `deploy-techdocs.yml` | VitePress site (AR-16) |
 | MCP tests | Test deleted code |
+
+`src/schema/schema-validator.ts` is **retained** (PR-15): the enhancer, generator, and gates depend
+on it, so it is live shared code rather than MCP runtime.
 
 ### Surviving source set
 
