@@ -327,6 +327,46 @@ describe('DeepSeek truncation handling (ST-7)', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('aborts without writing when a Pass-2 guide call truncates', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fluentui-enhance-guides-'));
+    const input = join(dir, 'schema.json');
+    const output = join(dir, 'schema-enhanced.json');
+    writeFileSync(input, JSON.stringify(rawSchemaWithButton()), 'utf-8');
+
+    process.env.LLM_PROVIDER = 'deepseek';
+    process.env.DEEPSEEK_API_KEY = 'k';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        fakeResponse(200, {
+          choices: [
+            { message: { content: '{"a":1' }, finish_reason: 'length' },
+          ],
+        }),
+      ),
+    );
+
+    try {
+      await expect(
+        runEnhancer({
+          version: 'v9',
+          full: false,
+          componentsOnly: false,
+          guidesOnly: true,
+          dryRun: false,
+          input,
+          output,
+          concurrency: 1,
+          verbose: false,
+        }),
+      ).rejects.toThrowError(/truncat/i);
+
+      expect(existsSync(output)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ============================================================================
@@ -473,6 +513,7 @@ describe('incremental enhancement (ST-11)', () => {
         ariaAttributes: [],
         screenReaderBehavior: '',
       },
+      stylingTips: 'kept',
       sourceHash: computeComponentHash(raw.components[0]),
       enhancedAt: '2026-09-19T00:00:00.000Z',
     };

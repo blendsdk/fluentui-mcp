@@ -396,7 +396,7 @@ export async function runEnhancement(
   if (config.generateGuides) {
     log('Pass 2: generating guides, category guidance, and recipes');
 
-    foundation = await generateGuides(
+    const foundationBatch = await generateGuides(
       FOUNDATION_GUIDES,
       provider,
       config,
@@ -406,7 +406,7 @@ export async function runEnhancement(
       log,
       'foundation',
     );
-    quickReference = await generateGuides(
+    const quickReferenceBatch = await generateGuides(
       QUICK_REFERENCE_GUIDES,
       provider,
       config,
@@ -416,20 +416,34 @@ export async function runEnhancement(
       log,
       'quick-ref',
     );
-    categoryGuidance = await generateCategoryGuidance(
+    const categoryBatch = await generateCategoryGuidance(
       provider,
       config,
       rawSchema.components,
       summaries,
       log,
     );
-    recipes = await generateRecipes(
+    const recipeBatch = await generateRecipes(
       provider,
       config,
       rawSchema.components,
       summaries,
       log,
     );
+
+    foundation = foundationBatch.entries;
+    quickReference = quickReferenceBatch.entries;
+    categoryGuidance = categoryBatch.entries;
+    recipes = recipeBatch.entries;
+
+    // Surface Pass-2 failures so the caller's fail-fast gate aborts the run
+    // before a partial schema is written.
+    recordBatchFailures(stats, [
+      ...foundationBatch.failures,
+      ...quickReferenceBatch.failures,
+      ...categoryBatch.failures,
+      ...recipeBatch.failures,
+    ]);
 
     stats.guidesGenerated = foundation.length + quickReference.length;
     stats.categoryGuidanceGenerated = categoryGuidance.length;
@@ -462,6 +476,20 @@ type GuideMessageBuilder = (context: {
   version: string;
 }) => Parameters<LLMProvider['chat']>[0];
 
+/**
+ * Result of generating a catalog of guides/categories/recipes.
+ *
+ * Failures are surfaced explicitly so the orchestrator can fail-fast instead
+ * of silently dropping an entry and writing a partial schema.
+ */
+interface GeneratedBatch<T> {
+  /** Successfully generated entries, in catalog order. */
+  entries: T[];
+
+  /** Human-readable messages for each failed entry. */
+  failures: string[];
+}
+
 
 /**
  * Generate a set of GuideEntry items for a catalog using a message builder.
@@ -479,7 +507,7 @@ async function generateGuides(
   buildMessages: GuideMessageBuilder,
   log?: (msg: string) => void,
   label = 'guide',
-): Promise<GuideEntry[]> {
+): Promise<GeneratedBatch<GuideEntry>> {
   const allComponentNames = summaries.map((s) => s.name);
   const total = specs.length;
 
@@ -515,9 +543,14 @@ async function generateGuides(
     },
   );
 
-  return results.items
-    .filter((item) => item.ok && item.result)
-    .map((item) => item.result as GuideEntry);
+  return {
+    entries: results.items
+      .filter((item) => item.ok && item.result)
+      .map((item) => item.result as GuideEntry),
+    failures: results.failed.map(
+      (item) => item.error?.message ?? `${label} #${item.index} failed`,
+    ),
+  };
 }
 
 
@@ -536,7 +569,7 @@ async function generateCategoryGuidance(
   components: ComponentEntry[],
   summaries: ComponentSummary[],
   log?: (msg: string) => void,
-): Promise<CategoryGuidanceEntry[]> {
+): Promise<GeneratedBatch<CategoryGuidanceEntry>> {
   const allComponentNames = summaries.map((s) => s.name);
   const specs = CATEGORY_GUIDES;
   const total = specs.length;
@@ -571,9 +604,14 @@ async function generateCategoryGuidance(
     },
   );
 
-  return results.items
-    .filter((item) => item.ok && item.result)
-    .map((item) => item.result as CategoryGuidanceEntry);
+  return {
+    entries: results.items
+      .filter((item) => item.ok && item.result)
+      .map((item) => item.result as CategoryGuidanceEntry),
+    failures: results.failed.map(
+      (item) => item.error?.message ?? `category #${item.index} failed`,
+    ),
+  };
 }
 
 /**
@@ -589,7 +627,7 @@ async function generateRecipes(
   components: ComponentEntry[],
   summaries: ComponentSummary[],
   log?: (msg: string) => void,
-): Promise<RecipeEntry[]> {
+): Promise<GeneratedBatch<RecipeEntry>> {
   const allComponentNames = summaries.map((s) => s.name);
   const specs = RECIPE_GUIDES;
   const total = specs.length;
@@ -626,9 +664,14 @@ async function generateRecipes(
     },
   );
 
-  return results.items
-    .filter((item) => item.ok && item.result)
-    .map((item) => item.result as RecipeEntry);
+  return {
+    entries: results.items
+      .filter((item) => item.ok && item.result)
+      .map((item) => item.result as RecipeEntry),
+    failures: results.failed.map(
+      (item) => item.error?.message ?? `recipe #${item.index} failed`,
+    ),
+  };
 }
 
 
@@ -840,6 +883,25 @@ function cleanTextArray(values: string[]): string[] {
 // ============================================================================
 // Internal Utilities
 // ============================================================================
+
+/**
+ * Record guide/category/recipe generation failures on the run statistics.
+ *
+ * Kept separate from {@link EnhancementRunStats.failures} increments in Pass 1
+ * so both passes report through one place and `failures` always equals the
+ * number of entries in `failureDetails`.
+ *
+ * @param stats - The run statistics accumulator
+ * @param failures - Failure messages from a generation batch
+ */
+function recordBatchFailures(
+  stats: EnhancementRunStats,
+  failures: string[],
+): void {
+  if (failures.length === 0) return;
+  stats.failures += failures.length;
+  stats.failureDetails.push(...failures);
+}
 
 /** Build batch options from the enhancer config. */
 function batchOptions(config: EnhancerConfig): {
