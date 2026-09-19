@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 22:25
-> **Progress**: 93/103 tasks (90%)
+> **Last Updated**: 2026-09-19 22:35
+> **Progress**: 95/103 tasks (92%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -343,11 +343,13 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 ## Phase 8: Docs, decisions & evaluation (RD-08)
 
 **Reference**: [03-06](03-06-docs-decisions-eval.md) · AR-22, AR-19
+**Phase baseline tree**: f5bb855908aa17a8f474778df72f45929d6246f8
+**Scope**: strict · **Expected modification set**: src/__tests__/repo/**, README.md, AGENTS.md, requirements/decisions/**, plans/fluentui-agent-skill/**
 
 ### Step 8.1: Specification Tests (before implementation)
 
-- [ ] 8.1.1 [spec-author] Extend repo-hygiene tests for README and ADRs (ST-36, ST-37) — `src/__tests__/repo/repo-hygiene.spec.test.ts`
-- [ ] 8.1.2 Run doc spec tests; verify they FAIL (red phase)
+- [x] 8.1.1 [spec-author] Extend repo-hygiene tests for README and ADRs (ST-36, ST-37) — `src/__tests__/repo/repo-hygiene.spec.test.ts` ✅ (completed: 2026-09-19 22:35)
+- [x] 8.1.2 Run doc spec tests; verify they FAIL (red phase) ✅ (completed: 2026-09-19 22:35)
 
 ### Step 8.2: Implementation
 

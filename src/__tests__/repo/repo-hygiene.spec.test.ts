@@ -16,7 +16,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -69,7 +69,7 @@ function referencingFiles(needle: string): string[] {
 }
 
 // ============================================================================
-// Grep gate (ST-34)
+// Grep gate
 // ============================================================================
 
 describe('repository hygiene', () => {
@@ -87,7 +87,7 @@ describe('repository hygiene', () => {
 });
 
 // ============================================================================
-// Removed paths (ST-34, RD-06 acceptance criteria 2 and 3)
+// Removed paths
 // ============================================================================
 
 describe('removed paths', () => {
@@ -100,6 +100,87 @@ describe('removed paths', () => {
   it('has no retired documentation sites', () => {
     for (const path of ['docs', 'techdocs', '.github/workflows/deploy-techdocs.yml']) {
       expect(existsSync(join(REPO_ROOT, path))).toBe(false);
+    }
+  });
+});
+
+// ============================================================================
+// Skill-first README (ST-36)
+// ============================================================================
+
+const README_PATH = join(REPO_ROOT, 'README.md');
+
+// Tool names that only existed to serve the retired MCP server. The skill
+// replaces them with reference documents, so the README must not advertise
+// them.
+const RETIRED_MCP_TOKENS = [
+  'mcpServers',
+  'query_component',
+  'search_docs',
+  'list_by_category',
+  'get_foundation',
+  'get_pattern',
+  'get_enterprise',
+  'suggest_components',
+  'get_implementation_guide',
+  'get_component_examples',
+  'get_props_reference',
+  'list_all_docs',
+  'reindex',
+];
+
+describe('skill-first README', () => {
+  it('documents the skill install command and no MCP setup', () => {
+    const readme = readFileSync(README_PATH, 'utf-8');
+
+    expect(readme).toContain('npx -y fluentui-skill skill install');
+    for (const token of RETIRED_MCP_TOKENS) {
+      expect(readme, `README still mentions "${token}"`).not.toContain(token);
+    }
+    expect(readme).not.toContain('npm install -g fluentui-mcp');
+  });
+
+  it('links only to files that exist in the repository', () => {
+    const readme = readFileSync(README_PATH, 'utf-8');
+    const targets = [...readme.matchAll(/\]\((?!https?:|mailto:|#)([^)]+)\)/g)]
+      .map((match) => match[1].split('#')[0])
+      .filter((target) => target.length > 0);
+
+    const missing = targets.filter((target) => !existsSync(join(REPO_ROOT, target)));
+    expect(missing).toEqual([]);
+  });
+});
+
+// ============================================================================
+// Architecture decision records (ST-37)
+// ============================================================================
+
+const DECISIONS_DIR = join(REPO_ROOT, 'requirements', 'decisions');
+
+// The five decisions that authorised the skill-first architecture. Each one
+// must exist and cite the ambiguity-register entry that approved it.
+const REQUIRED_ADR_NUMBERS = ['001', '002', '003', '004', '005'];
+
+/** Resolves the file for an ADR number, or fails with a clear message. */
+function adrFile(number: string): string {
+  const match = readdirSync(DECISIONS_DIR).find((entry) => entry.startsWith(`ADR-${number}-`));
+  if (match === undefined) {
+    throw new Error(`missing ADR-${number}`);
+  }
+  return join(DECISIONS_DIR, match);
+}
+
+describe('architecture decision records', () => {
+  it('ships ADR-001 through ADR-005', () => {
+    for (const number of REQUIRED_ADR_NUMBERS) {
+      expect(existsSync(adrFile(number)), `missing ADR-${number}`).toBe(true);
+    }
+  });
+
+  it('names the authorising ambiguity register entry in every ADR', () => {
+    for (const number of REQUIRED_ADR_NUMBERS) {
+      const text = readFileSync(adrFile(number), 'utf-8');
+      expect(text, `ADR-${number} names no ambiguity register entry`).toMatch(/\bAR-\d+\b/);
     }
   });
 });
