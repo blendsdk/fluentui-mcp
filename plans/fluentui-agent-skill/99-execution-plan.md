@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 21:31
-> **Progress**: 86/103 tasks (83%)
+> **Last Updated**: 2026-09-19 22:21
+> **Progress**: 87/103 tasks (84%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -315,9 +315,12 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 **Reference**: [RD-07](../../requirements/RD-07-non-functional.md) · AR-11, AR-20
 
+> **Phase baseline tree**: 241a3fa357ec21107dbe872c82c845657a9aaee5
+> **Scope**: strict · **Expected modification set**: `src/__tests__/**`, `plans/fluentui-agent-skill/**`
+
 ### Step 7.1: Verification tasks
 
-- [ ] 7.1.1 Verify determinism: two generator runs produce identical hashes
+- [x] 7.1.1 Verify determinism: two generator runs produce identical hashes ✅ (completed: 2026-09-19 22:21)
 - [ ] 7.1.2 Verify offline use: install into a temp target and load references with no network
 - [ ] 7.1.3 Verify performance targets: generation < 5s, example validation < 5 min
 - [ ] 7.1.4 Verify security tests: path traversal, secrets scan, no-execution guarantee
