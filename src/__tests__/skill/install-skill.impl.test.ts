@@ -12,7 +12,14 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -133,6 +140,34 @@ describe('installSkill atomic replacement', () => {
     expect(existsSync(temp)).toBe(false);
     expect(existsSync(backup)).toBe(false);
     expect(existsSync(join(target, SKILL_DIR_NAME, 'SKILL.md'))).toBe(true);
+  });
+
+  it('does not delete user entries that share the leftover prefix', () => {
+    const source = makeSourceSkill();
+    const target = makeTempDir();
+    const userTmp = join(target, `${TEMP_PREFIX}notes`);
+    const userBackup = join(target, `${BACKUP_PREFIX}notes`);
+    mkdirSync(userTmp, { recursive: true });
+    mkdirSync(userBackup, { recursive: true });
+
+    installSkill({ sourceDir: source, targetDir: target, version: '1.0.0' });
+
+    expect(existsSync(userTmp)).toBe(true);
+    expect(existsSync(userBackup)).toBe(true);
+  });
+
+  it('refuses a directory with an invalid marker and unrelated content', () => {
+    const source = makeSourceSkill();
+    const target = makeTempDir();
+    const dest = join(target, SKILL_DIR_NAME);
+    mkdirSync(dest, { recursive: true });
+    writeFileSync(join(dest, MARKER_FILE), '{}');
+    writeFileSync(join(dest, 'user-data.txt'), 'keep');
+
+    expect(() => installSkill({ sourceDir: source, targetDir: target, version: '1.0.0' })).toThrow(
+      /refusing to replace unrelated directory/,
+    );
+    expect(existsSync(join(dest, 'user-data.txt'))).toBe(true);
   });
 
   it('refuses to replace a directory that is not this skill', () => {
@@ -276,6 +311,31 @@ describe('main', () => {
     const code = await main(['install', '--nope'], { home: makeTempDir(), cwd: makeTempDir() });
 
     expect(code).toBe(2);
+  });
+
+  it('strips control characters from a tampered marker version', async () => {
+    const source = makeSourceSkill();
+    const target = makeTempDir();
+    installSkill({ sourceDir: source, targetDir: target, version: '1.0.0' });
+
+    const markerPath = join(target, SKILL_DIR_NAME, MARKER_FILE);
+    const marker: { version: string } = JSON.parse(readFileSync(markerPath, 'utf-8'));
+    marker.version = '1.0.0\u001b[31m\u0007\u202e';
+    writeFileSync(markerPath, JSON.stringify(marker));
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const code = await main(['status', '--target', target], {
+      home: makeTempDir(),
+      cwd: makeTempDir(),
+      version: '1.0.0',
+      isTTY: false,
+    });
+    const output = log.mock.calls.flat().join(' ');
+    log.mockRestore();
+
+    expect(code).toBe(0);
+    expect(output).toContain('1.0.0');
+    expect(output).not.toMatch(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e]/);
   });
 });
 

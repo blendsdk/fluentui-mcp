@@ -386,16 +386,21 @@ function assertReplaceable(dest: string): void {
 }
 
 /**
- * Removes control characters from a value before printing it.
+ * Removes control and display-formatting characters from a value before
+ * printing it.
  *
  * The installed version is read back from disk, so it is untrusted input; the
- * raw value could otherwise carry terminal escape sequences into the output.
+ * raw value could otherwise carry terminal escape sequences or bidirectional
+ * override characters into the output.
  *
  * @param value - Text to sanitize.
- * @returns The text without control characters.
+ * @returns The text without control or display-formatting characters.
  */
 function sanitizeForDisplay(value: string): string {
-  return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '');
+  return value.replace(
+    /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g,
+    '',
+  );
 }
 
 /**
