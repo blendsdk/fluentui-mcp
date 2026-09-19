@@ -112,10 +112,18 @@ export function scrape(options: ScrapeOptions): ScrapeResult {
 
   for (const pkg of [...packages, ...contribPackages]) {
     if (pkg.type === 'component') {
+      // The umbrella export index is authoritative for FluentUI packages: a
+      // package with no public value exports (a hook-only or internal package)
+      // contributes no components, and a package not in the index at all
+      // (a preview package that is not re-exported) contributes none either.
+      // Contrib packages have no index, so they use the scanning fallback.
       components.push(
-        ...adapter.extractComponents(pkg, {
-          exportedNames: exportNames.get(pkg.packageName) ?? [],
-        }),
+        ...adapter.extractComponents(
+          pkg,
+          pkg.source === 'fluentui'
+            ? { exportedNames: exportNames.get(pkg.packageName) ?? [] }
+            : undefined,
+        ),
       );
     } else if (pkg.type === 'utility') {
       const entry = adapter.extractUtility(pkg);

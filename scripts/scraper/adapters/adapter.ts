@@ -21,8 +21,10 @@ import type { ComponentEntry, UtilityEntry } from '../../../src/types/schema.js'
  */
 export interface ComponentDiscoveryOptions {
   /**
-   * Value identifiers the package exports publicly. When present, discovery is
-   * restricted to these names rather than scanning every `.types.ts` file.
+   * Value identifiers the package exports publicly. When the property is
+   * defined, discovery is restricted to these names rather than scanning every
+   * `.types.ts` file; an empty array therefore means the package contributes no
+   * components. Omitting the property entirely selects the scanning fallback.
    */
   exportedNames?: readonly string[];
 }

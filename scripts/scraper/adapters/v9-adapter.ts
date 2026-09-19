@@ -102,13 +102,16 @@ export class V9Adapter implements ScraperAdapter {
   /**
    * Discover the component names defined by a v9 package.
    *
-   * When `options.exportedNames` is provided, candidates are taken from the
-   * package's public exports and kept only when a matching `<Name>.types.ts`
-   * file exists. When there is no export list, or the export list yields no
-   * name with a matching types file (for example a contrib package or a
-   * package whose types files are named differently), the method falls back to
-   * scanning `<Name>.types.ts` files. If neither yields a name, the package
-   * directory name is used so the package still produces a best-effort entry.
+   * When `options.exportedNames` is defined, the umbrella export index is
+   * authoritative: candidates are the package's public value exports that also
+   * have a matching `<Name>.types.ts` file, and nothing else is considered.
+   * This keeps hook-only packages and preview packages that are not re-exported
+   * from contributing phantom components, and stops names being invented from
+   * the directory name or from internal `.types.ts` files.
+   *
+   * When `options` or `options.exportedNames` is absent (a contrib package, or
+   * a checkout without an export index), the method falls back to scanning
+   * `<Name>.types.ts` files and, as a last resort, the package directory name.
    *
    * @param pkg - Discovered component package
    * @param options - Optional exported names to restrict discovery to
@@ -118,18 +121,14 @@ export class V9Adapter implements ScraperAdapter {
     pkg: DiscoveredPackage,
     options?: ComponentDiscoveryOptions,
   ): string[] {
-    const exported = (options?.exportedNames ?? []).filter(isComponentName);
-
-    if (exported.length > 0) {
+    if (options?.exportedNames !== undefined) {
       const confirmed = new Set<string>();
-      for (const name of exported) {
+      for (const name of options.exportedNames.filter(isComponentName)) {
         if (this.findTypesFile(pkg, name) !== null) {
           confirmed.add(name);
         }
       }
-      if (confirmed.size > 0) {
-        return [...confirmed].sort(compareStrings);
-      }
+      return [...confirmed].sort(compareStrings);
     }
 
     const srcDir = findSrcDir(pkg.path);
