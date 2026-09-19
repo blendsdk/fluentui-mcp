@@ -10,7 +10,7 @@
  * @module formatters/list-formatter
  */
 
-import type { ComponentEntry, GuideEntry, PatternEntry } from '../types/index.js';
+import type { ComponentEntry, GuideEntry, PatternEntry } from '../../../src/types/index.js';
 import { formatSummary } from './component-formatter.js';
 
 /**

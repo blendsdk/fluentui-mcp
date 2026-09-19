@@ -21,7 +21,7 @@ import type {
   ComponentEnhanced,
   AntiPattern,
   PatternExample,
-} from '../types/index.js';
+} from '../../../src/types/index.js';
 import { formatPropsTable, formatSlotsTable } from './props-formatter.js';
 import { formatStories } from './story-formatter.js';
 

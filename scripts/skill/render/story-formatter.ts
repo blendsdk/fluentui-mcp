@@ -11,7 +11,7 @@
  * @module formatters/story-formatter
  */
 
-import type { ComponentEntry, StoryEntry } from '../types/index.js';
+import type { ComponentEntry, StoryEntry } from '../../../src/types/index.js';
 
 /**
  * Choose the most complete source available for a story.

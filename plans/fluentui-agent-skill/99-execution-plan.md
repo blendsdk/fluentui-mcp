@@ -90,7 +90,15 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 **Reference**: [03-01 §DeepSeek](03-01-content-pipeline.md) · AR-08, AR-09, AR-10, AR-17, AR-18
 
+> **Phase baseline tree**: e4e7e684e7f708a48b60404d8b553395c789c0b5
+> **Scope**: strict · **Expected modification set**: `scripts/enhancer/**`, `src/types/schema.ts`, `src/schema/schema-validator.ts`, `src/__tests__/enhancer/**`, `data/v9/fluentui-schema-enhanced.json`
+
 ### Step 2.1: Specification Tests (before implementation)
+
+> ✅ **PR-8 resolved** (2026-09-19): the dead MCP runtime and MCP tests were deleted before this
+> phase, and the reusable renderers were relocated to `scripts/skill/render/` (honoring PR-5).
+> Phase 2 therefore replaces the schema with no MCP-compatibility work. See
+> `00-ambiguity-register.md` PR-8.
 
 - [ ] 2.1.1 [spec-author] Write enhancement spec tests (ST-5..ST-11) — `src/__tests__/enhancer/deepseek.spec.test.ts`
 - [ ] 2.1.2 Run enhancement spec tests; verify they FAIL (red phase)
@@ -254,7 +262,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 6.2: Implementation
 
-- [ ] 6.2.1 Delete the MCP runtime files and the MCP SDK dependency — `src/index.ts`, `src/server.ts`, `src/config.ts`, `src/tools/**`, `src/schema/**`, `src/search/**`, `src/formatters/**`, `src/types/index.ts`, `package.json`
+- [ ] 6.2.1 Drop the MCP SDK dependency and the residual `src/types/index.ts` barrel — `package.json`, `src/types/index.ts` (the runtime files were already deleted under PR-8 before Phase 2; renderers were relocated to `scripts/skill/render/`)
 - [ ] 6.2.2 Delete legacy `docs/` and `techdocs/` with the Pages workflow — `docs/**`, `techdocs/**`, `.github/workflows/deploy-techdocs.yml`
 - [ ] 6.2.3 Update build/test/governance config — `tsconfig.build.json`, `vitest.config.ts`, `.gitignore`, `.github/workflows/ci.yml`, `.github/workflows/publish.yml`
 - [ ] 6.2.4 Replace `update-docs.yml` with `update-skill.yml` — `.github/workflows/update-skill.yml`

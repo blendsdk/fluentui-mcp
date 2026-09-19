@@ -1,7 +1,7 @@
 # Ambiguity Register: FluentUI Agent Skill Plan
 
-> **Status**: ✅ GATE PASSED — all 7 items resolved
-> **Last Updated**: 2026-09-19 11:46
+> **Status**: ✅ GATE PASSED — all 8 items resolved (PR-8 resolved at runtime)
+> **Last Updated**: 2026-09-19 12:35
 > **CodeOps Artifact Schema**: 1
 
 Plan-local decisions. Behavioral and scope decisions already resolved in the requirements register
@@ -17,6 +17,7 @@ are recorded.
 | PR-5 | Technical | Where the skill's Markdown render logic lives after `src/formatters` is deleted | Relocate needed renderers to `scripts/skill/render/` / duplicate in generator / discard and rewrite | Relocate the reusable renderers; no duplication | ✅ Resolved — Author (zero semantic impact; RD-06 authorizes relocation) |
 | PR-6 | Technical | How the pinned FluentUI release tag is selected | Query latest stable tag at run time / hardcode a tag now / always master | Resolve the latest stable release tag at scrape time; record it in the schema; `--fluentui-ref` overrides | ✅ Resolved — Author (implements AR-20) |
 | PR-7 | Naming | Node engine floor | Keep `>=18` / `>=20` / `>=22` | `>=20`, matching RD-07 and global `fetch` assumptions | ✅ Resolved — Author (matches approved RD-07) |
+| PR-8 (runtime) | Technical | Phase 2 replaces root `patterns[]`/`enterprise[]` with `recipes[]` and drops code-bearing fields, but their current consumers (`src/schema/**`, `src/search/**`, `src/formatters/**`, `src/tools/**`, MCP tests/fixtures) are not deleted until Phase 6, and `yarn build` (`tsconfig.build.json` includes all `src/**`) typechecks them. How to keep every phase green? | A) Hybrid supersession / B) Full replacement now / C) Front-load MCP removal | **Delete the dead MCP runtime + MCP tests now** (pre-executes the MCP subset of RD-06 deletion; user confirmed nobody uses the MCP). Phase 2 then replaces the schema cleanly with no throwaway work. Remaining RD-06 items — `docs/**`, `techdocs/**`, `package.json`, CI workflows, README — stay in Phase 6. | ✅ Resolved — User |
 
 ## Resolution Notes
 

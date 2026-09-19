@@ -11,7 +11,7 @@
  * @module formatters/props-formatter
  */
 
-import type { ComponentEntry, PropEntry, SlotEntry } from '../types/index.js';
+import type { ComponentEntry, PropEntry, SlotEntry } from '../../../src/types/index.js';
 
 /** Placeholder rendered when a cell has no meaningful value. */
 const EMPTY_CELL = '—';

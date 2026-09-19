@@ -11,7 +11,7 @@
  * @module formatters/guide-formatter
  */
 
-import type { GuideEntry, GuideCodeExample } from '../types/index.js';
+import type { GuideEntry, GuideCodeExample } from '../../../src/types/index.js';
 
 /** Joins non-empty section strings with blank lines between them. */
 function joinSections(sections: Array<string | undefined>): string {
