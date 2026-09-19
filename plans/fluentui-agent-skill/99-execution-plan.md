@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 11:58
-> **Progress**: 12/103 tasks (12%)
+> **Last Updated**: 2026-09-19 12:45
+> **Progress**: 14/103 tasks (14%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -100,8 +100,8 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 > Phase 2 therefore replaces the schema with no MCP-compatibility work. See
 > `00-ambiguity-register.md` PR-8.
 
-- [ ] 2.1.1 [spec-author] Write enhancement spec tests (ST-5..ST-11) — `src/__tests__/enhancer/deepseek.spec.test.ts`
-- [ ] 2.1.2 Run enhancement spec tests; verify they FAIL (red phase)
+- [x] 2.1.1 [spec-author] Write enhancement spec tests (ST-5..ST-11) — `src/__tests__/enhancer/deepseek.spec.test.ts` ✅ (completed: 2026-09-19 12:45)
+- [x] 2.1.2 Run enhancement spec tests; verify they FAIL (red phase) ✅ (completed: 2026-09-19 12:45)
 
 ### Step 2.2: Implementation — provider and cost gate
 
