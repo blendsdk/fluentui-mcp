@@ -16,7 +16,7 @@ Fluent UI v9 theming is built from four layers. Understanding them once makes ev
 Consequences worth internalising:
 
 - **Re-theming is a data change, not a component change.** You never restyle components to change a brand colour; you hand a new theme object to the provider.
-- **Themes are scoped by the DOM.** Because they are CSS custom properties, nesting a `Provider` redefines variables for that subtree only and leaves the rest of the app untouched.
+- **Themes are scoped by the DOM.** Because they are CSS custom properties, nesting a `FluentProvider` redefines variables for that subtree only and leaves the rest of the app untouched.
 - **Themes are partial-friendly.** A theme that defines three tokens inherits every other token from the nearest ancestor provider through normal CSS cascade.
 - **No re-render is required to switch themes.** Style rules already contain `var(...)` references; the browser repaints with the new values.
 
@@ -62,11 +62,11 @@ Rule of thumb: **use `tokens` in styles; use theme objects when defining or comp
 
 The naming pattern is `<subject><role><variant><index>` (for example `colorBrandBackgroundHover`). Learn the pattern once and you can guess most token names correctly.
 
-## 3. Applying a theme with `Provider`
+## 3. Applying a theme with `FluentProvider`
 
-The provider is exported as `Provider` from `@fluentui/react-components` (package-level docs and older examples refer to it as `FluentProvider`). It renders a root element, generates a CSS class containing the theme's custom properties, injects the class definition as a style tag, and applies the class to its root element. Every descendant inherits the variables.
+The provider is exported as `FluentProvider` from `@fluentui/react-components` (package-level docs and older examples refer to it as `FluentProvider`). It renders a root element, generates a CSS class containing the theme's custom properties, injects the class definition as a style tag, and applies the class to its root element. Every descendant inherits the variables.
 
-Provider props that matter for theming:
+FluentProvider props that matter for theming:
 
 | Prop | Type | Theming purpose |
 | --- | --- | --- |
@@ -155,12 +155,12 @@ Avoid hard-coded hex values in your own styles. They are the single most common 
 Because theming is CSS-variable based, scoping is just nesting:
 
 ```tsx
-<Provider theme={webLightTheme}>      {/* app default */}
+<FluentProvider theme={webLightTheme}>      {/* app default */}
   <Button appearance="primary">Global primary</Button>
-  <Provider theme={{ colorBrandBackground: tokens.colorPaletteRedBackground3 }}>
+  <FluentProvider theme={{ colorBrandBackground: tokens.colorPaletteRedBackground3 }}>
     <Button appearance="primary">Danger-zone primary</Button>
-  </Provider>
-</Provider>
+  </FluentProvider>
+</FluentProvider>
 ```
 
 The inner provider redefines only the tokens you list; everything else — neutrals, typography, spacing, shadows — cascades from the outer provider. This is the recommended way to build section-level accents, embedded sub-apps, or a preview pane that renders a different theme next to the host UI.
@@ -178,7 +178,7 @@ Guidance: use **one provider per theme boundary**, not one per component. Each p
 `dir` lives on the provider, not in the theme, because direction is a layout concern rather than a colour/type decision:
 
 ```tsx
-<Provider theme={webLightTheme} dir="rtl">…</Provider>
+<FluentProvider theme={webLightTheme} dir="rtl">…</FluentProvider>
 ```
 
 Components use logical CSS properties, so padding, borders and icon placement mirror automatically. Direction-sensitive icons (chevrons, arrows) should be mirrored in your own assets, and the same `dir` value should be used for every nested provider that renders portals.
@@ -195,7 +195,7 @@ Components use logical CSS properties, so padding, borders and icon placement mi
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | Overlay (Dialog/Popover/Menu/Tooltip) looks unthemed | `applyStylesToPortals` disabled, or the portal target lives outside the provider and outside a themed document | Leave `applyStylesToPortals` at its default, or move the provider so the portal target is inside it |
-| Content inside an iframe renders unstyled | The theme styles were never injected into that document | Pass `targetDocument` to `Provider` |
+| Content inside an iframe renders unstyled | The theme styles were never injected into that document | Pass `targetDocument` to `FluentProvider` |
 | Dark mode leaves light-coloured patches | Hard-coded hex/rgb values in your own styles or third-party CSS | Replace them with `tokens.*` or `var(--*)` |
 | Only the solid brand colour changed; hover/pressed/stroke still look wrong | A partial theme overrode one token instead of the whole brand ramp | Provide the full ramp to `createLightTheme`/`createDarkTheme` |
 | All radius values collapsed to one value | A theme group was replaced instead of spread (`borderRadius: { medium: '2px' }`) | Spread the base group: `{ ...base.borderRadius, medium: '2px' }` |
@@ -212,10 +212,10 @@ Components use logical CSS properties, so padding, borders and icon placement mi
 
 ## 13. Quick reference
 
-1. Wrap the app: `<Provider theme={webLightTheme}>`.
+1. Wrap the app: `<FluentProvider theme={webLightTheme}>`.
 2. Brand it: build a 16-stop `BrandVariants` ramp, then `createLightTheme(ramp)` + `createDarkTheme(ramp)` once at module scope.
 3. Style your own UI with `tokens.*` (or `var(--tokenName)` in plain CSS) — never with raw colours.
-4. Scope overrides by nesting a `Provider` with a partial theme.
+4. Scope overrides by nesting a `FluentProvider` with a partial theme.
 5. Keep portals themed (`applyStylesToPortals`) and other documents themed (`targetDocument`).
 6. Verify contrast and high contrast for every custom ramp you ship.
 
@@ -236,18 +236,12 @@ Wraps an app in Provider with webLightTheme. Every Fluent component inside reads
 
 ```tsx
 import * as React from 'react';
-import {
-  Provider,
-  Button,
-  Badge,
-  Text,
-  webLightTheme,
-} from '@fluentui/react-components';
+import { FluentProvider, Button, Badge, Text, webLightTheme } from '@fluentui/react-components';
 
 export default function App() {
   return (
     // Everything inside Provider picks up the theme of the nearest Provider.
-    <Provider theme={webLightTheme}>
+    <FluentProvider theme={webLightTheme}>
       <div style={{ display: 'grid', rowGap: 12, padding: 24 }}>
         <Text size={500} weight="semibold">
           Themed with Provider
@@ -264,7 +258,7 @@ export default function App() {
           </Badge>
         </div>
       </div>
-    </Provider>
+    </FluentProvider>
   );
 }
 ```
@@ -275,14 +269,7 @@ Defines a 16-stop BrandVariants ramp (10 = darkest, 160 = lightest, one consiste
 
 ```tsx
 import * as React from 'react';
-import {
-  Provider,
-  Button,
-  Switch,
-  createLightTheme,
-  createDarkTheme,
-  type BrandVariants,
-} from '@fluentui/react-components';
+import { FluentProvider, Button, Switch, createLightTheme, createDarkTheme, type BrandVariants } from '@fluentui/react-components';
 
 // A brand ramp is 16 stops: 10 is the darkest, 160 the lightest.
 // Keep a single hue and move monotonically in lightness.
@@ -314,7 +301,7 @@ export default function App() {
   const [isDark, setIsDark] = React.useState(false);
 
   return (
-    <Provider theme={isDark ? contosoDarkTheme : contosoLightTheme}>
+    <FluentProvider theme={isDark ? contosoDarkTheme : contosoLightTheme}>
       <div style={{ display: 'grid', rowGap: 12, padding: 24 }}>
         <Switch
           checked={isDark}
@@ -324,7 +311,7 @@ export default function App() {
         <Button appearance="primary">Branded primary action</Button>
         <Button appearance="outline">Branded outline action</Button>
       </div>
-    </Provider>
+    </FluentProvider>
   );
 }
 ```
@@ -335,13 +322,7 @@ Shows a partial theme: the inner Provider redefines only a few brand tokens, whi
 
 ```tsx
 import * as React from 'react';
-import {
-  Provider,
-  Button,
-  MessageBar,
-  tokens,
-  webLightTheme,
-} from '@fluentui/react-components';
+import { FluentProvider, Button, MessageBar, tokens, webLightTheme } from '@fluentui/react-components';
 
 // A partial theme only redefines the tokens it lists. `tokens.*` yields
 // var() references, so these overrides follow whatever theme is active.
@@ -353,11 +334,11 @@ const dangerZoneTheme = {
 
 export default function App() {
   return (
-    <Provider theme={webLightTheme}>
+    <FluentProvider theme={webLightTheme}>
       <div style={{ display: 'grid', rowGap: 12, padding: 24 }}>
         <Button appearance="primary">Global primary</Button>
 
-        <Provider theme={dangerZoneTheme}>
+        <FluentProvider theme={dangerZoneTheme}>
           <div style={{ display: 'grid', rowGap: 12 }}>
             <MessageBar intent="warning">
               This section uses a scoped brand override; everything else still
@@ -365,9 +346,9 @@ export default function App() {
             </MessageBar>
             <Button appearance="primary">Scoped primary</Button>
           </div>
-        </Provider>
+        </FluentProvider>
       </div>
-    </Provider>
+    </FluentProvider>
   );
 }
 ```
@@ -464,12 +445,7 @@ targetDocument injects the provider's generated theme styles into another docume
 
 ```tsx
 import * as React from 'react';
-import {
-  Provider,
-  Portal,
-  Button,
-  webDarkTheme,
-} from '@fluentui/react-components';
+import { FluentProvider, Portal, Button, webDarkTheme } from '@fluentui/react-components';
 
 export default function IframeThemedPreview() {
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
@@ -487,13 +463,13 @@ export default function IframeThemedPreview() {
       {targetDocument && (
         // targetDocument injects the theme styles into the iframe document;
         // Portal then renders the children into that same document.
-        <Provider theme={webDarkTheme} targetDocument={targetDocument}>
+        <FluentProvider theme={webDarkTheme} targetDocument={targetDocument}>
           <Portal mountNode={targetDocument.body}>
             <div style={{ padding: 16 }}>
               <Button appearance="primary">Themed inside the iframe</Button>
             </div>
           </Portal>
-        </Provider>
+        </FluentProvider>
       )}
     </div>
   );
@@ -506,15 +482,7 @@ Shows the safe way to derive a theme: spread the base theme and spread any token
 
 ```tsx
 import * as React from 'react';
-import {
-  Provider,
-  Button,
-  Switch,
-  createLightTheme,
-  createDarkTheme,
-  type BrandVariants,
-  type Theme,
-} from '@fluentui/react-components';
+import { FluentProvider, Button, Switch, createLightTheme, createDarkTheme, type BrandVariants, type Theme } from '@fluentui/react-components';
 
 const brand: BrandVariants = {
   10: '#020305',
@@ -562,7 +530,7 @@ export default function App() {
   const theme = useAppTheme(isDark ? 'dark' : 'light', compact);
 
   return (
-    <Provider theme={theme}>
+    <FluentProvider theme={theme}>
       <div style={{ display: 'grid', rowGap: 12, padding: 24 }}>
         <Switch
           checked={isDark}
@@ -576,7 +544,7 @@ export default function App() {
         />
         <Button appearance="primary">Themed button</Button>
       </div>
-    </Provider>
+    </FluentProvider>
   );
 }
 ```

@@ -132,21 +132,7 @@ The full recipe: typed records, a search box and status filter, sortable headers
 
 ```tsx
 import * as React from 'react';
-import {
-  Badge,
-  Button,
-  Input,
-  Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableCellLayout,
-  TableHeader,
-  TableHeaderCell,
-  TableRow,
-  TableSelectionCell,
-  Text,
-} from '@fluentui/react-components';
+import { Badge, Button, Input, Select, Table, TableBody, TableCell, TableCellLayout, TableHeader, TableHeaderCell, TableRow, TableSelectionCell, Text } from '@fluentui/react-components';
 
 type ProjectStatus = 'active' | 'paused' | 'archived';
 
@@ -314,20 +300,7 @@ A read-only table with avatar + two-line person cells, badge presence indicators
 
 ```tsx
 import * as React from 'react';
-import {
-  Avatar,
-  Badge,
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableCellLayout,
-  TableHeader,
-  TableHeaderCell,
-  TableRow,
-  Text,
-  Tooltip,
-} from '@fluentui/react-components';
+import { Avatar, Badge, Button, Table, TableBody, TableCell, TableCellLayout, TableHeader, TableHeaderCell, TableRow, Text, Tooltip } from '@fluentui/react-components';
 
 type Presence = 'online' | 'away' | 'offline';
 
@@ -455,17 +428,7 @@ Async data with a Spinner row while loading and an explanatory full-width row wh
 
 ```tsx
 import * as React from 'react';
-import {
-  Spinner,
-  Table,
-  TableBody,
-  TableCell,
-  TableCellLayout,
-  TableHeader,
-  TableHeaderCell,
-  TableRow,
-  Text,
-} from '@fluentui/react-components';
+import { Spinner, Table, TableBody, TableCell, TableCellLayout, TableHeader, TableHeaderCell, TableRow, Text } from '@fluentui/react-components';
 
 interface Deployment {
   id: string;

@@ -102,7 +102,7 @@ Import tokens from `@fluentui/react-components` and use them instead of literal 
 
 ## RTL and direction-aware layout
 
-Fluent UI flips direction with the `dir` prop on `Provider`. For your own CSS to follow, author with **logical properties**:
+Fluent UI flips direction with the `dir` prop on `FluentProvider`. For your own CSS to follow, author with **logical properties**:
 
 - `marginInlineStart` / `marginInlineEnd` instead of `marginLeft` / `marginRight`.
 - `insetInlineStart` instead of `left`.
@@ -115,11 +115,11 @@ Avoid `float`, absolute `left`/`right`, and background-position tricks that assu
 
 There are three levels of customization, in order of preference:
 
-1. **Token level (global):** pass a *partial* theme object to `Provider theme={...}`. Any token you set becomes the new value for the whole subtree — every component and every one of your `tokens.*` references picks it up, including portaled surfaces when `applyStylesToPortals` is enabled.
+1. **Token level (global):** pass a *partial* theme object to `FluentProvider theme={...}`. Any token you set becomes the new value for the whole subtree — every component and every one of your `tokens.*` references picks it up, including portaled surfaces when `applyStylesToPortals` is enabled.
 2. **Component level:** every Fluent UI component accepts `className`. Merge your class with the component's own class using `mergeClasses` and keep the consumer class last.
-3. **Deep/internals level:** `customStyleHooks_unstable` on `Provider` lets you append a class to a component's internal state (for example its `root`) for every instance in the app. It is powerful and app-wide; treat it as an escape hatch and prefer levels 1 and 2.
+3. **Deep/internals level:** `customStyleHooks_unstable` on `FluentProvider` lets you append a class to a component's internal state (for example its `root`) for every instance in the app. It is powerful and app-wide; treat it as an escape hatch and prefer levels 1 and 2.
 
-Portals deserve a special mention: `Popover`, `Menu`, `Dialog`, `Tooltip` and friends render their surfaces outside your DOM subtree. The `applyStylesToPortals` prop on `Provider` is what keeps theme and direction variables applied to those portals — leave it enabled unless you have a very specific reason not to.
+Portals deserve a special mention: `Popover`, `Menu`, `Dialog`, `Tooltip` and friends render their surfaces outside your DOM subtree. The `applyStylesToPortals` prop on `FluentProvider` is what keeps theme and direction variables applied to those portals — leave it enabled unless you have a very specific reason not to.
 
 ## Server-side rendering
 
@@ -469,15 +469,7 @@ Overrides only the tokens that differ (a partial theme), keeps portals in sync w
 // App.tsx
 import * as React from 'react';
 import { makeStyles, shorthands } from '@griffel/react';
-import {
-  Button,
-  Card,
-  Field,
-  Input,
-  Provider,
-  Text,
-  tokens,
-} from '@fluentui/react-components';
+import { Button, Card, Field, Input, FluentProvider, Text, tokens } from '@fluentui/react-components';
 
 // A *partial* theme: only the tokens that differ from the default Fluent UI theme.
 // Everything else is inherited, and every value becomes a CSS custom property.
@@ -518,7 +510,7 @@ export const App: React.FC = () => {
   return (
     // `theme` and `dir` are propagated to the whole subtree through CSS variables.
     // `applyStylesToPortals` keeps Popover, Menu, Dialog and Tooltip surfaces in sync.
-    <Provider theme={brandTheme} dir='ltr' applyStylesToPortals>
+    <FluentProvider theme={brandTheme} dir='ltr' applyStylesToPortals>
       <div className={styles.page}>
         <Card className={styles.card}>
           <Text size={500} weight='semibold'>
@@ -532,7 +524,7 @@ export const App: React.FC = () => {
           </Button>
         </Card>
       </div>
-    </Provider>
+    </FluentProvider>
   );
 };
 ```
@@ -546,7 +538,7 @@ Creates a document-less renderer on the server, wraps the tree in RendererProvid
 import * as React from 'react';
 import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { createDOMRenderer, makeStyles, RendererProvider, renderToStyleElements, shorthands } from '@griffel/react';
-import { Button, Provider, Text, tokens } from '@fluentui/react-components';
+import { Button, FluentProvider, Text, tokens } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
   root: {
@@ -576,9 +568,9 @@ export function renderPage(): { html: string; styleTags: string } {
 
   const html = renderToString(
     <RendererProvider renderer={renderer}>
-      <Provider applyStylesToPortals>
+      <FluentProvider applyStylesToPortals>
         <Page />
-      </Provider>
+      </FluentProvider>
     </RendererProvider>,
   );
 
@@ -592,7 +584,7 @@ export function renderPage(): { html: string; styleTags: string } {
 
 // client.tsx - on the client, create the renderer with the real document and reuse it.
 // const renderer = createDOMRenderer(document);
-// <RendererProvider renderer={renderer}><Provider>...</Provider></RendererProvider>
+// <RendererProvider renderer={renderer}><FluentProvider>...</FluentProvider></RendererProvider>
 ```
 
 ## Pitfalls

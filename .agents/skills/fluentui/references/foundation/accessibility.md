@@ -7,10 +7,10 @@ Fluent UI v9 ships accessibility as a default, not an add-on. Every interactive 
 ## What the library gives you out of the box
 
 - **Roles and ARIA state.** Controls render the roles, `aria-*` states and disabled / checked / selected semantics that assistive technology expects.
-- **Keyboard interaction per pattern.** `Accordion`, `Menu`, `Tabs`, `Tree`, `Table`, `Toolbar`, `Carousel`, `Slider`, `Rating`, `Spinbutton`, `Breadcrumb` and friends implement arrow-key, Home/End, Escape, Enter and Space behavior for you.
+- **Keyboard interaction per pattern.** `Accordion`, `Menu`, `Tabs`, `Tree`, `Table`, `Toolbar`, `Carousel`, `Slider`, `Rating`, `SpinButton`, `Breadcrumb` and friends implement arrow-key, Home/End, Escape, Enter and Space behavior for you.
 - **Focus management.** Overlays such as `Dialog`, `Popover`, `Menu`, `Drawer` and `TeachingPopover` move focus into the surface, keep it there while open, and return it to the trigger when closed. The `inertTrapFocus` prop uses the native `inert` attribute instead of manual tab interception. Under the hood this is powered by the `Tabster` utility.
 - **Visible focus.** Components render their focus indicator from design tokens in light, dark and forced-colors themes. Never remove it.
-- **Direction and theming.** `Provider` (`dir`, `theme`, `targetDocument`, `applyStylesToPortals`) applies direction and theme tokens to the entire tree, including portaled content.
+- **Direction and theming.** `FluentProvider` (`dir`, `theme`, `targetDocument`, `applyStylesToPortals`) applies direction and theme tokens to the entire tree, including portaled content.
 - **Motion primitives.** `Motion` and `MotionComponentsPreview` let you shape animation around user preferences.
 
 ## What you own
@@ -28,7 +28,7 @@ Fluent UI v9 ships accessibility as a default, not an add-on. Every interactive 
 | `Link` | native link, Enter activation | link text |
 | `Checkbox`, `Switch`, `Radio` | native inputs, Space toggles | the `label` prop, `Label`, or `Field` |
 | `Input`, `Textarea`, `Select`, `Search` | native form controls | `Field`, `Label` or `aria-label` |
-| `Slider`, `Spinbutton`, `Rating` | range / value widgets, arrow keys | `Field`, `aria-label`, `Rating.itemLabel` |
+| `Slider`, `SpinButton`, `Rating` | range / value widgets, arrow keys | `Field`, `aria-label`, `Rating.itemLabel` |
 | `Accordion` | disclosure pattern | header text |
 | `Tabs` | tablist / tab / tabpanel with roving tabindex | tab text |
 | `Menu` | menu / menuitem, arrow keys, Escape | item text |
@@ -89,7 +89,7 @@ A placeholder disappears as soon as the user types, is not reliably announced, a
 - `Avatar.name` generates the initials **and** the accessible name; `active`, `activeAppearance` and `color` are visual, so surface presence or status in text as well.
 - `Persona` uses `name` plus its primary / secondary / tertiary text slots.
 - `Image` (`fit`, `shape`, `shadow`, `bordered`, `block`) is a visual element: informative images need a text alternative (set the standard `alt` attribute so it lands on the underlying image element), and purely decorative images should be hidden from assistive technology.
-- `Infolabel` pairs visible text with an info button and popover; the button's accessible name is supplied through the `info` prop.
+- `InfoLabel` pairs visible text with an info button and popover; the button's accessible name is supplied through the `info` prop.
 
 ## 2. Keyboard interaction and focus management
 
@@ -152,7 +152,7 @@ Assistive technology announces a live region most reliably when the region alrea
 ### Loading and status
 
 - `Spinner` (`label`, `labelPosition`, `delay`, `size`, `appearance`) - `delay` avoids a flash for quick operations.
-- `Progress` (`value`, `max`, `shape`, `thickness`, `color`).
+- `ProgressBar` (`value`, `max`, `shape`, `thickness`, `color`).
 - `Skeleton` (`animation`, `appearance`, `shape`, `size`, `width`).
 
 Announce the completion of long operations through a `MessageBar` or another live region rather than only removing the spinner.
@@ -167,7 +167,7 @@ Announce the completion of long operations through a `MessageBar` or another liv
 
 ## 5. Direction, theming and localization
 
-Wrap the application in `Provider` and set `dir` to `'ltr' | 'rtl'`. `applyStylesToPortals` ensures that surfaces rendered through `Portal` receive the same styles and attributes, and `targetDocument` supports rendering into another document (iframes, popouts). `theme` accepts a `PartialTheme` so brand ramps can be adjusted - always re-verify contrast after changing them. Layout mirroring comes from logical CSS direction; icons that imply direction (arrows, back/forward) may need to be mirrored explicitly.
+Wrap the application in `FluentProvider` and set `dir` to `'ltr' | 'rtl'`. `applyStylesToPortals` ensures that surfaces rendered through `Portal` receive the same styles and attributes, and `targetDocument` supports rendering into another document (iframes, popouts). `theme` accepts a `PartialTheme` so brand ramps can be adjusted - always re-verify contrast after changing them. Layout mirroring comes from logical CSS direction; icons that imply direction (arrows, back/forward) may need to be mirrored explicitly.
 
 ## 6. Color, contrast and high contrast
 
@@ -181,7 +181,7 @@ Wrap the application in `Provider` and set `dir` to `'ltr' | 'rtl'`. `applyStyle
 
 - Text entry: `Input` (`type`, `size`, `appearance`), `Textarea` (`resize`, `size`, `appearance`), `Search`.
 - Choice: `Checkbox` (`checked='mixed'` for partial selection, `labelPosition`), `Radio` (`labelPosition='after' | 'below'`), `Switch` (`labelPosition`, `disabledFocusable`).
-- Value widgets: `Slider` (`min`, `max`, `step`, `vertical`, `disabled`), `Spinbutton` (`min`, `max`, `step`, `stepPage`, `precision`, `displayValue`), `Rating` (`max`, `step`, `itemLabel`, `name`).
+- Value widgets: `Slider` (`min`, `max`, `step`, `vertical`, `disabled`), `SpinButton` (`min`, `max`, `step`, `stepPage`, `precision`, `displayValue`), `Rating` (`max`, `step`, `itemLabel`, `name`).
 - Pickers: `Select`, `Combobox` (`freeform`), `TagPicker`, `ColorPicker`, `SwatchPicker`.
 - Dates and times: `DatepickerCompat` (`allowTextInput`, `openOnClick`, `inlinePopup`, `positioning`, `onValidationResult`, `formatDate`, `parseDateFromString`, `minDate`, `maxDate`, `disableAutoFocus`, `showWeekNumbers`, `firstDayOfWeek`) and `TimepickerCompat` (`startHour`, `endHour`, `increment`, `formatDateToTimeString`, `parseTimeStringToDate`). Keep `allowTextInput` enabled so keyboard-only users can type instead of navigating a grid, and surface format errors through `onValidationResult` plus a `MessageBar` or `Field` message.
 - Groups: a set of related checkboxes or radios is announced as a group only when it has a name - wrap it in `Field` and give the container an accessible name.
@@ -207,7 +207,7 @@ Beyond the focus rules above, `TeachingPopover` supplies onboarding primitives: 
 3. **Zoom and reflow.** 200% zoom, 320px width, and increased text spacing without loss of content or function.
 4. **High contrast / forced colors.**
 5. **Reduced motion.** Toggle the OS setting and confirm essential content is still reachable.
-6. **Contrast of custom themes.** Recheck any `Provider theme` overrides.
+6. **Contrast of custom themes.** Recheck any `FluentProvider theme` overrides.
 7. **Automated checks** (axe, Accessibility Insights) as a floor, never the whole story.
 
 ## Key Takeaways
@@ -479,13 +479,13 @@ Provider's dir prop applies direction to the whole tree. applyStylesToPortals ma
 
 ```tsx
 import * as React from 'react';
-import { Button, Portal, Provider } from '@fluentui/react-components';
+import { Button, Portal, FluentProvider } from '@fluentui/react-components';
 
 export const BidirectionalApp = () => {
   const [dir, setDir] = React.useState<'ltr' | 'rtl'>('rtl');
 
   return (
-    <Provider dir={dir} applyStylesToPortals>
+    <FluentProvider dir={dir} applyStylesToPortals>
       <Button
         appearance='primary'
         onClick={() => setDir(dir === 'rtl' ? 'ltr' : 'rtl')}
@@ -498,7 +498,7 @@ export const BidirectionalApp = () => {
       <Portal>
         <div>{dir === 'rtl' ? 'المحتوى بالعربية' : 'Content in English'}</div>
       </Portal>
-    </Provider>
+    </FluentProvider>
   );
 };
 ```
@@ -509,7 +509,7 @@ Spinbutton exposes min/max/step/precision so keyboard and screen reader users ca
 
 ```tsx
 import * as React from 'react';
-import { Field, Spinbutton } from '@fluentui/react-components';
+import { Field, SpinButton } from '@fluentui/react-components';
 
 export const SeatCountField = () => {
   const [seats, setSeats] = React.useState<number | null>(1);
@@ -523,7 +523,7 @@ export const SeatCountField = () => {
       validationState={invalid ? 'error' : 'none'}
       validationMessage={invalid ? 'Enter a number of seats greater than zero.' : undefined}
     >
-      <Spinbutton
+      <SpinButton
         value={seats}
         min={1}
         max={25}

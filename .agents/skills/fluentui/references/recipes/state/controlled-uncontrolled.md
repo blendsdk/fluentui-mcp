@@ -133,17 +133,7 @@ A profile form where every control owns its own value (Input, Textarea, Slider, 
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Checkbox,
-  Divider,
-  Field,
-  Input,
-  Slider,
-  Switch,
-  Text,
-  Textarea,
-} from '@fluentui/react-components';
+import { Button, Checkbox, Divider, Field, Input, Slider, Switch, Text, Textarea } from '@fluentui/react-components';
 
 /**
  * Uncontrolled form: every control owns its own value, so typing never re-renders React.
@@ -219,18 +209,7 @@ The same form shape, but a single React state object is the source of truth. Eve
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Checkbox,
-  Divider,
-  Field,
-  Input,
-  MessageBar,
-  Slider,
-  Switch,
-  Text,
-  Textarea,
-} from '@fluentui/react-components';
+import { Button, Checkbox, Divider, Field, Input, MessageBar, Slider, Switch, Text, Textarea } from '@fluentui/react-components';
 
 type FormState = {
   email: string;
@@ -360,16 +339,7 @@ A settings panel where only the mode lives in React state (a controlled Switch).
 
 ```tsx
 import * as React from 'react';
-import {
-  Badge,
-  Button,
-  Divider,
-  Field,
-  Input,
-  MessageBar,
-  Switch,
-  Text,
-} from '@fluentui/react-components';
+import { Badge, Button, Divider, Field, Input, MessageBar, Switch, Text } from '@fluentui/react-components';
 
 type Mode = 'basic' | 'advanced';
 

@@ -66,7 +66,7 @@
 | ST-22 | Change enhanced schema without regenerate | `skill:freshness` fails with regenerate instruction | RD-04 AC4 |
 | ST-23 | `SKILL.md` with 501-line body or wrong name | Format test fails | RD-04 AC5 |
 | ST-24 | Planted `sk-…` string in a reference | Secrets gate fails | RD-04 AC6 |
-| ST-25 | Prose references a nonexistent prop `frobnicate` | API-reference check fails | RD-04 must-have |
+| ST-25 | Prose references a nonexistent prop `frobnicate` | API-reference check reports it (WARN) but does not fail — PR-12 | RD-04 must-have (as amended by PR-12) |
 | ST-26 | Delete a component reference or break a relative link | Coverage gate fails | RD-04 AC7 |
 
 ### Installer & packaging (RD-05)

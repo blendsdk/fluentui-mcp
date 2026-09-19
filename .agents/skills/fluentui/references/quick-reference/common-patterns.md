@@ -25,7 +25,7 @@ Everything imports from `@fluentui/react-components` unless noted (compat/previe
 | Rating | `defaultValue` | `value` | `onChange` | `data.value` |
 | Select | — (uncontrolled only) | — | `onChange` | `data.value` |
 | Slider | `defaultValue` | `value` | `onChange` | `data.value` |
-| Spinbutton | `defaultValue` | `value` / `displayValue` | `onChange` | `data.value` / `data.displayValue` |
+| SpinButton | `defaultValue` | `value` / `displayValue` | `onChange` | `data.value` / `data.displayValue` |
 | SwatchPicker | `defaultSelectedValue` | `selectedValue` | `onSelectionChange` | `data.selectedValue` |
 | Switch | `defaultChecked` | `checked` | `onChange` | `data.checked` |
 | Tabs | `defaultSelectedValue` | `selectedValue` | `onTabSelect` | `data.value` |
@@ -81,7 +81,7 @@ Everything imports from `@fluentui/react-components` unless noted (compat/previe
 
 | Component | Props | Notes |
 | --- | --- | --- |
-| Provider | `theme` (PartialTheme), `dir` (`'ltr' \| 'rtl'`), `targetDocument`, `applyStylesToPortals`, `customStyleHooks_unstable`, `overrides_unstable` | Root of the app. Portals need `applyStylesToPortals` (or a mount node inside the Provider) to inherit theme + direction |
+| FluentProvider | `theme` (PartialTheme), `dir` (`'ltr' \| 'rtl'`), `targetDocument`, `applyStylesToPortals`, `customStyleHooks_unstable`, `overrides_unstable` | Root of the app. Portals need `applyStylesToPortals` (or a mount node inside the FluentProvider) to inherit theme + direction |
 | Portal | `children`, `mountNode` (`HTMLElement \| { element?, className? } \| null`) | Renders outside the DOM tree while keeping React context |
 | Positioning / Tabster / Utilities / ContextSelector / Aria | No props documented except `Aria.children` | `Aria` = a11y-only wrapper for custom slot rendering |
 
@@ -98,11 +98,11 @@ Everything imports from `@fluentui/react-components` unless noted (compat/previe
 | Radio | `value`, `onChange`, `labelPosition` (`after`/`below`), `disabled` |
 | Switch | `checked`/`defaultChecked`, `onChange`, `labelPosition` (`above`/`after`/`before`), `size`, `disabledFocusable` |
 | Slider | `value`/`defaultValue`, `onChange`, `min`/`max`/`step`, `vertical`, `size`, `disabled` |
-| Spinbutton | `value`/`defaultValue`/`displayValue`, `onChange`, `min`/`max`, `step`/`stepPage`, `precision`, `appearance`, `size` |
+| SpinButton | `value`/`defaultValue`/`displayValue`, `onChange`, `min`/`max`, `step`/`stepPage`, `precision`, `appearance`, `size` |
 | Rating | `value`/`defaultValue`, `onChange`, `max`, `step` (0.5/1), `size`, `color`, `itemLabel`, `name`, `iconFilled`/`iconOutline` |
 | ColorPicker | `color` (HsvColor), `onColorChange`, `shape` (`rounded`/`square`) |
 | TagPicker | `noPopover`, `inline`, `onOptionSelect`, `onOpenChange` |
-| Infolabel | `size`, `inline`, `info`, `popover` |
+| InfoLabel | `size`, `inline`, `info`, `popover` |
 | DatepickerCompat | `value`, `onSelectDate`, `open`/`defaultOpen`/`onOpenChange`, `allowTextInput`, `formatDate`/`parseDateFromString`, `onValidationResult`, `minDate`/`maxDate`, `firstDayOfWeek`, `firstWeekOfYear`, `showWeekNumbers`, `showGoToToday`, `inlinePopup`, `positioning`, `required`, `borderless`, `underlined`, `placeholder`, `today`, `initialPickerDate`, `isMonthPickerVisible`, `showMonthPickerAsOverlay`, `disableAutoFocus`, `openOnClick`, `showCloseButton`, `strings`, `dateTimeFormatter`, `allFocusable`, `highlightCurrentMonth`, `highlightSelectedMonth` |
 | TimepickerCompat | `selectedTime`/`defaultSelectedTime`, `onTimeChange`, `startHour`/`endHour`, `increment`, `dateAnchor`, `formatDateToTimeString`, `parseTimeStringToDate` |
 | CalendarCompat | Fully controlled: `navigatedDate`, `selectedDate`, `navigationIcons`, `strings` **(all required)** + `onNavigateDate` (required); plus `onSelectDate`, `dateRangeType`, `minDate`/`maxDate`, `showWeekNumbers`, `lightenDaysOutsideNavigatedMonth`, year-picker props |
@@ -113,7 +113,7 @@ Everything imports from `@fluentui/react-components` unless noted (compat/previe
 | --- | --- |
 | Spinner | `size` (extra-tiny → huge), `appearance` (`primary`/`inverted`), `labelPosition` (`above`/`below`/`before`/`after`), `delay` (avoids flash on fast loads); slots `root`/`spinner`/`spinnerTail`/`label` |
 | Skeleton | `animation` (`wave`/`pulse`), `appearance` (`opaque`/`translucent`), `shape` (`circle`/`square`/`rectangle`), `size`, `width` |
-| Progress | `value`, `max`, `thickness` (`medium`/`large`), `color` (`brand`/`success`/`warning`/`error`), `shape` (`rounded`/`square`) |
+| ProgressBar | `value`, `max`, `thickness` (`medium`/`large`), `color` (`brand`/`success`/`warning`/`error`), `shape` (`rounded`/`square`) |
 | MessageBar | `intent`, `politeness` (`assertive`/`polite`), `shape` (`square`/`rounded`); slots `root`/`icon`/`bottomReflowSpacer` |
 | Toast | `appearance` |
 
@@ -318,10 +318,10 @@ Wrap the app once; keep overlays themed and RTL-aware via applyStylesToPortals o
 
 ```tsx
 import * as React from 'react';
-import { Button, Portal, Provider } from '@fluentui/react-components';
+import { Button, Portal, FluentProvider } from '@fluentui/react-components';
 
 export const AppShell = ({ children }: { children: React.ReactNode }) => (
-  <Provider
+  <FluentProvider
     dir="rtl"
     applyStylesToPortals
     targetDocument={document}
@@ -333,7 +333,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => (
     <Portal mountNode={{ className: 'app-portal-root' }}>
       <Button appearance="primary">Portal-rendered action</Button>
     </Portal>
-  </Provider>
+  </FluentProvider>
 );
 ```
 
@@ -343,7 +343,7 @@ Accordion and Tabs take the full state from the handler data; Carousel can run u
 
 ```tsx
 import * as React from 'react';
-import { Accordion, Carousel, Tabs } from '@fluentui/react-components';
+import { Accordion, Carousel } from '@fluentui/react-components';
 
 export const Collections = ({
   accordionItems,
@@ -451,7 +451,7 @@ Spinner delay avoids flashing; Skeleton mirrors the final layout; MessageBar pol
 
 ```tsx
 import * as React from 'react';
-import { MessageBar, Progress, Skeleton, Spinner } from '@fluentui/react-components';
+import { MessageBar, ProgressBar, Skeleton, Spinner } from '@fluentui/react-components';
 
 export const LoadingStates = () => (
   <>
@@ -460,7 +460,7 @@ export const LoadingStates = () => (
     <Skeleton animation="wave" appearance="translucent" shape="rectangle" width="240px" size={16} />
     <Skeleton animation="pulse" appearance="opaque" shape="circle" width={40} />
 
-    <Progress value={40} max={100} thickness="large" color="brand" shape="rounded" />
+    <ProgressBar value={40} max={100} thickness="large" color="brand" shape="rounded" />
 
     <MessageBar shape="rounded" politeness="polite">
       Changes are saved automatically.

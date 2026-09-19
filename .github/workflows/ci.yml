@@ -42,3 +42,9 @@ jobs:
 
             - name: Run tests
               run: yarn test
+
+            - name: Check skill drift and coverage
+              run: yarn skill:check
+
+            - name: Validate skill examples
+              run: yarn skill:validate

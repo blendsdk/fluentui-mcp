@@ -16,10 +16,9 @@
 |---|---|---|
 | `Field` | `label`, `hint`, `required`, `validationState` (`error` / `warning` / `success` / `none`), `orientation`, `size`, slots `label` / `validationMessage` / `validationMessageIcon` / `hint` | Preferred wrapper for **every** form control — associates label + hint + error with the control |
 | `Label` | `required`, `disabled`, `weight`, `size`, slot `required` | Standalone labelling only; prefer `Field` around controls |
-| `Aria` | `children` | Renders screen-reader-only text; give the wrapper an `id` and point `aria-labelledby` / `aria-describedby` at it |
 | `Tooltip` | `relationship` (**required**: `label` / `description` / `inaccessible`), `visible`, `showDelay`, `hideDelay`, `withArrow`, `appearance`, `positioning`, `onVisibleChange`, `content` slot | `label` = the only name of an icon-only control · `description` = extra detail · `inaccessible` = text is already in the control and would double-announce |
 | `Rating` | `itemLabel: (rating) => string`, `max`, `step`, `value`, `name`, `size`, `color` | Name each star, e.g. `3 of 5 stars` |
-| `Infolabel` | `info`, `inline`, `size`, `popover` | The info trigger must be keyboard reachable and named |
+| `InfoLabel` | `info`, `inline`, `size`, `popover` | The info trigger must be keyboard reachable and named |
 | `Avatar` | `name` (supplies the accessible label), `active`, `activeAppearance`, `color`, `idForColor`, `shape`, `size`, slots `image` / `initials` / `icon` / `badge` | Never rely on color/initials alone — set `name` |
 | `Persona` | `name`, `presenceOnly`, `textPosition`, `textAlignment`, `size`, slots `avatar` / `presence` / `primaryText` … | `presenceOnly` drops all text: supply an accessible name and describe presence in text |
 | `Image` | `block`, `bordered`, `fit`, `shadow`, `shape` | Meaningful image → text alternative; decorative image → keep it out of the accessibility tree |
@@ -28,7 +27,7 @@
 | `Input` | `type` (`email`, `tel`, `url`, `number`, `password`, `search`, `date`, `datetime-local`, `month`, `time`, `week`), `size`, `appearance`, `value`, `defaultValue`, `onChange`, slots `contentBefore` / `contentAfter` | `type` drives semantics + mobile keyboard; slotted icons need names |
 | `Textarea` | `appearance`, `resize`, `size`, `value`, `defaultValue`, `onChange` | Same labelling rules as `Input` |
 | `Search` | `onChange` | Give it a visible label and announce result counts |
-| `Spinbutton` | `value`, `displayValue`, `min`, `max`, `step`, `stepPage`, `precision`, `size`, `appearance` | `displayValue` lets you format the read-out (e.g. `12 px`) |
+| `SpinButton` | `value`, `displayValue`, `min`, `max`, `step`, `stepPage`, `precision`, `size`, `appearance` | `displayValue` lets you format the read-out (e.g. `12 px`) |
 | `Select` | `appearance`, `size`, `onChange` | Keep a visible label; native select needs no custom key handling |
 | `Combobox` | `freeform`, slots `expandIcon` / `clearIcon` / `input` / `listbox` / `root` | Custom expand/clear icons must carry names; clearable must be keyboard operable |
 | `TagPicker` | `noPopover`, `onOpenChange`, `onOptionSelect`, `inline` | Combobox pattern: announce the number of selected tags |
@@ -95,7 +94,7 @@
 | `Carousel` | `announcement` | `CarouselAnnouncerFunction` | Supply announcement text for slide changes |
 | `Carousel` | `autoplayInterval`, `activeIndex`, `onActiveIndexChange` | — | Auto-playing motion needs a pause/stop control |
 | `Spinner` | `labelPosition` (`above` / `below` / `before` / `after`), `delay`, `appearance`, `size`, `label` slot | — | Always pair with visible text; `delay` avoids flashing |
-| `Progress` | `value`, `max`, `shape`, `thickness`, `color` | — | Determinate where possible; color is not the only state signal |
+| `ProgressBar` | `value`, `max`, `shape`, `thickness`, `color` | — | Determinate where possible; color is not the only state signal |
 | `Skeleton` | `animation`, `appearance`, `width`, `size`, `shape` | — | Presentational — announce loading via `Spinner` or `MessageBar`, not `Skeleton` |
 | `TeachingPopover` | `altText` (**required**), `value`, `mediaLength`, `footerLayout`, `dismissButton`, `icon` slot | — | Every media asset needs a text alternative; carousel steps need `navType`, `initialStepText`, `finalStepText` |
 | `Rating` | `itemLabel` | `(rating) => string` | Announces the chosen value |
@@ -104,7 +103,7 @@
 
 | Component | Prop | Rule |
 |---|---|---|
-| `Provider` | `dir` (`ltr` / `rtl`), `targetDocument`, `applyStylesToPortals`, `theme`, `overrides_unstable`, `customStyleHooks_unstable` | Verify the whole app under `dir="rtl"` — arrows, chevrons and side drawers mirror |
+| `FluentProvider` | `dir` (`ltr` / `rtl`), `targetDocument`, `applyStylesToPortals`, `theme`, `overrides_unstable`, `customStyleHooks_unstable` | Verify the whole app under `dir="rtl"` — arrows, chevrons and side drawers mirror |
 | `Portal` | `mountNode` | Portalled surfaces must still appear in a sensible DOM order |
 | `Motion` | `children`, `appear`, `replayKey`, `direction`, `visible`, `unmountOnExit`, `onMotionStart`, `onMotionFinish`, `onMotionCancel`, `imperativeRef` | Keep entrances short; never gate information behind an animation the user disabled |
 | `MotionComponentsPreview` | `children`, `visible`, `delayMode`, `hideMode`, `itemDelay`, `itemDuration`, `reversed`, `onMotionFinish` | Respect the user's reduced-motion preference for staggered lists |
@@ -126,25 +125,25 @@
 | Grid | `Table` | `focusMode`, `selectionMode`, `onSortChange`, cell `sortable` / `sortDirection` |
 | Breadcrumb | `Breadcrumb` | `focusMode`, `size` |
 | Carousel | `Carousel` | `announcement`, `autoplayInterval`, `draggable` |
-| Live region / status | `MessageBar`, `Toast`, `Spinner`, `Progress` | `politeness`, `intent`, `labelPosition` |
-| Field + control | `Field` + `Input` / `Textarea` / `Select` / `Combobox` / `Spinbutton` / `Slider` / `Radio` / `Checkbox` / `Switch` / `DatepickerCompat` / `TimepickerCompat` | `label`, `required`, `validationState`, `validationMessage` |
+| Live region / status | `MessageBar`, `Toast`, `Spinner`, `ProgressBar` | `politeness`, `intent`, `labelPosition` |
+| Field + control | `Field` + `Input` / `Textarea` / `Select` / `Combobox` / `SpinButton` / `Slider` / `Radio` / `Checkbox` / `Switch` / `DatepickerCompat` / `TimepickerCompat` | `label`, `required`, `validationState`, `validationMessage` |
 | Navigation | `Nav`, `Breadcrumb`, `Link` | `selectedValue`, `onNavItemSelect`, `inline` |
-| Screen-reader-only text | `Aria`, `MenuGridPreview` (`visuallyHidden`), `Infolabel` | `children` |
+| Screen-reader-only text | `Aria`, `MenuGridPreview` (`visuallyHidden`), `InfoLabel` | `children` |
 | Layout / grouping | `Card`, `Divider`, `Drawer`, `Portal`, `Overflow`, `Toolbar`, `List` | `focusMode`, `type`, `mountNode`, `navigationMode` |
 
 ## 7. Pre-ship checklist
 
-- [ ] Every input has a programmatic name (`Field` label, `Label`, `Aria`, or `aria-label` on the `root` slot).
+- [ ] Every input has a programmatic name (`Field` label, `Label`, or `aria-label` on the `root` slot).
 - [ ] Errors use `Field validationState="error"` + `validationMessage`; blocking errors also raise a `MessageBar` with `politeness="assertive"`.
-- [ ] Icon-only controls are named — `Tooltip relationship="label"` or `Aria`; tooltips that repeat visible text use `relationship="inaccessible"`.
+- [ ] Icon-only controls are named — `Tooltip relationship="label"` or an `aria-label`.
 - [ ] Unavailable controls use `disabledFocusable` when they should stay discoverable in the tab order.
 - [ ] Overlays: `Dialog` uses `inertTrapFocus`; `Popover` uses exactly one trap strategy; Escape closes; focus returns to the trigger; `Portal mountNode` keeps DOM order sane.
 - [ ] Widget-level keyboard behaviour verified: `Tabs selectTabOnFocus`, `Tree`/`List navigationMode`, `Breadcrumb`/`SwatchPicker focusMode`, `Card focusMode`, `Accordion navigation`, `Table focusMode`.
 - [ ] No pointer-only interactions: `Carousel draggable` has button equivalents; `Menu openOnHover`/`openOnContext` have keyboard equivalents.
 - [ ] State changes are announced (`MessageBar politeness`, `Carousel announcement`, `Rating itemLabel`) and focus never jumps unexpectedly.
 - [ ] Color is never the only cue (`Badge`, `Avatar`, `MessageBar`, `ColorPicker`, `SwatchPicker`, `Persona` presence).
-- [ ] Truncated `Text` exposes the full string via a `Tooltip`; loading uses `Spinner`/`Progress`, not `Skeleton` alone.
-- [ ] `Provider dir="rtl"` verified end to end; motion respects reduced-motion (`Motion`, `MotionComponentsPreview`, `Carousel autoplayInterval`).
+- [ ] Truncated `Text` exposes the full string via a `Tooltip`; loading uses `Spinner`/`ProgressBar`, not `Skeleton` alone.
+- [ ] `FluentProvider dir="rtl"` verified end to end; motion respects reduced-motion (`Motion`, `MotionComponentsPreview`, `Carousel autoplayInterval`).
 - [ ] `Table` sorting/selection is keyboard operable; `CalendarCompat` / `DatepickerCompat` / `TimepickerCompat` values are readable as text.
 
 ## Key Takeaways
@@ -288,17 +287,28 @@ export const SaveError = () => (
 );
 ```
 
-### Screen-reader-only text with Aria
+### Screen-reader-only text
 
 Aria renders visually hidden text you can point aria-describedby / aria-labelledby at.
 
 ```tsx
-import { Aria, Button } from '@fluentui/react-components';
+import { Button } from '@fluentui/react-components';
 
 export const SaveButton = () => (
   <>
-    <span id="save-hint">
-      <Aria>Saves a local draft. Publishing is a separate step.</Aria>
+    <span
+      id="save-hint"
+      style={{
+        position: 'absolute',
+        width: 1,
+        height: 1,
+        margin: -1,
+        overflow: 'hidden',
+        clip: 'rect(0 0 0 0)',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      Saves a local draft. Publishing is a separate step.
     </span>
     <Button appearance="primary" aria-describedby="save-hint">
       Save
@@ -312,12 +322,12 @@ export const SaveButton = () => (
 Verify the entire app under dir='rtl'; applyStylesToPortals keeps themed styles correct for portalled surfaces.
 
 ```tsx
-import { Provider } from '@fluentui/react-components';
+import { FluentProvider } from '@fluentui/react-components';
 
 export const App = () => (
-  <Provider dir="rtl" targetDocument={document} applyStylesToPortals>
+  <FluentProvider dir="rtl" targetDocument={document} applyStylesToPortals>
     {/* app tree */}
-  </Provider>
+  </FluentProvider>
 );
 ```
 

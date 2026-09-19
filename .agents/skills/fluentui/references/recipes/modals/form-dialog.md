@@ -103,18 +103,7 @@ A controlled Dialog containing a <form> with two Inputs inside Fields, validate-
 
 ```tsx
 import * as React from "react";
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  DialogTrigger,
-  Field,
-  Input,
-} from "@fluentui/react-components";
+import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input } from "@fluentui/react-components";
 
 interface ContactValues {
   name: string;
@@ -235,23 +224,7 @@ A dialog that submits to an API: re-entrancy guard, Spinner in the actions row, 
 
 ```tsx
 import * as React from "react";
-import {
-  Button,
-  Checkbox,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  DialogTrigger,
-  Field,
-  Input,
-  MessageBar,
-  Select,
-  Spinner,
-  Textarea,
-} from "@fluentui/react-components";
+import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input, MessageBar, Select, Spinner, Textarea } from "@fluentui/react-components";
 
 type MemberRole = "viewer" | "editor" | "admin";
 
@@ -423,18 +396,7 @@ Routes Escape, backdrop clicks and the Cancel button through a single onOpenChan
 
 ```tsx
 import * as React from "react";
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  DialogTrigger,
-  Field,
-  Input,
-} from "@fluentui/react-components";
+import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input } from "@fluentui/react-components";
 
 interface RenameDialogProps {
   currentName: string;

@@ -192,19 +192,7 @@ A complete account settings pane: typed draft/saved state, dirty tracking, inlin
 
 ```tsx
 import * as React from 'react';
-import {
-  Badge,
-  Button,
-  Card,
-  Divider,
-  Field,
-  Input,
-  MessageBar,
-  Select,
-  Switch,
-  Text,
-  Textarea,
-} from '@fluentui/react-components';
+import { Badge, Button, Card, Divider, Field, Input, MessageBar, Select, Switch, Text, Textarea } from '@fluentui/react-components';
 
 export type AccountSettings = {
   displayName: string;
@@ -490,18 +478,7 @@ The instant-apply variant: no Save button, changes apply on every interaction, a
 
 ```tsx
 import * as React from 'react';
-import {
-  Badge,
-  Button,
-  Card,
-  Checkbox,
-  Divider,
-  Field,
-  Input,
-  Persona,
-  Select,
-  Text,
-} from '@fluentui/react-components';
+import { Badge, Button, Card, Checkbox, Divider, Field, Input, Persona, Select, Text } from '@fluentui/react-components';
 
 export type ProfileSettings = {
   displayName: string;
@@ -684,18 +661,7 @@ A load/save lifecycle wrapper: Spinner while fetching, an error MessageBar with 
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Card,
-  Checkbox,
-  Divider,
-  Field,
-  Input,
-  MessageBar,
-  Select,
-  Spinner,
-  Text,
-} from '@fluentui/react-components';
+import { Button, Card, Checkbox, Divider, Field, Input, MessageBar, Select, Spinner, Text } from '@fluentui/react-components';
 
 export type WorkspaceSettings = {
   workspaceName: string;

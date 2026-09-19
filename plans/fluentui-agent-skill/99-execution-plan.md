@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 15:17
-> **Progress**: 47/103 tasks (46%)
+> **Last Updated**: 2026-09-19 16:56
+> **Progress**: 61/103 tasks (59%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -184,35 +184,40 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ## Phase 4: Integrity gates (RD-04)
 
-**Reference**: [03-03](03-03-integrity-gates.md) · AR-19
+> **Phase baseline tree**: 5fc3264
+> **Scope**: strict · **Expected modification set**: `scripts/skill/**`, `src/__tests__/skill/**`, `.github/workflows/ci.yml`, `package.json`, `yarn.lock`
+
+**Reference**: [03-03](03-03-integrity-gates.md) · AR-19 · PR-10 (validate emitted API tokens), PR-11 (gate packages as devDependencies)
 
 ### Step 4.1: Specification Tests (before implementation)
 
-- [ ] 4.1.1 [spec-author] Write gate spec tests (ST-19..ST-26) — `src/__tests__/skill/gates.spec.test.ts`
-- [ ] 4.1.2 Run gate spec tests; verify they FAIL (red phase)
+- [x] 4.1.1 [spec-author] Write gate spec tests (ST-19..ST-26) — `src/__tests__/skill/gates.spec.test.ts` ✅ (completed: 2026-09-19 16:47)
+- [x] 4.1.2 Run gate spec tests; verify they FAIL (red phase) ✅ (completed: 2026-09-19 16:47)
 
 ### Step 4.2: Implementation
 
-- [ ] 4.2.1 Implement example extraction and tier 1a/1b/2 validation — `scripts/skill/validate-examples.ts`
-- [ ] 4.2.2 Implement the API-reference check over generated prose — `scripts/skill/check-api-references.ts`
-- [ ] 4.2.3 Implement the drift and coverage gate — `scripts/skill/check-drift.ts`
-- [ ] 4.2.4 Implement the freshness gate — `scripts/skill/check-freshness.ts`
-- [ ] 4.2.5 Implement the secrets scan — `scripts/skill/secrets.ts`
+- [x] 4.2.1 Implement example extraction and tier 1a/1b/2 validation — `scripts/skill/validate-examples.ts` (plus shared `scripts/skill/files.ts`, `package-exports.ts`, and the format gate `scripts/skill/format.ts`) ✅ (completed: 2026-09-19 16:56)
+- [x] 4.2.2 Implement the API-reference check over generated prose — `scripts/skill/check-api-references.ts` ✅ (completed: 2026-09-19 16:56)
+- [x] 4.2.3 Implement the drift and coverage gate — `scripts/skill/check-drift.ts` ✅ (completed: 2026-09-19 16:56)
+- [x] 4.2.4 Implement the freshness gate — `scripts/skill/check-freshness.ts` ✅ (completed: 2026-09-19 16:56)
+- [x] 4.2.5 Implement the secrets scan — `scripts/skill/secrets.ts` ✅ (completed: 2026-09-19 16:56)
 
 ### Step 4.3: Green phase
 
-- [ ] 4.3.1 Run gate spec tests; verify they PASS (green phase)
+- [x] 4.3.1 Run gate spec tests; verify they PASS (green phase) ✅ (completed: 2026-09-19 16:56)
 
 ### Step 4.4: Implementation Tests & Hardening
 
-- [ ] 4.4.1 Write gate impl tests (report shape, throwaway project, extraction rules) — `src/__tests__/skill/gates.impl.test.ts`
-- [ ] 4.4.2 Wire gates into `ci.yml` and add the four `skill:*` scripts — `.github/workflows/ci.yml`, `package.json`
-- [ ] 4.4.3 Full verify (PR-1)
+- [x] 4.4.1 Write gate impl tests (report shape, throwaway project, extraction rules) — `src/__tests__/skill/gates.impl.test.ts` ✅ (completed: 2026-09-19 16:56)
+- [x] 4.4.2 Wire gates into `ci.yml` and add the four `skill:*` scripts — `.github/workflows/ci.yml`, `package.json` ✅ (completed: 2026-09-19 16:56)
+- [x] 4.4.3 Full verify (PR-1) ✅ (completed: 2026-09-19 16:56)
 
 **Deliverables**:
-- [ ] All seven gates implemented and passing on the committed skill
-- [ ] CI runs drift and example validation
-- [ ] All verification passing
+- [x] All seven gates implemented and passing on the committed skill ✅ (completed: 2026-09-19 16:56)
+- [x] CI runs drift and example validation ✅ (completed: 2026-09-19 16:56)
+- [x] All verification passing ✅ (completed: 2026-09-19 16:56)
+
+> **Runtime rulings applied**: PR-10/PR-12 adjusted the API-reference gate (component mentions hard-fail, prop labels report-only) and PR-13 authorized repairing the guide/quick-reference example symbols in the enhanced schema before regeneration.
 
 **Verify**: `yarn build && yarn test && yarn skill:check && yarn skill:validate`
 

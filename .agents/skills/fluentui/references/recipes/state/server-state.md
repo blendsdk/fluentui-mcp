@@ -14,7 +14,7 @@ Use this recipe whenever a view renders data that is fetched from an API and can
 
 Do not use it for purely local UI state (open/closed, hover, selected tab) - that is just React state, optionally styled with Fluent components. Do not use the Skeleton-first-load path for sub-100ms synchronous data. Do not hand-roll this if your app already standardizes on a data-fetching library: keep the AsyncStateBoundary mapping but feed it the library's data/error/isPending/isFetching values instead of useServerState. Finally, do not use MessageBar + retry as a substitute for a blocking Dialog when the failure means the user cannot continue at all (for example, a failed authentication step).
 
-Fluent UI React v9 ships no data-fetching layer. What it ships is a set of *state presentation* components - `Skeleton`, `Spinner`, `MessageBar`, `Badge`, `Button`, `Progress` - plus the layout components you render results with. A server-state recipe is the glue between the two: **one hook** that owns the request lifecycle and **one boundary component** that maps that lifecycle onto Fluent UI. Write the mapping once and every screen in the app renders loading, refreshing, error and empty states the same way.
+Fluent UI React v9 ships no data-fetching layer. What it ships is a set of *state presentation* components - `Skeleton`, `Spinner`, `MessageBar`, `Badge`, `Button`, `ProgressBar` - plus the layout components you render results with. A server-state recipe is the glue between the two: **one hook** that owns the request lifecycle and **one boundary component** that maps that lifecycle onto Fluent UI. Write the mapping once and every screen in the app renders loading, refreshing, error and empty states the same way.
 
 ## Model the states you actually have
 
@@ -84,7 +84,7 @@ Because `reload` is stable, polling is a three-line effect: an interval that cal
 - `Badge` - coarse status at a glance: Up to date / Refreshing, or a row's own status field.
 - `MessageBar` - request-level failures and confirmations. `intent="error"` + `politeness="assertive"` when there is nothing to show; `intent="warning"` over stale data; `intent="success"` for a completed optimistic write.
 - `Button` - retry, refresh, and the optimistic action itself. Disable it (`disabled`, or `disabledFocusable` to keep focus stable) while its own request is pending.
-- `Progress` - server-driven numeric values: job completion, quota used, SLO budget consumed.
+- `ProgressBar` - server-driven numeric values: job completion, quota used, SLO budget consumed.
 - `Card`, `Text`, `Avatar`, `Badge` - presentation of the rows. They are not state components; they live inside `children(data)`.
 - `Switch` - a convenient way to exercise failure paths in a demo or a dev story.
 
@@ -103,15 +103,7 @@ The reusable core of the recipe: a hook that owns request lifecycle, cancellatio
 // The reusable half of the recipe: one hook that owns the request lifecycle,
 // plus a boundary component that maps server state onto Fluent UI components.
 import * as React from 'react';
-import {
-  Badge,
-  Button,
-  Card,
-  MessageBar,
-  Skeleton,
-  Spinner,
-  Text,
-} from '@fluentui/react-components';
+import { Badge, Button, Card, MessageBar, Skeleton, Spinner, Text } from '@fluentui/react-components';
 
 const styles: Record<string, React.CSSProperties> = {
   page: { display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720, padding: 16 },
@@ -409,17 +401,7 @@ A people directory that consumes the hook and boundary from Example 1. Typing de
 // Example 2: debounced query + filter, request cancellation, optimistic writes.
 // Imports the files created in Example 1 (useServerState.tsx).
 import * as React from 'react';
-import {
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  Input,
-  MessageBar,
-  Select,
-  Spinner,
-  Text,
-} from '@fluentui/react-components';
+import { Avatar, Badge, Button, Card, Input, MessageBar, Select, Spinner, Text } from '@fluentui/react-components';
 import { AsyncStateBoundary, useServerState } from './useServerState';
 
 const styles: Record<string, React.CSSProperties> = {
@@ -679,15 +661,7 @@ Background revalidation on top of the same hook: a usePolling effect calls the s
 // Example 3: polling with visibility awareness plus a triggerable failure path.
 // Imports the files created in Example 1 (useServerState.tsx).
 import * as React from 'react';
-import {
-  Button,
-  Card,
-  Progress,
-  Skeleton,
-  Spinner,
-  Switch,
-  Text,
-} from '@fluentui/react-components';
+import { Button, Card, ProgressBar, Skeleton, Spinner, Switch, Text } from '@fluentui/react-components';
 import { AsyncStateBoundary, useServerState } from './useServerState';
 
 const styles: Record<string, React.CSSProperties> = {
@@ -851,7 +825,7 @@ export function LiveMetrics() {
                   <Text size={600} weight="semibold">
                     {metric.value}%
                   </Text>
-                  <Progress
+                  <ProgressBar
                     value={metric.value}
                     max={metric.max}
                     color={metric.color}

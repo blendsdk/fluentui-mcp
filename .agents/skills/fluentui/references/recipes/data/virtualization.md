@@ -163,17 +163,7 @@ A single-select directory of 10,000 contacts where only ~30 rows exist in the DO
 ```tsx
 // VirtualizedPeopleDirectory.tsx
 import * as React from 'react';
-import {
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  Divider,
-  Field,
-  Input,
-  MessageBar,
-  Text,
-} from '@fluentui/react-components';
+import { Avatar, Badge, Button, Card, Divider, Field, Input, MessageBar, Text } from '@fluentui/react-components';
 
 /* ------------------------------------------------------------------ */
 /* 1. The windowing hook: the DOM only ever holds the visible rows.    */
@@ -525,16 +515,7 @@ A 2,400-card gallery that virtualizes grid rows instead of cells. The column cou
 ```tsx
 // VirtualizedGallery.tsx
 import * as React from 'react';
-import {
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  Divider,
-  Skeleton,
-  Spinner,
-  Text,
-} from '@fluentui/react-components';
+import { Avatar, Badge, Button, Card, Divider, Skeleton, Spinner, Text } from '@fluentui/react-components';
 
 type ProjectStatus = 'on track' | 'at risk' | 'blocked';
 

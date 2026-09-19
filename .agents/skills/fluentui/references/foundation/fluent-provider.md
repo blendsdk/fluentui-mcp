@@ -4,10 +4,10 @@
 
 ## What the provider is
 
-Every Fluent UI v9 render tree starts with a provider. In `@fluentui/react-components` it is exported as `Provider`:
+Every Fluent UI v9 render tree starts with a provider. In `@fluentui/react-components` it is exported as `FluentProvider`:
 
 ```tsx
-import { Provider } from '@fluentui/react-components';
+import { FluentProvider } from '@fluentui/react-components';
 ```
 
 It is a context root rather than a visual component. It renders a wrapper element and, for everything below it:
@@ -25,7 +25,7 @@ Render one provider at the top of the React tree, above every Fluent UI componen
 // src/main.tsx
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
-import { Provider, webLightTheme } from '@fluentui/react-components';
+import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { App } from './App';
 
 const container = document.getElementById('root');
@@ -36,16 +36,16 @@ if (!container) {
 
 createRoot(container).render(
   <React.StrictMode>
-    <Provider theme={webLightTheme}>
+    <FluentProvider theme={webLightTheme}>
       <App />
-    </Provider>
+    </FluentProvider>
   </React.StrictMode>,
 );
 ```
 
 If the application has more than one React root — a micro-frontend widget, a second root mounted for an off-screen preview, a host element for a separate dialog surface — give each root its own provider.
 
-## Provider props at a glance
+## FluentProvider props at a glance
 
 | Prop | Type | Notes |
 | --- | --- | --- |
@@ -160,7 +160,7 @@ Mounts a single provider above the whole application so every Fluent UI componen
 // src/main.tsx
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
-import { Provider, webLightTheme } from '@fluentui/react-components';
+import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { App } from './App';
 
 const container = document.getElementById('root');
@@ -171,9 +171,9 @@ if (!container) {
 
 createRoot(container).render(
   <React.StrictMode>
-    <Provider theme={webLightTheme}>
+    <FluentProvider theme={webLightTheme}>
       <App />
-    </Provider>
+    </FluentProvider>
   </React.StrictMode>,
 );
 ```
@@ -184,13 +184,7 @@ Swaps two module-level theme objects at runtime. Because the theme references ar
 
 ```tsx
 import * as React from 'react';
-import {
-  Provider,
-  Switch,
-  Text,
-  webDarkTheme,
-  webLightTheme,
-} from '@fluentui/react-components';
+import { FluentProvider, Switch, Text, webDarkTheme, webLightTheme } from '@fluentui/react-components';
 
 export const App = () => {
   const [isDark, setIsDark] = React.useState(false);
@@ -199,7 +193,7 @@ export const App = () => {
   const theme = isDark ? webDarkTheme : webLightTheme;
 
   return (
-    <Provider theme={theme}>
+    <FluentProvider theme={theme}>
       <Switch
         label="Dark theme"
         checked={isDark}
@@ -208,7 +202,7 @@ export const App = () => {
       <Text block size={400}>
         This text and the switch above read their colors from the active theme.
       </Text>
-    </Provider>
+    </FluentProvider>
   );
 };
 ```
@@ -219,14 +213,7 @@ Builds light and dark themes from a single sixteen-step brand ramp, created once
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Card,
-  Provider,
-  Text,
-  createDarkTheme,
-  createLightTheme,
-} from '@fluentui/react-components';
+import { Button, Card, FluentProvider, Text, createDarkTheme, createLightTheme } from '@fluentui/react-components';
 import type { BrandVariants } from '@fluentui/react-components';
 
 // A brand ramp is sixteen shades of the same color, keyed 10 through 160.
@@ -258,7 +245,7 @@ export const App = () => {
   const theme = isDark ? appDarkTheme : appLightTheme;
 
   return (
-    <Provider theme={theme}>
+    <FluentProvider theme={theme}>
       <Card>
         <Text block weight="semibold">
           Contoso dashboard
@@ -270,7 +257,7 @@ export const App = () => {
           Switch to {isDark ? 'light' : 'dark'} theme
         </Button>
       </Card>
-    </Provider>
+    </FluentProvider>
   );
 };
 ```
@@ -281,22 +268,16 @@ Uses a second provider to paint a region with a different theme while the surrou
 
 ```tsx
 import * as React from 'react';
-import {
-  Card,
-  Provider,
-  Text,
-  webDarkTheme,
-  webLightTheme,
-} from '@fluentui/react-components';
+import { Card, FluentProvider, Text, webDarkTheme, webLightTheme } from '@fluentui/react-components';
 
 export const App = () => (
-  <Provider theme={webLightTheme} dir="ltr">
+  <FluentProvider theme={webLightTheme} dir="ltr">
     <Text block size={400} weight="semibold">
       Light application shell
     </Text>
 
     {/* A nested provider creates a theme island: everything inside is dark. */}
-    <Provider theme={webDarkTheme}>
+    <FluentProvider theme={webDarkTheme}>
       <Card appearance="filled-alternative">
         <Text block weight="semibold">
           Dark preview
@@ -306,8 +287,8 @@ export const App = () => (
           shell is unaffected.
         </Text>
       </Card>
-    </Provider>
-  </Provider>
+    </FluentProvider>
+  </FluentProvider>
 );
 ```
 
@@ -317,12 +298,7 @@ Sets direction once at the provider so the whole subtree — including portaled 
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Provider,
-  Tooltip,
-  webLightTheme,
-} from '@fluentui/react-components';
+import { Button, FluentProvider, Tooltip, webLightTheme } from '@fluentui/react-components';
 
 export type AppProps = {
   direction: 'ltr' | 'rtl';
@@ -330,11 +306,11 @@ export type AppProps = {
 
 export const App = ({ direction }: AppProps) => (
   // One place decides the writing direction for the whole subtree.
-  <Provider theme={webLightTheme} dir={direction} applyStylesToPortals>
+  <FluentProvider theme={webLightTheme} dir={direction} applyStylesToPortals>
     <Tooltip content="Save the current document" relationship="label">
       <Button appearance="primary">Save</Button>
     </Tooltip>
-  </Provider>
+  </FluentProvider>
 );
 ```
 
@@ -344,13 +320,7 @@ Points the provider at a different Document so portal mount nodes and styles are
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Portal,
-  Provider,
-  Text,
-  webLightTheme,
-} from '@fluentui/react-components';
+import { Button, Portal, FluentProvider, Text, webLightTheme } from '@fluentui/react-components';
 
 export const PreviewFrame = () => {
   const frameRef = React.useRef<HTMLIFrameElement>(null);
@@ -367,7 +337,7 @@ export const PreviewFrame = () => {
       {frameDocument && (
         // targetDocument makes the provider create portal mount nodes and styles
         // inside the iframe document instead of the parent document.
-        <Provider
+        <FluentProvider
           theme={webLightTheme}
           targetDocument={frameDocument}
           applyStylesToPortals
@@ -378,7 +348,7 @@ export const PreviewFrame = () => {
             </Text>
             <Button appearance="primary">Themed button</Button>
           </Portal>
-        </Provider>
+        </FluentProvider>
       )}
     </>
   );

@@ -4,7 +4,7 @@
 
 ## Goal
 
-Build an accessible, fully keyboard-operable tabbed interface with FluentUI React v9 — a tab strip (Tabs / TabList / Tab) plus one associated panel per tab — covering both uncontrolled and controlled selection, appearance and size variants, vertical side-tab layouts, and programmatic tab changes such as wizard steps.
+Build an accessible, fully keyboard-operable tabbed interface with FluentUI React v9 — a tab strip (TabList / Tab) plus one associated panel per tab — covering both uncontrolled and controlled selection, appearance and size variants, vertical side-tab layouts, and programmatic tab changes such as wizard steps.
 
 ## When to Use
 
@@ -22,8 +22,7 @@ A tab strip with a complete keyboard model (roving `tabindex`, arrow keys, Home/
 
 | Component | Renders | Responsibility |
 | --- | --- | --- |
-| `Tabs` | layout wrapper (`div`) | Optional. Provides the selection value through context so a `TabList` and its sibling panels share one source of truth. |
-| `TabList` | `div[role="tablist"]` | Owns selection and keyboard navigation. Creates its own internal state when it is not wrapped in `Tabs`. |
+| `TabList` | `div[role="tablist"]` | Owns selection and keyboard navigation. Creates its own internal state unless you pass `selectedValue`. |
 | `Tab` | `button[role="tab"]` | A single tab. `value` is required and must be unique within the list. |
 
 Minimum viable tab bar — a `TabList` on its own manages selection internally:
@@ -43,28 +42,28 @@ When the tab bar only *drives* something that lives outside of it (a filter for 
 
 Appearance, size, orientation, and behavior props (`appearance`, `size`, `vertical`, `reserveSelectedTabSpace`, `selectTabOnFocus`, `disabled`) all live on the tab list in this pattern.
 
-## Pattern B — `Tabs` + `TabList` + panels
+## Pattern B — `TabList` + sibling panels
 
-When panel content is a sibling of the tab strip, wrap both in `Tabs`. `Tabs` renders a flex layout container and provides the tab context to everything inside it (with `vertical`, the tab list and panels lay out side by side for a settings-style side navigation).
-
-Keep the selected value in React state and pass it to the wrapper:
+When panel content is a sibling of the tab strip, keep the selected value in React state and use it to drive both the `TabList` and the panel. Fluent does not wrap them for you; place the `TabList` and the panel in a fragment or a layout element, and put the selection props on the `TabList`.
 
 ```tsx
 const [selectedValue, setSelectedValue] = React.useState<TabValue>('overview');
 
-<Tabs selectedValue={selectedValue} onTabSelect={(_, data) => setSelectedValue(data.value)}>
-  <TabList>{/* <Tab value="overview" …/> */}</TabList>
+<>
+  <TabList selectedValue={selectedValue} onTabSelect={(_, data) => setSelectedValue(data.value)}>
+    {/* <Tab value="overview" …/> */}
+  </TabList>
   <div role="tabpanel" aria-labelledby={`tab-${selectedValue}`} tabIndex={0}>
     {/* panel body */}
   </div>
-</Tabs>;
+</>;
 ```
 
 ## Selection model: uncontrolled vs controlled
 
 * **Uncontrolled** — pass `defaultSelectedValue` and let the tab list own the state. Use it when nothing outside the tabs needs to know what is selected.
 * **Controlled** — pass `selectedValue` plus `onTabSelect`. Required whenever a panel, a URL, or a button ("Next") must read or change the selection.
-* Pass selection props to **one** component only. Setting `selectedValue`/`onTabSelect` on both `Tabs` and the inner `TabList` creates two sources of truth (Fluent logs a development warning because of this). If you wrap in `Tabs`, put the selection props on `Tabs`.
+* Pass selection props to **one** component only. Setting `selectedValue`/`onTabSelect` on both a parent and the `TabList` creates two sources of truth (Fluent logs a development warning because of this); put them on the `TabList`.
 * `TabValue` is `string | number`. Values must be unique and stable — never use the array index as the value when the list can be reordered or filtered.
 
 ## Wiring panels
@@ -80,7 +79,7 @@ Fluent does not render panels for you; you supply them and wire the relationship
 
 * `appearance`: `transparent` (default underline-style), `subtle`, `subtle-circular`, `filled-circular` (segmented-control look).
 * `size`: `small`, `medium`, `large`. Use `small` inside cards and toolbars.
-* `vertical`: switches the tab list to a column and, inside `Tabs`, puts panels beside the list.
+* `vertical`: switches the tab list to a column; place the panels beside it yourself.
 * `reserveSelectedTabSpace` (default `true`): keeps space for the selected indicator so labels don't shift as selection changes. Only disable it if you control the layout yourself.
 * `disabled` on `Tab` removes a single tab; `disabled` on the list disables the whole set.
 
@@ -90,11 +89,11 @@ The tab list already implements the ARIA Authoring Practices model: only the sel
 
 ## Advanced callbacks
 
-`onRegister`, `onUnregister`, `onSelect`, and `registeredTabs` exist on the `Tabs` wrapper for headless/advanced scenarios where you want to render your own list markup. When you use `TabList`, it wires all of these for you — leave them alone.
+Internal callbacks such as `onRegister` and `onUnregister` are wired by `TabList` for headless scenarios; do not call them yourself.
 
 ## Putting it together
 
-1. Pick the pattern: standalone `TabList` for a filter-style strip, `Tabs` + `TabList` + panels for real tabbed content.
+1. Pick the pattern: a standalone `TabList` for a filter-style strip, or a `TabList` plus sibling panels for real tabbed content.
 2. Decide uncontrolled vs controlled. Choose controlled as soon as anything outside the tabs depends on the selection.
 3. Give every tab a unique `value` and an `id`; give every panel `role="tabpanel"`, `aria-labelledby`, and a matching `id`.
 4. Pick `appearance`/`size`/`vertical` for the context (segmented control in a card, underline tabs in a page header, vertical list in settings).
@@ -108,16 +107,7 @@ A three-tab detail view where selection lives in React state, each Tab has an id
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Tab,
-  TabList,
-  Tabs,
-  Text,
-  type SelectTabData,
-  type SelectTabEvent,
-  type TabValue,
-} from '@fluentui/react-components';
+import { Button, Tab, TabList, Text, type SelectTabData, type SelectTabEvent, type TabValue } from '@fluentui/react-components';
 
 type PanelId = 'overview' | 'activity' | 'members';
 
@@ -149,8 +139,8 @@ export const ProjectTabs = () => {
   const activePanel = panels[selectedValue as PanelId];
 
   return (
-    <Tabs selectedValue={selectedValue} onTabSelect={onTabSelect}>
-      <TabList>
+    <>
+      <TabList selectedValue={selectedValue} onTabSelect={onTabSelect}>
         <Tab value="overview" id="tab-overview">
           Overview
         </Tab>
@@ -184,7 +174,7 @@ export const ProjectTabs = () => {
           <Button appearance="primary">{activePanel.action}</Button>
         </div>
       </div>
-    </Tabs>
+    </>
   );
 };
 ```
@@ -195,12 +185,7 @@ Four uncontrolled TabList variants covering every appearance and size, a disable
 
 ```tsx
 import * as React from 'react';
-import {
-  Tab,
-  TabList,
-  type SelectTabData,
-  type SelectTabEvent,
-} from '@fluentui/react-components';
+import { Tab, TabList, type SelectTabData, type SelectTabEvent } from '@fluentui/react-components';
 
 const onTabSelect = (_event: SelectTabEvent, data: SelectTabData) => {
   // The list owns its own selection; this handler is only for side effects.
@@ -264,16 +249,7 @@ Tabs rendered from an array inside a vertical Tabs wrapper, with a panel that sw
 
 ```tsx
 import * as React from 'react';
-import {
-  Badge,
-  Tab,
-  TabList,
-  Tabs,
-  Text,
-  type SelectTabData,
-  type SelectTabEvent,
-  type TabValue,
-} from '@fluentui/react-components';
+import { Badge, Tab, TabList, Text, type SelectTabData, type SelectTabEvent, type TabValue } from '@fluentui/react-components';
 
 const sections = [
   { value: 'profile', label: 'Profile' },
@@ -291,8 +267,8 @@ export const AccountSettingsTabs = () => {
   const currentLabel = sections.find(section => section.value === selectedValue)?.label;
 
   return (
-    <Tabs vertical selectedValue={selectedValue} onTabSelect={onTabSelect}>
-      <TabList>
+    <>
+      <TabList vertical selectedValue={selectedValue} onTabSelect={onTabSelect}>
         {sections.map(section => (
           <Tab key={section.value} value={section.value} id={`tab-${section.value}`}>
             {section.label}
@@ -328,7 +304,7 @@ export const AccountSettingsTabs = () => {
           </Text>
         )}
       </div>
-    </Tabs>
+    </>
   );
 };
 ```
@@ -339,18 +315,7 @@ Controlled tabs used as wizard steps: Back/Next buttons change selectedValue pro
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Field,
-  Input,
-  Tab,
-  TabList,
-  Tabs,
-  Text,
-  type SelectTabData,
-  type SelectTabEvent,
-  type TabValue,
-} from '@fluentui/react-components';
+import { Button, Field, Input, Tab, TabList, Text, type SelectTabData, type SelectTabEvent, type TabValue } from '@fluentui/react-components';
 
 const steps = ['account', 'profile', 'review'] as const;
 type Step = (typeof steps)[number];
@@ -369,8 +334,8 @@ export const SignupWizard = () => {
   };
 
   return (
-    <Tabs selectedValue={step} onTabSelect={onTabSelect}>
-      <TabList>
+    <>
+      <TabList selectedValue={step} onTabSelect={onTabSelect}>
         <Tab value="account" id="tab-account">
           Account
         </Tab>
@@ -419,7 +384,7 @@ export const SignupWizard = () => {
           </Button>
         </div>
       </div>
-    </Tabs>
+    </>
   );
 };
 ```

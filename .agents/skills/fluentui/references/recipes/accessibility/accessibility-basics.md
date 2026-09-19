@@ -23,8 +23,8 @@ This recipe builds a settings form, a row of actions, and an async publish panel
 | Question | Where the answer comes from |
 | --- | --- |
 | What is this? (name) | `Field`'s `label`, visible `Button` text, or `Tooltip relationship="label"` |
-| What does it do? (role) | The component itself — `Input`, `Button`, `Checkbox`, `Switch`, `Spinner`, `Progress` and `MessageBar` render correct semantics. Do not rebuild them out of `<div>`s |
-| What state is it in? | `Field validationState`, `checked`, `disabledFocusable`, `Progress value` |
+| What does it do? (role) | The component itself — `Input`, `Button`, `Checkbox`, `Switch`, `Spinner`, `ProgressBar` and `MessageBar` render correct semantics. Do not rebuild them out of `<div>`s |
+| What state is it in? | `Field validationState`, `checked`, `disabledFocusable`, `ProgressBar value` |
 | Anything else to know? (description) | `Field`'s `hint` and `validationMessage`, `Tooltip relationship="description"`, `MessageBar` |
 
 ## Step 1 — Label and validate through Field
@@ -118,18 +118,18 @@ Change the button's text while it is busy so the state is visible as well as ann
 <Spinner size="tiny" label="Publishing your site" labelPosition="after" />
 ```
 
-`Progress` exposes a value, not a name. Pair it with visible `Text` (and a heading that describes the task) so the number has meaning:
+`ProgressBar` exposes a value, not a name. Pair it with visible `Text` (and a heading that describes the task) so the number has meaning:
 
 ```tsx
 <h3 id="publish-heading">Publish site</h3>
-<Progress value={percent} max={100} />
+<ProgressBar value={percent} max={100} />
 <Text block>{`${percent}% complete.`}</Text>
 ```
 
 ## Step 7 — Direction, theming, and hidden text
 
-- Wrap the app in `Provider` with `dir="rtl"` when the document direction is right-to-left. Components flip their layout, icon placement and motion; you still own the reading order of your own text.
-- For short text that must be available to assistive technology but not visible on screen, Fluent UI ships the `Aria` utility component (`import { Aria } from '@fluentui/react-components'`), which renders a visually hidden element you give the text to as `children`. Prefer a visible `MessageBar` whenever the user benefits from seeing the message too.
+- Wrap the app in `FluentProvider` with `dir="rtl"` when the document direction is right-to-left. Components flip their layout, icon placement and motion; you still own the reading order of your own text.
+- For short text that must be available to assistive technology but not visible on screen, Fluent UI ships the `Aria` utility component (``), which renders a visually hidden element you give the text to as `children`. Prefer a visible `MessageBar` whenever the user benefits from seeing the message too.
 - Never remove focus outlines. The components draw a focus indicator from the theme; overriding it with `outline: none` breaks keyboard navigation.
 
 ## Verify before shipping
@@ -148,15 +148,7 @@ A complete form where Field supplies every label, hint and validation message, C
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Checkbox,
-  Field,
-  Input,
-  MessageBar,
-  Switch,
-  Textarea,
-} from '@fluentui/react-components';
+import { Button, Checkbox, Field, Input, MessageBar, Switch, Textarea } from '@fluentui/react-components';
 
 type Status = { intent: 'success' | 'error'; message: string } | null;
 
@@ -311,7 +303,7 @@ Shows how to label a Spinner through its label slot, pair Progress with visible 
 
 ```tsx
 import * as React from 'react';
-import { Button, MessageBar, Progress, Spinner, Text } from '@fluentui/react-components';
+import { Button, MessageBar, ProgressBar, Spinner, Text } from '@fluentui/react-components';
 
 type PublishState = 'idle' | 'publishing' | 'published';
 
@@ -364,7 +356,7 @@ export const PublishPanel: React.FC = () => {
           <Spinner size="tiny" label="Publishing your site" labelPosition="after" />
 
           {/* Progress carries a value, not a name, so the text supplies the meaning. */}
-          <Progress value={percent} max={100} />
+          <ProgressBar value={percent} max={100} />
           <Text block>{`${percent}% complete. We will announce when the site is live.`}</Text>
         </div>
       )}

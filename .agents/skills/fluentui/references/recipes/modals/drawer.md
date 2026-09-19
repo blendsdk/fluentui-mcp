@@ -96,18 +96,7 @@ A controlled end-positioned overlay drawer that creates a project. It shows the 
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Drawer,
-  DrawerBody,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerHeaderTitle,
-  Field,
-  Input,
-  Select,
-  Textarea,
-} from '@fluentui/react-components';
+import { Button, Drawer, DrawerBody, DrawerFooter, DrawerHeader, DrawerHeaderTitle, Field, Input, Select, Textarea } from '@fluentui/react-components';
 
 export const NewProjectDrawer = () => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -228,18 +217,7 @@ A non-modal `type="inline"` drawer used as a persistent filter rail. It is contr
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Checkbox,
-  Drawer,
-  DrawerBody,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerHeaderTitle,
-  Slider,
-  Switch,
-  Text,
-} from '@fluentui/react-components';
+import { Button, Checkbox, Drawer, DrawerBody, DrawerFooter, DrawerHeader, DrawerHeaderTitle, Slider, Switch, Text } from '@fluentui/react-components';
 
 export const InlineFilterDrawer = () => {
   const [isOpen, setIsOpen] = React.useState(true);
@@ -332,16 +310,7 @@ An overlay drawer lists tickets; choosing one renders a second, `inline` drawer 
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Divider,
-  Drawer,
-  DrawerBody,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerHeaderTitle,
-  Text,
-} from '@fluentui/react-components';
+import { Button, Divider, Drawer, DrawerBody, DrawerFooter, DrawerHeader, DrawerHeaderTitle, Text } from '@fluentui/react-components';
 
 type Ticket = {
   id: string;

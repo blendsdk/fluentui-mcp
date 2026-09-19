@@ -32,7 +32,7 @@ A sign-in surface assembled from Fluent UI React v9 form primitives: `Field`, `I
 | Credential entry | `Input` | `type` switches between `email`, `password` and `text` for the reveal toggle with no styling change. |
 | Boolean choices | `Checkbox` | Controlled with `checked` and `onChange(ev, data)`; read `data.checked`. |
 | Primary action | `Button` | `appearance="primary"`, `size="large"`, `disabled` while a request is in flight. |
-| Progress | `Spinner` | Rendered in the Button `icon` slot while submitting. |
+| ProgressBar | `Spinner` | Rendered in the Button `icon` slot while submitting. |
 | Result feedback | `MessageBar` | `intent="error"` with `politeness="assertive"` for failures, `intent="success"` with `politeness="polite"` for success. |
 | Surface, heading text, separator, links | `Card`, `Text`, `Divider`, `Link` | Purely presentational plus navigation. |
 
@@ -183,15 +183,7 @@ A complete controlled sign-in form: email and password Fields with inline valida
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Card,
-  Checkbox,
-  Field,
-  Input,
-  Link,
-  Text,
-} from '@fluentui/react-components';
+import { Button, Card, Checkbox, Field, Input, Link, Text } from '@fluentui/react-components';
 
 type LoginValues = {
   email: string;
@@ -336,17 +328,7 @@ Adds the asynchronous round trip: a status machine (idle, submitting, succeeded,
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Card,
-  Checkbox,
-  Field,
-  Input,
-  Link,
-  MessageBar,
-  Spinner,
-  Text,
-} from '@fluentui/react-components';
+import { Button, Card, Checkbox, Field, Input, Link, MessageBar, Spinner, Text } from '@fluentui/react-components';
 
 type Status = 'idle' | 'submitting' | 'succeeded' | 'failed';
 
@@ -503,16 +485,7 @@ A denser layout using horizontal Fields with underline Inputs, a Divider separat
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Card,
-  Checkbox,
-  Divider,
-  Field,
-  Input,
-  Link,
-  Text,
-} from '@fluentui/react-components';
+import { Button, Card, Checkbox, Divider, Field, Input, Link, Text } from '@fluentui/react-components';
 
 type Provider = 'sso' | 'passkey';
 
@@ -520,7 +493,7 @@ export const CompactSignInCard: React.FC = () => {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [keepSignedIn, setKeepSignedIn] = React.useState(false);
-  const [pendingProvider, setPendingProvider] = React.useState<Provider | undefined>();
+  const [pendingProvider, setPendingProvider] = React.useState<FluentProvider | undefined>();
 
   const submit = () => {
     if (email.trim().length === 0 || password.length === 0) {

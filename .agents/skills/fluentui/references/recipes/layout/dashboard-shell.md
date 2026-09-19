@@ -170,7 +170,6 @@ Use `Dialog` for short, blocking work that should interrupt the user (edit form,
 
 ```tsx
 <Drawer type='overlay' position='end' open={isOpen} onOpenChange={(_, { open }) => setIsOpen(open)}>
-  <DrawerOverlay />
   <DrawerHeader>
     <DrawerHeaderTitle
       action={<Button appearance='subtle' aria-label='Close details' onClick={() => setIsOpen(false)}>Close</Button>}
@@ -219,44 +218,7 @@ Complete shell: app bar with search, alerts and account menu, a Nav sidebar with
 
 ```tsx
 import * as React from 'react';
-import {
-  Avatar,
-  Badge,
-  Breadcrumb,
-  BreadcrumbButton,
-  BreadcrumbDivider,
-  BreadcrumbItem,
-  Button,
-  Card,
-  CardHeader,
-  Divider,
-  Input,
-  Link,
-  Menu,
-  MenuDivider,
-  MenuItem,
-  MenuList,
-  MenuPopover,
-  MenuTrigger,
-  MessageBar,
-  MessageBarBody,
-  Nav,
-  NavCategory,
-  NavCategoryItem,
-  NavItem,
-  NavSubItem,
-  NavSubItemGroup,
-  Skeleton,
-  SkeletonItem,
-  Text,
-  Toolbar,
-  ToolbarButton,
-  ToolbarDivider,
-  Tooltip,
-  makeStyles,
-  shorthands,
-  tokens,
-} from '@fluentui/react-components';
+import { Avatar, Badge, Breadcrumb, BreadcrumbButton, BreadcrumbDivider, BreadcrumbItem, Button, Card, CardHeader, Divider, Input, Link, Menu, MenuDivider, MenuItem, MenuList, MenuPopover, MenuTrigger, MessageBar, MessageBarBody, Nav, NavCategory, NavCategoryItem, NavItem, NavSubItem, NavSubItemGroup, Skeleton, SkeletonItem, Text, Toolbar, ToolbarButton, ToolbarDivider, Tooltip, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 
 type Trend = 'success' | 'danger' | 'informative';
 
@@ -552,31 +514,7 @@ The content canvas of a shell: a Card grid of records where each card opens a co
 
 ```tsx
 import * as React from 'react';
-import {
-  Badge,
-  Button,
-  Card,
-  CardHeader,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  DialogTrigger,
-  Divider,
-  Field,
-  Input,
-  MessageBar,
-  MessageBarBody,
-  Select,
-  Switch,
-  Text,
-  Textarea,
-  makeStyles,
-  shorthands,
-  tokens,
-} from '@fluentui/react-components';
+import { Badge, Button, Card, CardHeader, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Divider, Field, Input, MessageBar, MessageBarBody, Select, Switch, Text, Textarea, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 
 type ReportStatus = 'Active' | 'Paused' | 'Draft';
 
@@ -810,23 +748,7 @@ A reusable dashboard widget that renders all four content states - loading with 
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Card,
-  CardHeader,
-  Divider,
-  MessageBar,
-  MessageBarActions,
-  MessageBarBody,
-  MessageBarTitle,
-  Skeleton,
-  SkeletonItem,
-  Spinner,
-  Text,
-  makeStyles,
-  shorthands,
-  tokens,
-} from '@fluentui/react-components';
+import { Button, Card, CardHeader, Divider, MessageBar, MessageBarActions, MessageBarBody, MessageBarTitle, Skeleton, SkeletonItem, Spinner, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 
 type WidgetState = 'loading' | 'ready' | 'empty' | 'error';
 

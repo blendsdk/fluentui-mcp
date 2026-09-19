@@ -143,15 +143,7 @@ A card gallery that reflows from one to two to three columns and a toolbar whose
 
 ```tsx
 import * as React from 'react';
-import {
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  Text,
-  makeStyles,
-  tokens,
-} from '@fluentui/react-components';
+import { Avatar, Badge, Button, Card, Text, makeStyles, tokens } from '@fluentui/react-components';
 
 type ProjectStatus = 'On track' | 'At risk' | 'Blocked';
 
@@ -323,17 +315,7 @@ An app shell with a sticky navigation rail on desktop that becomes a collapsible
 
 ```tsx
 import * as React from 'react';
-import {
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  Divider,
-  Text,
-  Tooltip,
-  makeStyles,
-  tokens,
-} from '@fluentui/react-components';
+import { Avatar, Badge, Button, Card, Divider, Text, Tooltip, makeStyles, tokens } from '@fluentui/react-components';
 
 /**
  * Keep this string in sync with the `@media (min-width: 900px)` blocks below:
@@ -559,18 +541,7 @@ A settings form in a Card where Field orientation flips from vertical to horizon
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Card,
-  Divider,
-  Field,
-  Input,
-  Select,
-  Switch,
-  Text,
-  makeStyles,
-  tokens,
-} from '@fluentui/react-components';
+import { Button, Card, Divider, Field, Input, Select, Switch, Text, makeStyles, tokens } from '@fluentui/react-components';
 
 const WIDE_QUERY = '(min-width: 720px)';
 

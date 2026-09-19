@@ -5,13 +5,13 @@
 ## 1. Mental model
 
 ```
-BrandVariants → createLightTheme/createDarkTheme → Theme → <Provider theme={...}> → tokens.* → var(--token)
+BrandVariants → createLightTheme/createDarkTheme → Theme → <FluentProvider theme={...}> → tokens.* → var(--token)
 ```
 
 - `tokens` is a flat map: `tokens.colorBrandBackground === 'var(--colorBrandBackground)'`.
-- A `Theme` is just the **values** of those CSS custom properties, applied by `Provider` via a theme class on a wrapper element.
+- A `Theme` is just the **values** of those CSS custom properties, applied by `FluentProvider` via a theme class on a wrapper element.
 - Switching themes = one class swap → CSS rules are never regenerated, components never re-render for styling.
-- Write `var(--colorBrandBackground)` in plain CSS or inline `style` — it resolves anywhere inside the `Provider` subtree.
+- Write `var(--colorBrandBackground)` in plain CSS or inline `style` — it resolves anywhere inside the `FluentProvider` subtree.
 - Never hard-code hex/px: always go through `tokens.*`.
 
 ## 2. Core APIs (all exported from `@fluentui/react-components`)
@@ -30,7 +30,7 @@ BrandVariants → createLightTheme/createDarkTheme → Theme → <Provider theme
 | `shorthands` | object | `border`, `borderColor`, `borderRadius`, `borderStyle`, `borderWidth`, `padding`, `paddingBlock`, `paddingInline`, `margin`, `gap`, `inset`, `outline`, `overflow`, `transition`, `textDecorationLine`, `flex`, `grid` |
 | `BrandVariants`, `Theme`, `PartialTheme` | types | — |
 
-## 3. `Provider` props that control tokens
+## 3. `FluentProvider` props that control tokens
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
@@ -41,7 +41,7 @@ BrandVariants → createLightTheme/createDarkTheme → Theme → <Provider theme
 | `customStyleHooks_unstable` | `FluentProviderCustomStyleHooks` | — | per-component style override, tree-wide |
 | `overrides_unstable` | `OverridesContextValue_unstable` | — | global token override, e.g. `{ tokens: { colorBrandBackground: '#b4009e' } }` |
 
-A **nested** `Provider` re-themes only its subtree. To tweak one token, spread a partial theme (`{ ...webLightTheme, colorBrandBackground: '#b4009e' }`) instead of building a whole new theme.
+A **nested** `FluentProvider` re-themes only its subtree. To tweak one token, spread a partial theme (`{ ...webLightTheme, colorBrandBackground: '#b4009e' }`) instead of building a whole new theme.
 
 ## 4. Token reference
 
@@ -141,11 +141,11 @@ Horizontal and vertical spacing are **separate scales** — `spacingVerticalM` f
 - `makeStyles` (atomic, hashed classes) is the default. Use `makeResetStyles` for base classes where specificity/override order matters, and `makeStaticStyles` for global selectors.
 - Pseudo-classes and at-rules are nested objects inside the style object: `':hover': {...}`, `':focus-visible': {...}`, `'@media (forced-colors: active)': {...}`.
 - Compose component styles with the `className` prop: `className={mergeClasses(styles.base, active && styles.active)}`.
-- Prefer `Provider`-level controls before reaching for `customStyleHooks_unstable` / `overrides_unstable` (both `_unstable`).
+- Prefer `FluentProvider`-level controls before reaching for `customStyleHooks_unstable` / `overrides_unstable` (both `_unstable`).
 
 ## 7. Plain-CSS / non-Griffel surfaces
 
-Any descendant of `Provider` can read tokens as CSS custom properties:
+Any descendant of `FluentProvider` can read tokens as CSS custom properties:
 
 ```css
 .my-chart-tooltip {
@@ -164,7 +164,7 @@ The CSS variable name is always `--` + the token name.
 ## 8. Quick decision list
 
 1. Need a color/size? → find the `tokens.*` name; never type a hex or px.
-2. Need a new brand? → `BrandVariants` + `createLightTheme`/`createDarkTheme` + `<Provider theme>`.
+2. Need a new brand? → `BrandVariants` + `createLightTheme`/`createDarkTheme` + `<FluentProvider theme>`.
 3. Need one token different? → `overrides_unstable={{ tokens: {...} }}` or a partial theme spread.
 4. Need a component styled differently everywhere? → `customStyleHooks_unstable`.
 5. Need it in a portal? → `applyStylesToPortals` (default `true`) / `targetDocument`.
@@ -187,14 +187,7 @@ The CSS variable name is always `--` + the token name.
 Build light/dark themes from a 16-step BrandVariants palette and apply them at the app root.
 
 ```tsx
-import {
-  Provider,
-  Button,
-  createLightTheme,
-  createDarkTheme,
-  type BrandVariants,
-  type Theme,
-} from '@fluentui/react-components';
+import { FluentProvider, Button, createLightTheme, createDarkTheme, type BrandVariants, type Theme } from '@fluentui/react-components';
 
 // BrandVariants requires ALL keys 10..160 in steps of 10
 const brand: BrandVariants = {
@@ -208,9 +201,9 @@ const lightTheme: Theme = createLightTheme(brand);
 const darkTheme: Theme = createDarkTheme(brand);
 
 export const App = ({ isDark }: { isDark: boolean }) => (
-  <Provider theme={isDark ? darkTheme : lightTheme}>
+  <FluentProvider theme={isDark ? darkTheme : lightTheme}>
     <Button appearance="primary">Primary uses colorBrandBackground</Button>
-  </Provider>
+  </FluentProvider>
 );
 ```
 
@@ -260,13 +253,7 @@ export const useSurfaceStyles = makeStyles({
 Compose a base class with a state class and hand it to a component via className.
 
 ```tsx
-import {
-  Button,
-  makeStyles,
-  mergeClasses,
-  tokens,
-  shorthands,
-} from '@fluentui/react-components';
+import { Button, makeStyles, mergeClasses, tokens, shorthands } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
   base: {
@@ -297,19 +284,13 @@ export const Pill = ({ active, children }: { active: boolean; children: string }
 Global token override, tree-wide component style override, and theme inheritance into Portal content.
 
 ```tsx
-import {
-  Provider,
-  Portal,
-  Button,
-  webLightTheme,
-  tokens,
-} from '@fluentui/react-components';
+import { FluentProvider, Portal, Button, webLightTheme, tokens } from '@fluentui/react-components';
 
 // Partial theme: same token names, one value changed
 const appTheme = { ...webLightTheme, colorBrandBackground: '#b4009e' };
 
 export const App = () => (
-  <Provider
+  <FluentProvider
     theme={appTheme}
     // default true: injects the theme class into portal content (Portal, Menu, Popover, Dialog, Tooltip...)
     applyStylesToPortals
@@ -325,7 +306,7 @@ export const App = () => (
     <Portal>
       <Button appearance="primary">Inherits the theme class</Button>
     </Portal>
-  </Provider>
+  </FluentProvider>
 );
 ```
 

@@ -19,9 +19,9 @@ Components fall into four layers. The layer a component lives in predicts how mu
 - `ContextSelector` — context subscriptions where only the consumers that opt in re-render.
 - `Utilities` — shared helpers.
 
-**Layer 1 — context and theming.** `Provider` supplies the theme, writing direction (`dir`), the document used for portals and events (`targetDocument`), style injection into portals (`applyStylesToPortals`), provider-wide per-slot style overrides (`customStyleHooks_unstable`) and the unstable `overrides_unstable` escape hatch.
+**Layer 1 — context and theming.** `FluentProvider` supplies the theme, writing direction (`dir`), the document used for portals and events (`targetDocument`), style injection into portals (`applyStylesToPortals`), provider-wide per-slot style overrides (`customStyleHooks_unstable`) and the unstable `overrides_unstable` escape hatch.
 
-**Layer 2 — building blocks.** Single-purpose, mostly presentational components: `Button`, `Input`, `Textarea`, `Field`, `Label`, `Select`, `Combobox`, `Checkbox`, `Switch`, `Radio`, `Slider`, `Rating`, `Spinbutton`, `ColorPicker`, `Search`, `Infolabel`, `Badge`, `Avatar`, `Persona`, `Image`, `Skeleton`, `Text`, `Divider`, `Card`, `Link`, `MessageBar`, `Spinner`, `Progress`.
+**Layer 2 — building blocks.** Single-purpose, mostly presentational components: `Button`, `Input`, `Textarea`, `Field`, `Label`, `Select`, `Combobox`, `Checkbox`, `Switch`, `Radio`, `Slider`, `Rating`, `SpinButton`, `ColorPicker`, `Search`, `InfoLabel`, `Badge`, `Avatar`, `Persona`, `Image`, `Skeleton`, `Text`, `Divider`, `Card`, `Link`, `MessageBar`, `Spinner`, `ProgressBar`.
 
 **Layer 3 — composites and overlays.** Components that own a state machine, register children, and/or render into a portal: `Dialog`, `Menu`, `Popover`, `Drawer`, `TeachingPopover`, `Tooltip`, `Toast`, `Accordion`, `Tabs`, `Tree`, `List`, `Nav`, `Breadcrumb`, `TagPicker`, `SwatchPicker`, `Table`, `Carousel`, `Overflow`, `Toolbar`, and the compat date/time family (`DatepickerCompat`, `TimepickerCompat`, `CalendarCompat`).
 
@@ -75,15 +75,15 @@ Representative axes drawn from the components in this guide:
 
 - `appearance`: `Button`, `Badge`, `Card`, `Link`, `MessageBar`, `Spinner`, `Textarea`, `Select`, `Tree`, `Table`.
 - `size`: `Button`, `Badge`, `Card`, `Field`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `Slider`, `Rating`, `Spinner`, `Persona`, `Avatar`, `Toolbar`, `Tree`, `Breadcrumb`.
-- `shape`: `Button`, `Badge`, `Checkbox`, `Card`-adjacent checkboxes, `MessageBar`, `Spinner`/`Progress` (`shape: 'rounded' | 'square'`), `Image`, `Skeleton`, `SwatchPicker`.
-- `color`: `Badge`, `Avatar`, `Progress`, `Rating`.
+- `shape`: `Button`, `Badge`, `Checkbox`, `Card`-adjacent checkboxes, `MessageBar`, `Spinner`/`ProgressBar` (`shape: 'rounded' | 'square'`), `Image`, `Skeleton`, `SwatchPicker`.
+- `color`: `Badge`, `Avatar`, `ProgressBar`, `Rating`.
 - Layout: `orientation` (`Card`, `Field`), `vertical` (`Divider`, `Slider`, `Toolbar`), `inline` (`Link`, `Popover`, `Menu`, `TagPicker`), `block` / `truncate` / `wrap` / `align` (`Text`), `inset` / `alignContent` (`Divider`).
 
 When appearance props are not enough, the escape hatches are ordered by blast radius:
 
 1. `className` / inline style on the instance — smallest radius.
-2. `customStyleHooks_unstable` on `Provider` — keyed by component name, then by slot name; applies to every instance inside that provider and keeps your overrides in one place.
-3. `overrides_unstable` on `Provider` — unstable, for provider-wide re-mapping of internals.
+2. `customStyleHooks_unstable` on `FluentProvider` — keyed by component name, then by slot name; applies to every instance inside that provider and keeps your overrides in one place.
+3. `overrides_unstable` on `FluentProvider` — unstable, for provider-wide re-mapping of internals.
 
 Prefer (1) for genuine one-offs and (2) whenever the same tweak would otherwise be repeated. Avoid reaching into internal DOM with a selector: the slot table is the contract, the internal DOM is not.
 
@@ -142,7 +142,7 @@ Prefer (1) and (2) until they genuinely cannot express your design. Wrapping bef
 
 ## 6. Context and theming
 
-`Provider` is the architectural seam between the library and your app:
+`FluentProvider` is the architectural seam between the library and your app:
 
 - `theme` — a partial theme merged over the ambient one.
 - `dir` — `'ltr' | 'rtl'`; every component's slots and logical styles flip accordingly.
@@ -212,11 +212,11 @@ When you wrap or extend v9, mirror the architecture so your component feels nati
 | Persistent inline panel | `Drawer` with `type: 'inline'` |
 | Selection with keyboard modes | `List`, `Tree`, `Table`, `SwatchPicker`, `Card` |
 | Layout that must react to available width | `Overflow` with `id` / `groupId` and `onOverflowChange` |
-| Global visual tuning | `Provider.customStyleHooks_unstable` |
+| Global visual tuning | `FluentProvider.customStyleHooks_unstable` |
 
 ## 12. Review checklist
 
-- Every surface that floats is inside a `Provider`, and `applyStylesToPortals` is set when the portal target is outside the app root.
+- Every surface that floats is inside a `FluentProvider`, and `applyStylesToPortals` is set when the portal target is outside the app root.
 - No component receives both a `default*` prop and its controlled counterpart.
 - Every controlled component has a handler that actually updates the state it reports.
 - Slot content is passed through named slot props rather than by re-parenting DOM.
@@ -243,20 +243,13 @@ Shows how content is placed through named slots (contentBefore, contentAfter, ic
 
 ```tsx
 import * as React from 'react';
-import {
-  Badge,
-  Button,
-  Field,
-  Input,
-  Provider,
-  Text,
-} from '@fluentui/react-components';
+import { Badge, Button, Field, Input, FluentProvider, Text } from '@fluentui/react-components';
 
 export const SlotCompositionExample = () => {
   const [email, setEmail] = React.useState('');
 
   return (
-    <Provider>
+    <FluentProvider>
       {/* Field's slots render in a fixed order: label, children,
           validationMessageIcon, validationMessage, hint. */}
       <Field
@@ -297,7 +290,7 @@ export const SlotCompositionExample = () => {
       >
         Verified
       </Badge>
-    </Provider>
+    </FluentProvider>
   );
 };
 ```
@@ -308,18 +301,11 @@ Contrasts the default-seed pattern with the controlled pattern across Switch, Ch
 
 ```tsx
 import * as React from 'react';
-import {
-  Checkbox,
-  Provider,
-  Rating,
-  Slider,
-  Switch,
-  Text,
-} from '@fluentui/react-components';
+import { Checkbox, FluentProvider, Rating, Slider, Switch, Text } from '@fluentui/react-components';
 
 /** Uncontrolled: the control owns its state from first render. */
 export const UncontrolledExample = () => (
-  <Provider>
+  <FluentProvider>
     <Switch defaultChecked label='Product updates' />
     <Checkbox defaultChecked label='Weekly digest' size='medium' shape='square' />
     <Rating
@@ -328,7 +314,7 @@ export const UncontrolledExample = () => (
       step={1}
       itemLabel={(rating) => `${rating} of 5`}
     />
-  </Provider>
+  </FluentProvider>
 );
 
 /** Controlled: the parent is the single source of truth. */
@@ -338,7 +324,7 @@ export const ControlledExample = () => {
   const [state, setState] = React.useState<boolean | 'mixed'>('mixed');
 
   return (
-    <Provider>
+    <FluentProvider>
       <Text block>{`Volume ${volume}% / notifications ${
         notify ? 'on' : 'off'
       }`}</Text>
@@ -364,7 +350,7 @@ export const ControlledExample = () => {
         }
         label='Select all messages'
       />
-    </Provider>
+    </FluentProvider>
   );
 };
 
@@ -396,14 +382,7 @@ A product-level component that composes Card (root, floatingAction and selection
 
 ```tsx
 import * as React from 'react';
-import {
-  Badge,
-  Card,
-  Divider,
-  Label,
-  Provider,
-  Text,
-} from '@fluentui/react-components';
+import { Badge, Card, Divider, Label, FluentProvider, Text } from '@fluentui/react-components';
 
 type PlanCardProps = {
   name: string;
@@ -453,7 +432,7 @@ export const PlanPicker = () => {
   const [selectedPlan, setSelectedPlan] = React.useState('pro');
 
   return (
-    <Provider>
+    <FluentProvider>
       <PlanCard
         name='Standard'
         price='$12'
@@ -468,7 +447,7 @@ export const PlanPicker = () => {
         selected={selectedPlan === 'pro'}
         onSelectedChange={() => setSelectedPlan('pro')}
       />
-    </Provider>
+    </FluentProvider>
   );
 };
 ```
@@ -479,20 +458,13 @@ Shows the provider as the architectural seam (direction, portal style injection)
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  MessageBar,
-  Portal,
-  Provider,
-  Text,
-  Tooltip,
-} from '@fluentui/react-components';
+import { Button, MessageBar, Portal, FluentProvider, Text, Tooltip } from '@fluentui/react-components';
 
 export const LayeredAppShell = () => {
   const [mountNode, setMountNode] = React.useState<HTMLElement | null>(null);
 
   return (
-    <Provider dir='ltr' applyStylesToPortals>
+    <FluentProvider dir='ltr' applyStylesToPortals>
       <div
         ref={(node) => {
           setMountNode(node);
@@ -522,7 +494,7 @@ export const LayeredAppShell = () => {
           </MessageBar>
         </Portal>
       </div>
-    </Provider>
+    </FluentProvider>
   );
 };
 ```
@@ -533,13 +505,7 @@ Demonstrates customStyleHooks_unstable (keyed by component name, then by slot na
 
 ```tsx
 import * as React from 'react';
-import {
-  Badge,
-  Button,
-  Card,
-  Provider,
-  Text,
-} from '@fluentui/react-components';
+import { Badge, Button, Card, FluentProvider, Text } from '@fluentui/react-components';
 
 /**
  * customStyleHooks_unstable is keyed by component display name, then by slot
@@ -561,7 +527,7 @@ const customStyleHooks = {
 };
 
 export const ThemedSurface = () => (
-  <Provider customStyleHooks_unstable={customStyleHooks}>
+  <FluentProvider customStyleHooks_unstable={customStyleHooks}>
     <Card appearance='outline' focusMode='off' size='large' orientation='vertical'>
       <Badge appearance='ghost' color='informative' size='small' shape='rounded'>
         Beta
@@ -574,7 +540,7 @@ export const ThemedSurface = () => (
         Continue
       </Button>
     </Card>
-  </Provider>
+  </FluentProvider>
 );
 ```
 
@@ -584,22 +550,10 @@ Uses Field for label/hint/validation wiring, Tooltip.relationship for accessible
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Checkbox,
-  Field,
-  Input,
-  Link,
-  MessageBar,
-  Provider,
-  Select,
-  Switch,
-  Textarea,
-  Tooltip,
-} from '@fluentui/react-components';
+import { Button, Checkbox, Field, Input, Link, MessageBar, FluentProvider, Select, Switch, Textarea, Tooltip } from '@fluentui/react-components';
 
 export const AccessibleSettingsForm = () => (
-  <Provider dir='ltr'>
+  <FluentProvider dir='ltr'>
     <Field
       label='Workspace name'
       hint='Visible to every member of the workspace.'
@@ -648,7 +602,7 @@ export const AccessibleSettingsForm = () => (
     <Button appearance='primary' shape='rounded' onClick={() => console.log('saved')}>
       Save changes
     </Button>
-  </Provider>
+  </FluentProvider>
 );
 ```
 

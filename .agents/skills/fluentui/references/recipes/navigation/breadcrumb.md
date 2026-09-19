@@ -82,7 +82,7 @@ In both cases the data source should be the same list of `{ path, label }` segme
 
 ## RTL and theming
 
-Breadcrumb spacing and the default divider direction are logical, so wrap the app (or the subtree) in `<Provider dir="rtl">` and the trail mirrors correctly without component-level changes.
+Breadcrumb spacing and the default divider direction are logical, so wrap the app (or the subtree) in `<FluentProvider dir="rtl">` and the trail mirrors correctly without component-level changes.
 
 ## Accessibility checklist
 
@@ -100,12 +100,7 @@ A semantic 4-level trail rendered from data: a home icon on the first crumb, int
 
 ```tsx
 import * as React from 'react';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbButton,
-  BreadcrumbDivider,
-} from '@fluentui/react-components';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbButton, BreadcrumbDivider } from '@fluentui/react-components';
 
 type Crumb = {
   /** Route path; also used as a stable React key. */
@@ -172,14 +167,7 @@ A route-driven trail that collapses its middle crumbs into an accessible ellipsi
 
 ```tsx
 import * as React from 'react';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbButton,
-  BreadcrumbDivider,
-  Button,
-  Tooltip,
-} from '@fluentui/react-components';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbButton, BreadcrumbDivider, Button, Tooltip } from '@fluentui/react-components';
 
 export type Crumb = { path: string; label: string };
 
@@ -274,14 +262,7 @@ An interactive demo wiring Field + Select to the breadcrumb's size and focusMode
 
 ```tsx
 import * as React from 'react';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbButton,
-  BreadcrumbDivider,
-  Field,
-  Select,
-} from '@fluentui/react-components';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbButton, BreadcrumbDivider, Field, Select } from '@fluentui/react-components';
 
 type BreadcrumbSize = 'small' | 'medium' | 'large';
 type BreadcrumbFocusMode = 'tab' | 'arrow';
@@ -350,14 +331,7 @@ A compact, small-sized trail used above a page title: ancestor crumbs are real L
 
 ```tsx
 import * as React from 'react';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbDivider,
-  Link,
-  Text,
-  Tooltip,
-} from '@fluentui/react-components';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbDivider, Link, Text, Tooltip } from '@fluentui/react-components';
 
 export const PageTitleBreadcrumb = ({ reportName }: { reportName: string }) => (
   // "arrow" mode keeps the header to a single tab stop for keyboard users.

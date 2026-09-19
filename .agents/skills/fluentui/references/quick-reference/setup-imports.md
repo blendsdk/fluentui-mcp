@@ -30,13 +30,13 @@ Everything below comes from the **single** entry point `@fluentui/react-componen
 | Category | Components |
 |---|---|
 | Buttons | `Button` |
-| Forms | `Checkbox`, `ColorPicker`, `Combobox`, `Field`, `Infolabel`, `Input`, `Label`, `Radio`, `Rating`, `Search`, `Select`, `Slider`, `Spinbutton`, `SwatchPicker`, `Switch`, `TagPicker`, `Textarea` |
+| Forms | `Checkbox`, `ColorPicker`, `Combobox`, `Field`, `InfoLabel`, `Input`, `Label`, `Radio`, `Rating`, `Search`, `Select`, `Slider`, `SpinButton`, `SwatchPicker`, `Switch`, `TagPicker`, `Textarea` |
 | Data display | `Avatar`, `Badge`, `Image`, `List`, `Persona`, `Skeleton`, `Table`, `Tags`, `Text`, `Tree` |
-| Feedback | `Dialog`, `MessageBar`, `Progress`, `Spinner`, `Toast`, `Tooltip` |
+| Feedback | `Dialog`, `MessageBar`, `ProgressBar`, `Spinner`, `Toast`, `Tooltip` |
 | Navigation | `Breadcrumb`, `Link`, `Menu`, `Nav`, `Tabs` |
 | Layout | `Card`, `Divider` |
 | Overlays | `Drawer`, `Popover`, `TeachingPopover` |
-| Utilities | `Accordion`, `Aria`, `Carousel`, `Motion`, `Overflow`, `Portal`, `Positioning`, `Provider`, `Tabster`, `Utilities` |
+| Layout utilities | `Accordion`, `Carousel`, `Overflow`, `Portal`, `FluentProvider` |
 
 ### Separate packages — NOT importable from the core entry point
 
@@ -50,9 +50,9 @@ Everything below comes from the **single** entry point `@fluentui/react-componen
 | `MotionComponentsPreview` | `@fluentui/react-motion-components-preview` |
 | `HeadlessComponentsPreview` | `@fluentui/react-headless-components-preview` |
 
-## 3. Root setup — `Provider`
+## 3. Root setup — `FluentProvider`
 
-Wrap the app (or the surface that needs theming) in `Provider`.
+Wrap the app (or the surface that needs theming) in `FluentProvider`.
 
 | Prop | Type | Purpose |
 |---|---|---|
@@ -70,7 +70,7 @@ Wrap the app (or the surface that needs theming) in `Provider`.
 | `children` | `any` |
 | `mountNode` | `HTMLElement \| { element?: HTMLElement \| null; className?: string; } \| null` |
 
-Combine `Portal mountNode` with `Provider targetDocument` + `applyStylesToPortals` for iframes / SSR / shadow DOM hosts.
+Combine `Portal mountNode` with `FluentProvider targetDocument` + `applyStylesToPortals` for iframes / SSR / shadow DOM hosts.
 
 ## 5. Required-props quick check (before importing)
 
@@ -78,7 +78,6 @@ Combine `Portal mountNode` with `Provider targetDocument` + `applyStylesToPortal
 |---|---|
 | `Dialog` | `children` |
 | `Menu` | `children` |
-| `Aria` | `children` |
 | `Motion` | `children` (plus `direction` on the presence variants) |
 | `Overflow` | `id`, `children` |
 | `Tooltip` | `relationship` (`label` / `description` / `inaccessible`) |
@@ -90,22 +89,17 @@ Combine `Portal mountNode` with `Provider targetDocument` + `applyStylesToPortal
 
 ## 6. Names that collide with HTML/DOM names — alias on import
 
-`Provider`, `Text`, `Image`, `Field`, `Label`, `List`, `Menu`, `Nav`, `Table`, `Link`, `Search`, `Select`, `Toast`, `Divider`.
+`FluentProvider`, `Text`, `Image`, `Field`, `Label`, `List`, `Menu`, `Nav`, `Table`, `Link`, `Search`, `Select`, `Toast`, `Divider`.
 
 ```tsx
-import {
-  Provider as FluentProvider,
-  Text as FluentText,
-  Image as FluentImage,
-  Field as FluentField,
-} from '@fluentui/react-components';
+import { FluentProvider, Text as FluentText, Image as FluentImage, Field as FluentField } from '@fluentui/react-components';
 ```
 
 ## 7. Entry-point rules
 
 - One root import per package (table in §1) — no additional deep/private paths are documented here.
 - Preview capabilities ship as their own packages (`MenuGridPreview`, `MotionComponentsPreview`, `HeadlessComponentsPreview`).
-- Utility components (`Aria`, `Tabster`, `Positioning`, `Utilities`) are imported the same way as visual components.
+- Focus, positioning, and motion primitives such as Tabster and Positioning live in their own `@fluentui/react-*` packages; they are not exports of `@fluentui/react-components`.
 - Slot props (`icon`, `contentBefore`, `contentAfter`, `label`, `validationMessage`, `hint`, `checkbox`, `floatingAction`, …) are passed as normal JSX props on the imported component.
 
 ## Key Takeaways
@@ -125,12 +119,12 @@ Wrap the render tree in Provider so theme, direction and portal styling are appl
 
 ```tsx
 import * as React from 'react';
-import { Provider, Button, Field, Input, Spinner } from '@fluentui/react-components';
+import { FluentProvider, Button, Field, Input, Spinner } from '@fluentui/react-components';
 
 type AppProps = { theme: React.ComponentProps<typeof Provider>['theme'] };
 
 export const App = ({ theme }: AppProps) => (
-  <Provider theme={theme} dir='ltr' applyStylesToPortals>
+  <FluentProvider theme={theme} dir='ltr' applyStylesToPortals>
     <Field label='Name' required>
       <Input placeholder='Ada Lovelace' size='medium' />
     </Field>
@@ -138,7 +132,7 @@ export const App = ({ theme }: AppProps) => (
       Save
     </Button>
     <Spinner size='tiny' label='Loading' />
-  </Provider>
+  </FluentProvider>
 );
 ```
 
@@ -148,16 +142,16 @@ All standard components come from the same package root; group imports by area f
 
 ```tsx
 // Data display
-import { Avatar, Badge, Image, List, Persona, Skeleton, Table, Tags, Text, Tree } from '@fluentui/react-components';
+import { Avatar, Badge, Image, List, Persona, Skeleton, Table, TagGroup, Text, Tree } from '@fluentui/react-components';
 
 // Forms
-import { Checkbox, ColorPicker, Combobox, Field, Infolabel, Input, Label, Radio, Rating, Search, Select, Slider, Spinbutton, SwatchPicker, Switch, TagPicker, Textarea } from '@fluentui/react-components';
+import { Checkbox, ColorPicker, Combobox, Field, InfoLabel, Input, Label, Radio, Rating, SearchBox, Select, Slider, SpinButton, SwatchPicker, Switch, TagPicker, Textarea } from '@fluentui/react-components';
 
 // Feedback, overlays, navigation
-import { Dialog, MessageBar, Progress, Spinner, Toast, Tooltip, Drawer, Popover, TeachingPopover, Breadcrumb, Link, Menu, Nav, Tabs } from '@fluentui/react-components';
+import { Dialog, MessageBar, ProgressBar, Spinner, Toast, Tooltip, Drawer, Popover, TeachingPopover, Breadcrumb, Link, Menu, Nav } from '@fluentui/react-components';
 
 // Layout + utilities
-import { Card, Divider, Accordion, Aria, Carousel, Motion, Overflow, Portal, Positioning, Provider, Tabster, Utilities } from '@fluentui/react-components';
+import { Card, Divider, Accordion, Carousel, Overflow, Portal, FluentProvider } from '@fluentui/react-components';
 ```
 
 ### Compat pickers use their own packages
@@ -186,14 +180,14 @@ export const Scheduling = () => (
 Portal moves overlay content into an element you choose; feed the same document to Provider for styles.
 
 ```tsx
-import { Portal, Spinner, Provider } from '@fluentui/react-components';
+import { Portal, Spinner, FluentProvider } from '@fluentui/react-components';
 
 export const EmbeddedApp = ({ host, hostDocument }: { host: HTMLElement; hostDocument: Document }) => (
-  <Provider targetDocument={hostDocument} applyStylesToPortals dir='rtl'>
+  <FluentProvider targetDocument={hostDocument} applyStylesToPortals dir='rtl'>
     <Portal mountNode={host}>
       <Spinner size='small' label='Loading' />
     </Portal>
-  </Provider>
+  </FluentProvider>
 );
 
 // mountNode can also carry a className:
@@ -206,13 +200,7 @@ Generic names such as Provider, Text, Image and Field are easy to alias at the i
 
 ```tsx
 import * as React from 'react';
-import {
-  Provider as FluentProvider,
-  Text as FluentText,
-  Image as FluentImage,
-  Field as FluentField,
-  Input,
-} from '@fluentui/react-components';
+import { FluentProvider, Text as FluentText, Image as FluentImage, Field as FluentField, Input } from '@fluentui/react-components';
 
 export const Form = () => (
   <FluentProvider dir='ltr'>
@@ -235,9 +223,6 @@ import { ContextSelector } from '@fluentui/react-context-selector';
 import { MenuGridPreview } from '@fluentui/react-menu-grid-preview';
 import { MotionComponentsPreview } from '@fluentui/react-motion-components-preview';
 import { HeadlessComponentsPreview } from '@fluentui/react-headless-components-preview';
-
-// Utilities stay in the core package
-import { Aria, Tabster, Positioning, Overflow, Utilities } from '@fluentui/react-components';
 ```
 
 ### Direction and theme toggling at runtime
@@ -246,17 +231,17 @@ Provider accepts only 'ltr' | 'rtl' and a PartialTheme, so re-rendering it is en
 
 ```tsx
 import * as React from 'react';
-import { Provider, Button, Breadcrumb } from '@fluentui/react-components';
+import { FluentProvider, Button, Breadcrumb } from '@fluentui/react-components';
 
 export const DirectionDemo = () => {
   const [dir, setDir] = React.useState<'ltr' | 'rtl'>('ltr');
   return (
-    <Provider dir={dir} applyStylesToPortals>
+    <FluentProvider dir={dir} applyStylesToPortals>
       <Button appearance='subtle' onClick={() => setDir(dir === 'ltr' ? 'rtl' : 'ltr')}>
         Toggle direction
       </Button>
       <Breadcrumb size='medium'>Home</Breadcrumb>
-    </Provider>
+    </FluentProvider>
   );
 };
 ```

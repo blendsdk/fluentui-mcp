@@ -101,7 +101,7 @@ Any state you hold inside the dialog (checkbox, typed name, error message, pendi
 
 * Keep the state that drives `open` in the component that owns the action (the row, the settings page, the editor), and pass `open`/`onConfirm`/`onCancel` into the reusable `ConfirmDialog`.
 * Dialog surfaces are portaled to the document body automatically, so it is safe to render them deep inside lists or cards - no extra `Portal` needed.
-* Theme comes from the surrounding `Provider`; the surface, buttons and message bars pick up brand colors, RTL and high-contrast styles automatically. Avoid hard-coded pixel widths - `DialogSurface` already caps its width for readability.
+* Theme comes from the surrounding `FluentProvider`; the surface, buttons and message bars pick up brand colors, RTL and high-contrast styles automatically. Avoid hard-coded pixel widths - `DialogSurface` already caps its width for readability.
 
 ## Examples
 
@@ -111,17 +111,7 @@ A small, fully typed confirm dialog component with title/description, cancel-fir
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Spinner,
-  Text,
-} from '@fluentui/react-components';
+import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Spinner, Text } from '@fluentui/react-components';
 
 /** Replace with your real API call. */
 const publishArticle = async (): Promise<void> => {
@@ -244,22 +234,7 @@ A high-friction confirmation: an acknowledgement Checkbox plus a Field/Input typ
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Checkbox,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Field,
-  Input,
-  MessageBar,
-  MessageBarBody,
-  Spinner,
-  Text,
-} from '@fluentui/react-components';
+import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, MessageBar, MessageBarBody, Spinner, Text } from '@fluentui/react-components';
 
 export interface Workspace {
   id: string;
@@ -426,16 +401,7 @@ A ConfirmProvider that renders one Dialog and a useConfirm() hook returning a pr
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Text,
-} from '@fluentui/react-components';
+import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Text } from '@fluentui/react-components';
 
 export interface ConfirmOptions {
   title: string;

@@ -86,19 +86,7 @@ A controlled Nav rail with flat items, a section header, two collapsible categor
 
 ```tsx
 import * as React from "react";
-import {
-  Nav,
-  NavCategory,
-  NavCategoryItem,
-  NavDivider,
-  NavItem,
-  NavSectionHeader,
-  NavSubItem,
-  NavSubItemGroup,
-  Text,
-  makeStyles,
-  tokens,
-} from "@fluentui/react-components";
+import { Nav, NavCategory, NavCategoryItem, NavDivider, NavItem, NavSectionHeader, NavSubItem, NavSubItemGroup, Text, makeStyles, tokens } from "@fluentui/react-components";
 
 /* --- Decorative inline icons (swap for @fluentui/react-icons in your app) --- */
 const DashboardIcon = () => (
@@ -242,25 +230,7 @@ A top header that composes Text (brand), a search Input with a contentBefore ico
 
 ```tsx
 import * as React from "react";
-import {
-  Avatar,
-  Breadcrumb,
-  BreadcrumbButton,
-  BreadcrumbDivider,
-  BreadcrumbItem,
-  Button,
-  Input,
-  Menu,
-  MenuDivider,
-  MenuItem,
-  MenuList,
-  MenuPopover,
-  MenuTrigger,
-  Text,
-  Tooltip,
-  makeStyles,
-  tokens,
-} from "@fluentui/react-components";
+import { Avatar, Breadcrumb, BreadcrumbButton, BreadcrumbDivider, BreadcrumbItem, Button, Input, Menu, MenuDivider, MenuItem, MenuList, MenuPopover, MenuTrigger, Text, Tooltip, makeStyles, tokens } from "@fluentui/react-components";
 
 const SearchIcon = () => (
   <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
@@ -401,24 +371,7 @@ A narrow-viewport pattern: a hamburger Button opens a Drawer (type="overlay") th
 
 ```tsx
 import * as React from "react";
-import {
-  Button,
-  Divider,
-  Drawer,
-  Link,
-  Nav,
-  NavCategory,
-  NavCategoryItem,
-  NavItem,
-  NavSectionHeader,
-  NavSubItem,
-  NavSubItemGroup,
-  Persona,
-  Text,
-  Tooltip,
-  makeStyles,
-  tokens,
-} from "@fluentui/react-components";
+import { Button, Divider, Drawer, Link, Nav, NavCategory, NavCategoryItem, NavItem, NavSectionHeader, NavSubItem, NavSubItemGroup, Persona, Text, Tooltip, makeStyles, tokens } from "@fluentui/react-components";
 
 const MenuIcon = () => (
   <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
@@ -578,13 +531,7 @@ A controlled TabList for peer views of the current page, with a matching tabpane
 
 ```tsx
 import * as React from "react";
-import {
-  Tab,
-  TabList,
-  Text,
-  makeStyles,
-  tokens,
-} from "@fluentui/react-components";
+import { Tab, TabList, Text, makeStyles, tokens } from "@fluentui/react-components";
 
 const useStyles = makeStyles({
   root: {

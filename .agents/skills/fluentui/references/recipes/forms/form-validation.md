@@ -111,16 +111,7 @@ A complete form (Input, Select, Textarea, Checkbox) where a single validate func
 
 ```tsx
 import * as React from "react";
-import {
-  Button,
-  Checkbox,
-  Field,
-  Input,
-  MessageBar,
-  Select,
-  Text,
-  Textarea,
-} from "@fluentui/react-components";
+import { Button, Checkbox, Field, Input, MessageBar, Select, Text, Textarea } from "@fluentui/react-components";
 
 type FormValues = {
   fullName: string;
@@ -432,13 +423,7 @@ Shows a typed ValidatedTextField wrapper around Field + Input, cross-field valid
 
 ```tsx
 import * as React from "react";
-import {
-  Button,
-  Field,
-  Input,
-  MessageBar,
-  Text,
-} from "@fluentui/react-components";
+import { Button, Field, Input, MessageBar, Text } from "@fluentui/react-components";
 
 type SupportedInputType = "text" | "email" | "password" | "search" | "tel" | "url";
 

@@ -118,15 +118,7 @@ A reusable useAsyncData hook (AbortController + stale-response guard + reload no
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Card,
-  Divider,
-  MessageBar,
-  Skeleton,
-  Spinner,
-  Text,
-} from '@fluentui/react-components';
+import { Button, Card, Divider, MessageBar, Skeleton, Spinner, Text } from '@fluentui/react-components';
 
 /* ------------------------------------------------------------------ *
  * 1. One discriminated union covers every state the view can be in.
@@ -310,18 +302,7 @@ A search field that debounces keystrokes, aborts superseded requests, and render
 
 ```tsx
 import * as React from 'react';
-import {
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  Field,
-  Input,
-  MessageBar,
-  Skeleton,
-  Spinner,
-  Text,
-} from '@fluentui/react-components';
+import { Avatar, Badge, Button, Card, Field, Input, MessageBar, Skeleton, Spinner, Text } from '@fluentui/react-components';
 
 type Person = { id: string; name: string; jobTitle: string; presence: 'active' | 'away' };
 
@@ -503,15 +484,7 @@ A useResource hook that keeps the last successful data mounted, distinguishes is
 
 ```tsx
 import * as React from 'react';
-import {
-  Button,
-  Card,
-  Divider,
-  MessageBar,
-  Skeleton,
-  Spinner,
-  Text,
-} from '@fluentui/react-components';
+import { Button, Card, Divider, MessageBar, Skeleton, Spinner, Text } from '@fluentui/react-components';
 
 export interface ResourceState<T> {
   /** Last successful value — stays populated while a refresh is in flight. */

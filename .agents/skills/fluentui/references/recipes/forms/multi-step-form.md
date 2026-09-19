@@ -24,7 +24,7 @@ Three pieces of state run the whole wizard:
 | --- | --- | --- |
 | `values` | `FormValues` | Every field from every step, in one controlled object |
 | `errors` | `Partial<Record<keyof FormValues, string>>` | Messages keyed by **field**, not by step |
-| `stepIndex` | `number` | Which step renders, which slides the Progress bar |
+| `stepIndex` | `number` | Which step renders, which slides the ProgressBar bar |
 
 Three rules make it work:
 
@@ -50,7 +50,7 @@ const STEPS: StepDefinition[] = [
 ];
 ```
 
-The step list is the single source of truth for the headings, the `Progress` bar, the `Badge` counter, and the order of validation. Adding a step means adding one entry plus one block of JSX - nothing else changes.
+The step list is the single source of truth for the headings, the `ProgressBar` bar, the `Badge` counter, and the order of validation. Adding a step means adding one entry plus one block of JSX - nothing else changes.
 
 ## 2. Write one validation function with a step switch
 
@@ -93,7 +93,7 @@ const goNext = () => {
 
 Pair that with a single `updateField` helper that patches values *and* drops the error for the patched keys, so a message disappears as soon as the user fixes it.
 
-## 4. Build the chrome: Card, Text, Badge, Progress, Divider
+## 4. Build the chrome: Card, Text, Badge, ProgressBar, Divider
 
 ```tsx
 <Card appearance='outline' style={{ padding: 24 }}>
@@ -102,7 +102,7 @@ Pair that with a single `updateField` helper that patches values *and* drops the
       <Text size={500} weight='semibold'>Create your workspace</Text>
       <Badge appearance='tint' color='brand'>{`Step ${stepIndex + 1} of ${STEPS.length}`}</Badge>
     </div>
-    <Progress value={stepIndex + 1} max={STEPS.length} aria-label={`Step ${stepIndex + 1} of ${STEPS.length}`} />
+    <ProgressBar value={stepIndex + 1} max={STEPS.length} aria-label={`Step ${stepIndex + 1} of ${STEPS.length}`} />
     {/* fields */}
     <Divider />
     {/* footer with Back / Next / Submit */}
@@ -110,7 +110,7 @@ Pair that with a single `updateField` helper that patches values *and* drops the
 </Card>
 ```
 
-`Progress` is 0..1 by default, so always pass `max={STEPS.length}` together with the 1-based `value`. Always render the numeric step counter as text as well - color and bar length alone are not a text alternative.
+`ProgressBar` is 0..1 by default, so always pass `max={STEPS.length}` together with the 1-based `value`. Always render the numeric step counter as text as well - color and bar length alone are not a text alternative.
 
 ## 5. Lay out fields with Field
 
@@ -154,7 +154,7 @@ Do **not** make each summary row a link back to its step unless you also impleme
 
 ## 8. Extract the logic for the second wizard
 
-Copy-pasting the transition handlers into a second flow is where bugs start. Example 2 shows a reusable `useWizard` hook (stepIndex, errors, goNext, goBack, goTo, validateAll) plus a `StepIndicator` built from `Text`, `Badge` and `Progress` that any form can drop in.
+Copy-pasting the transition handlers into a second flow is where bugs start. Example 2 shows a reusable `useWizard` hook (stepIndex, errors, goNext, goBack, goTo, validateAll) plus a `StepIndicator` built from `Text`, `Badge` and `ProgressBar` that any form can drop in.
 
 ## 9. Async validation inside a step
 
@@ -177,22 +177,7 @@ A complete wizard with a profile step, a preferences step, and a review step. De
 
 ```tsx
 import * as React from 'react';
-import {
-  Badge,
-  Button,
-  Card,
-  Checkbox,
-  Divider,
-  Field,
-  Input,
-  MessageBar,
-  Progress,
-  Select,
-  Spinner,
-  Switch,
-  Text,
-  Textarea,
-} from '@fluentui/react-components';
+import { Badge, Button, Card, Checkbox, Divider, Field, Input, MessageBar, ProgressBar, Select, Spinner, Switch, Text, Textarea } from '@fluentui/react-components';
 
 /* ---------------------------------- model ---------------------------------- */
 
@@ -427,7 +412,7 @@ export const MultiStepForm = () => {
                 {`Step ${stepIndex + 1} of ${STEPS.length}`}
               </Badge>
             </div>
-            <Progress value={stepIndex + 1} max={STEPS.length} aria-label={`Step ${stepIndex + 1} of ${STEPS.length}`} />
+            <ProgressBar value={stepIndex + 1} max={STEPS.length} aria-label={`Step ${stepIndex + 1} of ${STEPS.length}`} />
           </header>
 
           <div role='group' aria-labelledby={headingId} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -599,20 +584,7 @@ Extracts the wizard mechanics into a generic useWizard hook (stepIndex, field-ke
 
 ```tsx
 import * as React from 'react';
-import {
-  Badge,
-  Button,
-  Card,
-  Checkbox,
-  Divider,
-  Field,
-  Input,
-  MessageBar,
-  Progress,
-  Select,
-  Text,
-  Textarea,
-} from '@fluentui/react-components';
+import { Badge, Button, Card, Checkbox, Divider, Field, Input, MessageBar, ProgressBar, Select, Text, Textarea } from '@fluentui/react-components';
 
 /* -------------------------------- useWizard -------------------------------- */
 
@@ -729,7 +701,7 @@ export const StepIndicator = (props: StepIndicatorProps) => {
         </Text>
         <Badge appearance='tint' color='brand' shape='rounded' size='small'>{`${percent}%`}</Badge>
       </div>
-      <Progress
+      <ProgressBar
         value={currentIndex + 1}
         max={steps.length}
         aria-label={`Step ${currentIndex + 1} of ${steps.length}`}

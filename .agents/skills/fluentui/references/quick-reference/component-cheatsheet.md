@@ -6,7 +6,7 @@
 
 | Package | Components |
 | --- | --- |
-| `@fluentui/react-components` | Accordion, Aria, Avatar, Badge, Breadcrumb, Button, Card, Carousel, Checkbox, ColorPicker, Combobox, Dialog, Divider, Drawer, Field, Image, Infolabel, Input, Label, Link, List, Menu, MessageBar, Motion, Nav, Overflow, Persona, Popover, Portal, Positioning, Progress, Provider, Radio, Rating, Search, Select, Skeleton, Slider, Spinbutton, Spinner, SwatchPicker, Switch, Table, Tabs, Tabster, TagPicker, Tags, TeachingPopover, Text, Textarea, Toast, Toolbar, Tooltip, Tree, Utilities |
+| `@fluentui/react-components` | Accordion, Avatar, Badge, Breadcrumb, Button, Card, Carousel, Checkbox, ColorPicker, Combobox, Dialog, Divider, Drawer, Field, Image, InfoLabel, Input, Label, Link, List, Menu, MessageBar, Nav, Overflow, Persona, Popover, Portal, ProgressBar, FluentProvider, Radio, Rating, SearchBox, Select, Skeleton, Slider, SpinButton, Spinner, SwatchPicker, Switch, Table, TabList, TagGroup, TeachingPopover, Text, Textarea, Toast, Toolbar, Tooltip, Tree |
 | `@fluentui/react-calendar-compat` | CalendarCompat |
 | `@fluentui/react-datepicker-compat` | DatepickerCompat |
 | `@fluentui/react-timepicker-compat` | TimepickerCompat |
@@ -25,10 +25,10 @@ import { TimepickerCompat } from '@fluentui/react-timepicker-compat';
 
 | Pattern | Props | Components |
 | --- | --- | --- |
-| Visual variant | `appearance` | Button, Input, Textarea, Select, Spinbutton, Badge, Card, Divider, Link, Spinner, Skeleton, Popover, Tooltip, Tabs, Tree |
-| Visual scale | `size` | Button, Badge, Avatar, Persona, Input, Textarea, Select, Field, Label, Spinner, Switch, Slider, Spinbutton, Rating, Tabs, Tree, Card, Breadcrumb, SwatchPicker, Toolbar, Infolabel |
-| Corner style | `shape` | Button, Badge, Skeleton, Checkbox, ColorPicker, Image, MessageBar, Progress, SwatchPicker |
-| Controlled value | `value` + `onChange` | Input, Textarea, Select, Slider, Spinbutton, Rating, Radio |
+| Visual variant | `appearance` | Button, Input, Textarea, Select, SpinButton, Badge, Card, Divider, Link, Spinner, Skeleton, Popover, Tooltip, Tabs, Tree |
+| Visual scale | `size` | Button, Badge, Avatar, Persona, Input, Textarea, Select, Field, Label, Spinner, Switch, Slider, SpinButton, Rating, Tabs, Tree, Card, Breadcrumb, SwatchPicker, Toolbar, InfoLabel |
+| Corner style | `shape` | Button, Badge, Skeleton, Checkbox, ColorPicker, Image, MessageBar, ProgressBar, SwatchPicker |
+| Controlled value | `value` + `onChange` | Input, Textarea, Select, Slider, SpinButton, Rating, Radio |
 | Checked value | `checked` / `defaultChecked` + `onChange` | Checkbox (`boolean \| "mixed"`), Switch |
 | Open state | `open` / `defaultOpen` + `onOpenChange` | Dialog, Popover, Menu, DatepickerCompat |
 | Selection state | `selected` / `defaultSelected`, `selectedValue` / `defaultSelectedValue` + `onSelectionChange` | Card, List, Nav, SwatchPicker, Tree |
@@ -43,7 +43,7 @@ import { TimepickerCompat } from '@fluentui/react-timepicker-compat';
 | Input | `outline`, `underline`, `filled-darker`, `filled-lighter`, `filled-darker-shadow`, `filled-lighter-shadow` |
 | Textarea | `outline`, `filled-darker`, `filled-lighter`, `filled-darker-shadow`, `filled-lighter-shadow` |
 | Select | `outline`, `underline`, `filled-darker`, `filled-lighter` |
-| Spinbutton | `outline`, `underline`, `filled-darker`, `filled-lighter` |
+| SpinButton | `outline`, `underline`, `filled-darker`, `filled-lighter` |
 | Badge | `filled`, `ghost`, `outline`, `tint` |
 | Card | `filled`, `filled-alternative`, `outline`, `subtle` |
 | Divider | `brand`, `default`, `strong`, `subtle` |
@@ -59,8 +59,8 @@ import { TimepickerCompat } from '@fluentui/react-timepicker-compat';
 
 | Scale | Components |
 | --- | --- |
-| `small` \| `medium` \| `large` | Button, Input, Textarea, Select, Field, Label, Breadcrumb, Tabs, Card, Toolbar, Infolabel |
-| `small` \| `medium` | Switch, Slider, Spinbutton, Tree |
+| `small` \| `medium` \| `large` | Button, Input, Textarea, Select, Field, Label, Breadcrumb, Tabs, Card, Toolbar, InfoLabel |
+| `small` \| `medium` | Switch, Slider, SpinButton, Tree |
 | `medium` \| `large` | Checkbox |
 | `extra-small` \| `small` \| `medium` \| `large` | SwatchPicker |
 | `extra-small` … `extra-large` \| `huge` | Avatar, Persona |
@@ -85,7 +85,7 @@ import { TimepickerCompat } from '@fluentui/react-timepicker-compat';
 | Combobox | `freeform`, `children` | root, expandIcon, clearIcon, input, listbox |
 | DatepickerCompat | `value`, `onSelectDate`, `open`/`defaultOpen`/`onOpenChange`, `allowTextInput`, `formatDate`, `parseDateFromString`, `minDate`, `maxDate`, `today`, `initialPickerDate`, `firstDayOfWeek`, `firstWeekOfYear`, `showWeekNumbers`, `showGoToToday`, `highlightCurrentMonth`, `highlightSelectedMonth`, `isMonthPickerVisible`, `showMonthPickerAsOverlay`, `required`, `disabled`, `underlined`, `borderless`, `inlinePopup`, `openOnClick`, `disableAutoFocus`, `placeholder`, `strings`, `dateTimeFormatter`, `positioning`, `onValidationResult`, `showCloseButton`, `allFocusable` | — |
 | Field | `orientation` (`vertical`/`horizontal`), `validationState` (`error`/`warning`/`success`/`none`), `required`, `size`, `children` | root, label, validationMessage, validationMessageIcon, hint |
-| Infolabel | `size` (`small`/`medium`/`large`), `inline`, `info`, `popover` | — |
+| InfoLabel | `size` (`small`/`medium`/`large`), `inline`, `info`, `popover` | — |
 | Input | `size`, `appearance`, `value`, `defaultValue`, `onChange`, `type` (`text`/`number`/`email`/`password`/`search`/`tel`/`url`/`date`/`datetime-local`/`month`/`time`/`week`) | root, input, contentBefore, contentAfter |
 | Label | `disabled`, `required`, `size`, `weight` (`regular`/`semibold`) | root, required |
 | Radio | `value`, `labelPosition` (`after`/`below`), `disabled`, `onChange` | root, label, input, indicator |
@@ -93,7 +93,7 @@ import { TimepickerCompat } from '@fluentui/react-timepicker-compat';
 | Search | `onChange(event, InputOnChangeData)` | — |
 | Select | `appearance`, `size`, `onChange` | root, select, icon |
 | Slider | `value`, `defaultValue`, `min`, `max`, `step`, `vertical`, `disabled`, `size`, `onChange` | root, rail, thumb, input |
-| Spinbutton | `value`, `defaultValue`, `displayValue`, `min`, `max`, `step`, `stepPage`, `precision`, `appearance`, `size`, `onChange` | — |
+| SpinButton | `value`, `defaultValue`, `displayValue`, `min`, `max`, `step`, `stepPage`, `precision`, `appearance`, `size`, `onChange` | — |
 | SwatchPicker | `selectedValue`, `defaultSelectedValue`, `onSelectionChange`, `layout` (`row`/`grid`), `focusMode` (`arrow`/`tab`), `size`, `shape`, `spacing` | root |
 | Switch | `checked`, `defaultChecked`, `labelPosition` (`above`/`after`/`before`), `disabledFocusable`, `size`, `onChange` | root, indicator, input, label |
 | TagPicker | `children` (required), `inline`, `noPopover`, `onOpenChange`, `onOptionSelect` | — |
@@ -110,7 +110,7 @@ import { TimepickerCompat } from '@fluentui/react-timepicker-compat';
 | `onChange` — Switch | `data.checked: boolean` |
 | `onChange` — Radio | `data.value: string` |
 | `onChange` — Slider, Rating | `data.value: number` |
-| `onChange` — Spinbutton | `data.value: number \| null`, `data.displayValue` |
+| `onChange` — SpinButton | `data.value: number \| null`, `data.displayValue` |
 | `onOpenChange` — Dialog, Popover, Menu | `data.open: boolean` |
 | `onSelectionChange` — Card | `data.selected: boolean` |
 | `onSelectDate` — DatepickerCompat | `(date: Date \| null \| undefined)` |
@@ -147,7 +147,7 @@ import { TimepickerCompat } from '@fluentui/react-timepicker-compat';
 | --- | --- | --- |
 | Dialog | `children` (required), `open`, `defaultOpen`, `onOpenChange`, `modalType` (DialogModalType), `inertTrapFocus`, `unmountOnClose` | surfaceMotion |
 | MessageBar | `intent` (MessageBarIntent), `politeness` (`assertive`/`polite`), `shape` (`square`/`rounded`) | root, icon, bottomReflowSpacer |
-| Progress | `value`, `max`, `shape` (`rounded`/`square`), `thickness` (`medium`/`large`), `color` (`brand`/`success`/`warning`/`error`) | — |
+| ProgressBar | `value`, `max`, `shape` (`rounded`/`square`), `thickness` (`medium`/`large`), `color` (`brand`/`success`/`warning`/`error`) | — |
 | Spinner | `size`, `appearance`, `labelPosition` (`above`/`below`/`before`/`after`), `delay` | root, spinner, spinnerTail, label |
 | Toast | `appearance` | root |
 | Tooltip | `relationship` (**required**: `label`/`description`/`inaccessible`), `appearance`, `withArrow`, `showDelay`, `hideDelay`, `visible`, `onVisibleChange`, `positioning`, `ref` | content |
@@ -172,7 +172,6 @@ import { TimepickerCompat } from '@fluentui/react-timepicker-compat';
 | Component | Props | Slots |
 | --- | --- | --- |
 | Accordion | `defaultOpenItems`, `openItems`, `collapsible`, `multiple`, `navigation` (`linear`/`circular`), `onToggle` | root |
-| Aria | `children` | — |
 | Carousel | `defaultActiveIndex`, `activeIndex`, `onActiveIndexChange`, `align` (`center`/`start`/`end`), `appearance` (CarouselAppearance), `circular`, `groupSize` (number \| `"auto"`), `draggable`, `whitespace`, `motion` (CarouselMotion), `announcement`, `autoplayInterval` | root |
 | ContextSelector | — | — |
 | HeadlessComponentsPreview | — | — |
@@ -182,7 +181,7 @@ import { TimepickerCompat } from '@fluentui/react-timepicker-compat';
 | Overflow | `id` (required), `groupId`, `children` (required), `onOverflowChange` | — |
 | Portal | `children`, `mountNode` (HTMLElement \| `{ element?, className? }` \| null) | — |
 | Positioning | — | — |
-| Provider | `theme` (PartialTheme), `dir` (`ltr`/`rtl`), `targetDocument`, `applyStylesToPortals`, `customStyleHooks_unstable`, `overrides_unstable` | — |
+| FluentProvider | `theme` (PartialTheme), `dir` (`ltr`/`rtl`), `targetDocument`, `applyStylesToPortals`, `customStyleHooks_unstable`, `overrides_unstable` | — |
 | Tabster | — | — |
 | Utilities | — | — |
 
@@ -291,14 +290,7 @@ Checkbox (tri-state), Radio, Switch, Slider, Rating and Spinbutton with their on
 
 ```tsx
 import * as React from 'react';
-import {
-  Checkbox,
-  Radio,
-  Rating,
-  Slider,
-  Spinbutton,
-  Switch,
-} from '@fluentui/react-components';
+import { Checkbox, Radio, Rating, Slider, SpinButton, Switch } from '@fluentui/react-components';
 
 export const Settings = () => {
   const [agree, setAgree] = React.useState<boolean | 'mixed'>(false);
@@ -354,7 +346,7 @@ export const Settings = () => {
         onChange={(ev, data) => setStars(data.value)}
       />
 
-      <Spinbutton
+      <SpinButton
         appearance="outline"
         size="medium"
         min={0}
@@ -415,7 +407,7 @@ export const ProfileCard = () => {
 MessageBar intent, Spinner size/delay/labelPosition, Progress color & thickness, Skeleton shape.
 
 ```tsx
-import { MessageBar, Progress, Skeleton, Spinner } from '@fluentui/react-components';
+import { MessageBar, ProgressBar, Skeleton, Spinner } from '@fluentui/react-components';
 
 <MessageBar intent="success" politeness="polite" shape="rounded">
   Changes saved.
@@ -429,7 +421,7 @@ import { MessageBar, Progress, Skeleton, Spinner } from '@fluentui/react-compone
   delay={300}
 />
 
-<Progress value={40} max={100} shape="rounded" thickness="medium" color="brand" />
+<ProgressBar value={40} max={100} shape="rounded" thickness="medium" color="brand" />
 
 <Skeleton animation="wave" appearance="translucent" shape="rectangle" width="240px" />
 ```
@@ -493,19 +485,13 @@ export const Overlays = () => {
 };
 ```
 
-### Text input family: Select, Search, Combobox, TagPicker, Infolabel
+### Text input family: Select, SearchBox, Combobox, TagPicker, InfoLabel
 
-Native Select, Search onChange payload, freeform Combobox, inline TagPicker and Infolabel.
+Native Select, SearchBox onChange payload, freeform Combobox, inline TagPicker and InfoLabel.
 
 ```tsx
 import * as React from 'react';
-import {
-  Combobox,
-  Infolabel,
-  Search,
-  Select,
-  TagPicker,
-} from '@fluentui/react-components';
+import { Combobox, InfoLabel, SearchBox, Select, TagPicker } from '@fluentui/react-components';
 
 export const Inputs = () => {
   const [city, setCity] = React.useState('sea');
@@ -523,7 +509,7 @@ export const Inputs = () => {
         <option value="pdx">Portland</option>
       </Select>
 
-      <Search
+      <SearchBox
         placeholder="Search"
         value={query}
         onChange={(ev, data) => setQuery(data.value)}
@@ -537,9 +523,9 @@ export const Inputs = () => {
         {/* option children */}
       </TagPicker>
 
-      <Infolabel size="medium" inline info="Region determines data residency.">
+      <InfoLabel size="medium" inline info="Region determines data residency.">
         Region
-      </Infolabel>
+      </InfoLabel>
     </>
   );
 };
