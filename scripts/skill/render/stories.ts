@@ -105,6 +105,11 @@ export function renderExamplesSection(
   component: ComponentEntry,
   max: number = MAX_COMPONENT_STORIES,
 ): string {
-  const rendered = selectStories(component.stories, max).map(renderStory);
+  const rendered = selectStories(component.stories, max)
+    .map(renderStory)
+    .filter((block) => block !== '');
+  if (rendered.length === 0) {
+    return '';
+  }
   return joinSections([heading(2, 'Examples'), ...rendered]);
 }
