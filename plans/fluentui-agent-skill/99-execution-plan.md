@@ -297,7 +297,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 - [x] 6.4.1 Full verify (PR-1) ✅ (completed: 2026-09-19 21:31)
 
 **Deliverables**:
-- [x] No MCP, `docs/`, or `techdocs/` references ✅ (completed: 2026-09-19 21:31)
+- [x] No dead MCP runtime, `docs/`, or `techdocs/` artifacts; the README MCP rewrite is owned by Phase 8 (PC-02) ✅ (completed: 2026-09-19 21:31)
 - [x] Build and tests green on the surviving set ✅ (completed: 2026-09-19 21:31)
 - [x] All verification passing ✅ (completed: 2026-09-19 21:31)
 

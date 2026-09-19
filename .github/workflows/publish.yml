@@ -21,6 +21,9 @@
 
 name: Publish to npm
 
+permissions:
+    contents: read
+
 on:
     # Manual trigger only (inactive by default)
     workflow_dispatch:
@@ -100,18 +103,31 @@ jobs:
             - name: Build the published artifacts
               run: yarn build && yarn assemble
 
+            # Read the pack file list as JSON so the checks match exact paths.
+            # A plain `grep "data/"` would also match the generated
+            # `skills/fluentui/references/recipes/data/` pages and always fail.
             - name: Verify package contents
               run: |
-                  npm pack --dry-run --ignore-scripts 2>&1 | tee pack-output.txt
-                  grep -q "skills/fluentui/SKILL.md" pack-output.txt || { echo "::error::skills/fluentui/SKILL.md not included in npm package — run yarn assemble"; exit 1; }
-                  grep -q "dist/bin.js" pack-output.txt || { echo "::error::dist/bin.js (bin entry) not included in npm package — build did not emit"; exit 1; }
-                  if grep -q "data/" pack-output.txt; then echo "::error::data/ must not be included in npm package"; exit 1; fi
+                  npm pack --dry-run --ignore-scripts --json > pack-output.json
+                  node -e '
+                    const files = require("./pack-output.json")[0].files.map((f) => f.path);
+                    const required = ["skills/fluentui/SKILL.md", "dist/bin.js"];
+                    for (const path of required) {
+                      if (!files.includes(path)) {
+                        console.error("::error::" + path + " not included in npm package");
+                        process.exit(1);
+                      }
+                    }
+                    if (files.some((p) => p.startsWith("data/"))) {
+                      console.error("::error::data/ must not be included in npm package");
+                      process.exit(1);
+                    }
+                    console.log("Package contents verified: " + files.length + " files");
+                  '
 
             - name: Publish to npm (dry run)
               if: ${{ github.event.inputs.dry_run == 'true' || github.event.inputs.dry_run == '' }}
               run: npm publish --dry-run
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
             - name: Publish to npm
               if: ${{ github.event.inputs.dry_run == 'false' || github.event_name == 'release' }}

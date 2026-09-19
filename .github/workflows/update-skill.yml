@@ -75,17 +75,22 @@ jobs:
 
             # --- Stage 1: Scrape ---
             # `--clone` lets the scraper pin the checkout to the newest stable
-            # release tag (or the explicit `ref` when one was provided).
+            # release tag (or the explicit `ref` when one was provided). The
+            # free-text refs are passed through the environment and quoted into
+            # an argument array so they can never be interpreted as shell.
             - name: Run scraper
+              env:
+                  FLUENTUI_REF: ${{ github.event.inputs.ref }}
+                  CONTRIB_REF: ${{ github.event.inputs.contrib_ref }}
               run: |
-                  SCRAPE_FLAGS=""
-                  if [ -n "${{ github.event.inputs.ref }}" ]; then
-                    SCRAPE_FLAGS="$SCRAPE_FLAGS --ref ${{ github.event.inputs.ref }}"
+                  args=(scrape --version "$FLUENTUI_VERSION" --clone --verbose)
+                  if [ -n "$FLUENTUI_REF" ]; then
+                    args+=(--ref "$FLUENTUI_REF")
                   fi
-                  if [ -n "${{ github.event.inputs.contrib_ref }}" ]; then
-                    SCRAPE_FLAGS="$SCRAPE_FLAGS --contrib-ref ${{ github.event.inputs.contrib_ref }}"
+                  if [ -n "$CONTRIB_REF" ]; then
+                    args+=(--contrib-ref "$CONTRIB_REF")
                   fi
-                  yarn scrape --version ${{ env.FLUENTUI_VERSION }} --clone $SCRAPE_FLAGS --verbose
+                  yarn "${args[@]}"
 
             # --- Stage 2: Enhance (skip on dry run) ---
             - name: Run enhancer
