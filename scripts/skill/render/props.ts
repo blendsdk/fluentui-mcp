@@ -1,0 +1,127 @@
+/**
+ * Render a component's props and slots as Markdown tables.
+ *
+ * These are pure functions over {@link ComponentEntry} data. They reuse the
+ * shared table and escaping primitives so prop types containing `|` (for
+ * example `'primary' | 'secondary'`) never break the table layout.
+ *
+ * @module skill/render/props
+ */
+
+import type { ComponentEntry, PropEntry, SlotEntry } from '../../../src/types/schema.js';
+import {
+  EMPTY_CELL,
+  bulletList,
+  escapeTableCell,
+  heading,
+  inlineCode,
+  joinSections,
+  table,
+} from './sections.js';
+
+/** Sort entries by name for stable, alphabetical output. */
+function sortByName<T extends { name: string }>(entries: readonly T[]): T[] {
+  return [...entries].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Render a single prop as a table row.
+ *
+ * Deprecated props are annotated inline in the description cell so the
+ * deprecation is visible without a separate column.
+ */
+function propRow(prop: PropEntry): string[] {
+  const name = inlineCode(prop.name);
+  const type = inlineCode(prop.type);
+  const defaultValue = prop.defaultValue ? inlineCode(prop.defaultValue) : EMPTY_CELL;
+  const required = prop.required ? 'Yes' : 'No';
+
+  let description = prop.description ? escapeTableCell(prop.description) : EMPTY_CELL;
+  if (prop.deprecated) {
+    const note = prop.deprecationMessage
+      ? `**Deprecated:** ${escapeTableCell(prop.deprecationMessage)}`
+      : '**Deprecated**';
+    description = description === EMPTY_CELL ? note : `${description} ${note}`;
+  }
+
+  return [name, type, defaultValue, required, description];
+}
+
+/** Render a single slot as a table row, combining its element alternatives. */
+function slotRow(slot: SlotEntry): string[] {
+  const elementTypes = [slot.elementType, ...(slot.alternativeTypes ?? [])].filter(
+    (value) => value && value.trim() !== '',
+  );
+  const element = elementTypes.length > 0 ? inlineCode(elementTypes.join(' | ')) : EMPTY_CELL;
+  const description = slot.description ? escapeTableCell(slot.description) : EMPTY_CELL;
+  return [inlineCode(slot.name), element, slot.required ? 'Yes' : 'No', description];
+}
+
+/**
+ * Render a component's props as a Markdown table.
+ *
+ * @param component - The component whose props to render.
+ * @returns The props table, or a short notice when there are no props.
+ */
+export function renderPropsTable(component: ComponentEntry): string {
+  if (component.props.length === 0) {
+    return '_No documented props._';
+  }
+  const rows = sortByName(component.props).map(propRow);
+  return table(
+    ['Prop', 'Type', 'Default', 'Required', 'Description'],
+    rows,
+  );
+}
+
+/**
+ * Render a component's slots as a Markdown table.
+ *
+ * @param component - The component whose slots to render.
+ * @returns The slots table, or an empty string when there are no slots.
+ */
+export function renderSlotsTable(component: ComponentEntry): string {
+  if (component.slots.length === 0) {
+    return '';
+  }
+  const rows = sortByName(component.slots).map(slotRow);
+  return table(['Slot', 'Element', 'Required', 'Description'], rows);
+}
+
+/**
+ * Render per-prop usage guidance as a bullet list.
+ *
+ * @param component - The component whose guidance to render.
+ * @returns The bullet list, or an empty string when there is no guidance.
+ */
+export function renderPropGuidance(component: ComponentEntry): string {
+  const guidance = component.enhanced?.propGuidance;
+  if (!guidance || guidance.length === 0) {
+    return '';
+  }
+  const items = guidance.map((entry) => {
+    const example =
+      entry.example && entry.example.trim() !== ''
+        ? ` ${inlineCode(entry.example)}`
+        : '';
+    return `**${entry.prop}**: ${entry.guidance}${example}`;
+  });
+  return joinSections([heading(3, 'Prop Guidance'), bulletList(items)]);
+}
+
+/**
+ * Render the complete props reference section: the props table, optional
+ * per-prop guidance, and the slots table when the component has slots.
+ *
+ * @param component - The component to document.
+ * @returns The `Props Reference` section with its optional subsections.
+ */
+export function renderPropsReference(component: ComponentEntry): string {
+  const slots = renderSlotsTable(component);
+  return joinSections([
+    heading(2, 'Props Reference'),
+    renderPropsTable(component),
+    renderPropGuidance(component),
+    slots === '' ? '' : joinSections([heading(3, 'Slots'), slots]),
+  ]);
+}

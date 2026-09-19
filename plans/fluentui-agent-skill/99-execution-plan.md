@@ -3,7 +3,7 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-09-19 15:17
-> **Progress**: 34/103 tasks (33%)
+> **Progress**: 35/103 tasks (34%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -156,7 +156,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 3.2: Implementation
 
-- [ ] 3.2.1 Relocate reusable formatter logic to pure renderers — `scripts/skill/render/props.ts`, `stories.ts`, `sections.ts` (PR-5)
+- [x] 3.2.1 Relocate reusable formatter logic to pure renderers — `scripts/skill/render/props.ts`, `stories.ts`, `sections.ts` (PR-5) ✅ (completed: 2026-09-19 15:18)
 - [ ] 3.2.2 Implement the source→destination mapping with path-safety checks — `scripts/skill/mapping.ts`
 - [ ] 3.2.3 Implement the deterministic generator and `--check` mode — `scripts/skill/generate.ts`
 - [ ] 3.2.4 Implement the manifest — `scripts/skill/manifest.ts`
