@@ -41,3 +41,21 @@ Security verdict was FAIL on SEC-01; correctness verdict was PASS WITH MINOR FIN
 | F2 | Fix: run a real `npm pack` against an isolated package fixture and assert the file list. |
 | F6 | Fix: raise the vitest test timeout so the pre-existing heavy tests stop flaking under parallel load. |
 | F3, F4, F5, F7 | Keep in strict scope; recorded as non-blocking notes. |
+
+## Re-review (fix diff `d55bae3..1e4c78f`)
+
+One focused re-review. Verdict: **PASS WITH MINOR FINDINGS — no critical or major finding
+remains.** It confirmed every targeted fix with a live reproduction, including an attempt to
+defeat the constrained assemble destination by passing hostile CLI arguments and `..` paths; the
+attempt failed. It reported three minor follow-ups, two of which were applied:
+
+| ID | Fix |
+|----|-----|
+| NEW-1 | Added regression tests for the cleanup-pattern, invalid-marker refusal, and control-character sanitizing fixes. |
+| NEW-2 | Extended the sanitizer to strip Unicode display-formatting characters (bidirectional overrides) as well as control characters. |
+| NEW-3 | Informational only: the packaging test shells out to `npm`, which needs `npm.cmd` on Windows. Matches the existing pattern; no change. |
+
+## Outcome
+
+Phase 5 is complete and its acceptance criteria are met: the installer works, the package is
+packable with no `data/`, and the full verify chain passes.
