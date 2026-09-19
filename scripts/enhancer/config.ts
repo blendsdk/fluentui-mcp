@@ -8,7 +8,51 @@
  * @module enhancer/config
  */
 
-import type { GuideSpec } from './types.js';
+import type { DeepSeekReasoningEffort, GuideSpec } from './types.js';
+
+// ============================================================================
+// DeepSeek Limits & Defaults
+// ============================================================================
+
+/**
+ * Output-token ceiling requested from DeepSeek.
+ *
+ * DeepSeek's reasoning models expose a 128K output window; the enhancer always
+ * asks for the maximum so large enriched JSON is never silently cut short. A
+ * response that still ends with `finish_reason === 'length'` is treated as
+ * truncated and aborts the item.
+ */
+export const DEEPSEEK_MAX_OUTPUT_TOKENS = 131_072;
+
+/**
+ * Per-request timeout in milliseconds for DeepSeek calls.
+ *
+ * Thinking-mode responses can take a long time, so the timeout is generous
+ * (10 minutes) rather than the typical request timeout.
+ */
+export const DEEPSEEK_REQUEST_TIMEOUT_MS = 600_000;
+
+/** Default DeepSeek model id when `DEEPSEEK_MODEL` is unset. */
+export const DEFAULT_DEEPSEEK_MODEL = 'deepseek-flash';
+
+/** Default DeepSeek OpenAI-compatible base URL when `DEEPSEEK_BASE_URL` is unset. */
+export const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
+
+/**
+ * Reasoning-effort levels DeepSeek accepts.
+ *
+ * Used both as the validation allowlist for `DEEPSEEK_REASONING_EFFORT` and as
+ * the default (`max`) when the variable is unset.
+ */
+export const DEEPSEEK_REASONING_EFFORTS: readonly DeepSeekReasoningEffort[] = [
+  'none',
+  'low',
+  'high',
+  'max',
+];
+
+/** Default reasoning effort when `DEEPSEEK_REASONING_EFFORT` is unset. */
+export const DEFAULT_DEEPSEEK_REASONING_EFFORT: DeepSeekReasoningEffort = 'max';
 
 // ============================================================================
 // Guide Catalogs

@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 12:45
-> **Progress**: 14/103 tasks (14%)
+> **Last Updated**: 2026-09-19 12:51
+> **Progress**: 16/103 tasks (16%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -105,8 +105,8 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 2.2: Implementation — provider and cost gate
 
-- [ ] 2.2.1 Add DeepSeek config and limits — `scripts/enhancer/types.ts`, `scripts/enhancer/config.ts`
-- [ ] 2.2.2 Implement the DeepSeek provider with fail-fast and truncation detection — `scripts/enhancer/llm/deepseek.ts`, `scripts/enhancer/llm/provider.ts`
+- [x] 2.2.1 Add DeepSeek config and limits — `scripts/enhancer/types.ts`, `scripts/enhancer/config.ts` ✅ (completed: 2026-09-19 12:51)
+- [x] 2.2.2 Implement the DeepSeek provider with fail-fast and truncation detection — `scripts/enhancer/llm/deepseek.ts`, `scripts/enhancer/llm/provider.ts` ✅ (completed: 2026-09-19 12:51)
 - [ ] 2.2.3 Port the cost estimator and confirmation gate — `scripts/enhancer/cost-estimator.ts`, `scripts/enhancer/cli.ts`
 
 ### Step 2.3: Implementation — content model
