@@ -33,8 +33,9 @@ export type {
 
   GuideEntry,
   GuideCodeExample,
-  PatternEntry,
-  PatternEntryExample,
+  CategoryGuidanceEntry,
+  RecipeEntry,
+  RecipeExample,
 } from './schema.js';
 
 export { KNOWN_COMPONENT_CATEGORIES } from './schema.js';

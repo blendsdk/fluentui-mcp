@@ -49,11 +49,11 @@ export interface FluentUISchema {
   /** Foundation guides (getting started, theming, styling, etc.) */
   foundation: GuideEntry[];
 
-  /** Pattern guides (forms, navigation, layout, etc.) */
-  patterns: PatternEntry[];
+  /** Per-category guidance documents (one per schema category) */
+  categoryGuidance: CategoryGuidanceEntry[];
 
-  /** Enterprise guides (dashboards, admin, data viz, etc.) */
-  enterprise: GuideEntry[];
+  /** Task recipes (login form, data table, dashboard shell, etc.) */
+  recipes: RecipeEntry[];
 
   /** Quick reference (cheatsheets, checklists, etc.) */
   quickReference: GuideEntry[];
@@ -327,9 +327,6 @@ export interface ComponentEnhanced {
     screenReaderBehavior: string;
   };
 
-  /** Common usage patterns with code examples */
-  commonPatterns: PatternExample[];
-
   /** Tips for styling this component with Griffel */
   stylingTips: string;
 
@@ -348,11 +345,8 @@ export interface ComponentEnhanced {
   /** Theming & design-token guidance (which tokens to use, dark mode, RTL). */
   themingNotes?: string;
 
-  /** Slot-composition examples demonstrating slot overrides/children. */
-  compositionExamples?: PatternExample[];
-
-  /** Related-pattern links (pattern/guide ids this component participates in). */
-  relatedPatterns?: string[];
+  /** Recipe ids this component participates in. */
+  relatedRecipes?: string[];
 
   /** Edge cases & gotchas (controlled/uncontrolled, async, empty states). */
   edgeCases?: string[];
@@ -395,9 +389,6 @@ export interface AntiPattern {
 
   /** The correct approach. */
   solution: string;
-
-  /** Optional corrected code snippet. */
-  code?: string;
 }
 
 
@@ -622,42 +613,41 @@ export interface GuideCodeExample {
 }
 
 /**
- * A pattern guide grouping related components into real-world usage patterns.
- * Examples: login forms, sidebar navigation, dashboard layouts.
+ * Documentation for one component category (buttons, forms, navigation, …).
  *
- * Patterns differ from guides in that they focus on composing multiple
- * components together and include working examples with component references.
+ * Category guidance aggregates cross-cutting advice that applies to every
+ * component in the category, so a reader gets one coherent overview instead
+ * of repeating the same guidance in each component file.
  */
-export interface PatternEntry {
-  /** Pattern ID (e.g., 'login-form', 'sidebar-navigation') */
+export interface CategoryGuidanceEntry {
+  /** Stable guide ID (equal to the category id, e.g. 'buttons') */
   id: string;
 
-  /** Pattern title */
-  title: string;
+  /** The schema category this guidance describes */
+  category: SchemaComponentCategory;
 
-  /** Pattern group (e.g., 'forms', 'navigation', 'layout', 'modals', 'state', 'data') */
-  group: string;
+  /** Multi-sentence overview of the category's role */
+  overview: string;
 
-  /** Full pattern content (markdown formatted) */
-  content: string;
+  /** When and why to reach for components in this category */
+  whenToUse: string;
 
-  /** Complete working examples */
-  examples: PatternEntryExample[];
+  /** Best practices shared by the category */
+  bestPractices: {
+    /** Things to do */
+    dos: string[];
+    /** Things to avoid */
+    donts: string[];
+  };
 
-  /** Component names this pattern uses */
-  referencedComponents: string[];
+  /** Accessibility guidance shared by the category */
+  accessibility: string;
 
-  /** When to use this pattern. */
-  whenToUse?: string;
+  /** Category-level anti-patterns (prose only, no code) */
+  antiPatterns: AntiPattern[];
 
-  /** When NOT to use this pattern. */
-  whenNotToUse?: string;
-
-  /** Accessibility callouts for the composed pattern. */
-  accessibilityNotes?: string;
-
-  /** Pitfalls specific to this pattern. */
-  pitfalls?: string[];
+  /** IDs of the components that belong to this category */
+  componentIds: string[];
 
   /** Hash for diff-based updates */
   sourceHash: string;
@@ -667,20 +657,66 @@ export interface PatternEntry {
 }
 
 /**
- * A complete working example within a pattern entry.
-
- * Includes references to which components are used.
+ * A task recipe: a goal-oriented walkthrough that composes several components
+ * to accomplish a concrete job (for example a login form or a data table).
+ *
+ * Unlike component enhancement, recipes may include complete code examples so
+ * a reader can copy a working composition and adapt it.
  */
-export interface PatternEntryExample {
+export interface RecipeEntry {
+  /** Stable recipe ID (e.g., 'login-form', 'data-table') */
+  id: string;
+
+  /** Human-readable recipe title */
+  title: string;
+
+  /** Recipe group (forms, data, navigation, modals, layout, state, accessibility) */
+  group: string;
+
+  /** The concrete outcome the recipe helps the reader achieve */
+  goal: string;
+
+  /** When this recipe is the right choice */
+  whenToUse: string;
+
+  /** When NOT to use this recipe, and what to use instead */
+  whenNotToUse: string;
+
+  /** Full recipe content (markdown formatted) */
+  content: string;
+
+  /** Complete, working examples for the recipe */
+  examples: RecipeExample[];
+
+  /** Component names the recipe uses */
+  referencedComponents: string[];
+
+  /** Accessibility callouts for the composed recipe */
+  accessibilityNotes: string;
+
+  /** Common mistakes specific to this recipe */
+  pitfalls: string[];
+
+  /** Hash for diff-based updates */
+  sourceHash: string;
+
+  /** ISO 8601 timestamp of when this was generated */
+  enhancedAt: string;
+}
+
+/**
+ * A complete working example within a recipe.
+ */
+export interface RecipeExample {
   /** Example name */
   name: string;
 
-  /** Description of this example */
+  /** Description of what this example demonstrates */
   description: string;
 
   /** Complete working code */
   code: string;
 
-  /** Component names used in this example */
-  components: string[];
+  /** Programming language for syntax highlighting (e.g., 'tsx') */
+  language?: string;
 }

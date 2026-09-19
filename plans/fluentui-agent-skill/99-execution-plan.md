@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 12:53
-> **Progress**: 17/103 tasks (17%)
+> **Last Updated**: 2026-09-19 12:54
+> **Progress**: 18/103 tasks (18%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -111,7 +111,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 2.3: Implementation — content model
 
-- [ ] 2.3.1 Evolve schema types (drop code fields; add `categoryGuidance`, `recipes`) — `src/types/schema.ts`
+- [x] 2.3.1 Evolve schema types (drop code fields; add `categoryGuidance`, `recipes`) — `src/types/schema.ts` ✅ (completed: 2026-09-19 12:54)
 - [ ] 2.3.2 Rewrite the component prompt to prose-only — `scripts/enhancer/prompts/component-enhance.ts`
 - [ ] 2.3.3 Add the category-guidance prompt — `scripts/enhancer/prompts/category-guidance.ts`
 - [ ] 2.3.4 Replace the pattern prompt with the recipe prompt — `scripts/enhancer/prompts/recipe.ts`
