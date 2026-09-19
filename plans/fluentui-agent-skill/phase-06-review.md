@@ -3,7 +3,8 @@
 > **Phase diff**: `de66f1d` (tree of `32e0758`) → `2ca01a0`
 > **Reviewers**: correctness reviewer + security auditor (parallel, strict scope)
 > **Verdicts**: correctness **FAIL** (one critical) · security **PASS WITH MINOR FINDINGS**
-> **Status**: ⏳ Awaiting user ruling on the finding batch
+> **Re-review**: **PASS** on fix diff `2ca01a0..62d11d1` — no critical or major remains
+> **Status**: ✅ Closed
 
 ## Findings
 
@@ -64,3 +65,20 @@
 - **PC-04:** the hygiene scan matches ST-34's intent but excludes `plans/`, `requirements/`, and itself, so RD-06 AC1's literal `grep` still matches those.
 - **PC-05:** the retained validator is emitted into `dist/` and `yarn build` does not clean.
 - **SEC-02 / SEC-05:** actions remain pinned to floating tags, and the update job holds write permissions for all steps.
+- The `full_enhance` workflow input is still interpolated inside `run:`, but it is a constrained `type: choice`, not free text.
+
+## Re-review
+
+The fix diff `2ca01a0..62d11d1` was re-reviewed once. Verdict **PASS**. Each fix was confirmed with live
+evidence: the pack guard passes with the nested `recipes/data/` pages present and fails on a missing
+`SKILL.md` or a top-level `data/` entry; a hostile ref value passed through the argument array executes
+nothing; `ci.yml`/`publish.yml` declare `contents: read`; and `npm publish --dry-run` needs no token.
+All three workflows parse, the four `skill:*` steps are intact, and `yarn build && yarn test` is green
+(34 files, 706 tests).
+
+## Outcome
+
+Phase 6 is complete. The MCP runtime, its dependency, the legacy `docs/` corpus, and the `techdocs/`
+site are gone; the pipeline, generated skill, installer, and gates survive; CI, publish, and the update
+pipeline target the surviving set. RD-06 acceptance criteria 1 and 2–7 are met; the README rewrite
+remains with Phase 8.

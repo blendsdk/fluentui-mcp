@@ -303,6 +303,12 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 **Verify**: `yarn build && yarn test`
 
+> **Review ruling applied**: the correctness review found the publish guard matched the generated
+> `recipes/data/` pages and always failed; it now asserts exact pack paths from `npm pack --json`.
+> The follow-up also passed the scraper ref inputs through the environment, added explicit
+> `contents: read` permissions, dropped `NPM_TOKEN` from the dry-run step, and attributed the
+> README rewrite to Phase 8. See `phase-06-review.md`.
+
 ---
 
 ## Phase 7: Non-functional hardening (RD-07)
