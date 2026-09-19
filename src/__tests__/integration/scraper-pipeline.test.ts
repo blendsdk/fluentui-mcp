@@ -142,30 +142,45 @@ describe('Scraper pipeline integration', () => {
     const config = getVersionConfig('v9');
     const packages = discoverPackages(MOCK_ROOT, config);
 
-    // Should find react-button, react-dialog, react-input (not react-components)
-    expect(packages.length).toBe(3);
+    // Should find the component packages, but not the react-components umbrella
     const dirNames = packages.map((p) => p.dirName);
     expect(dirNames).toContain('react-button');
     expect(dirNames).toContain('react-dialog');
     expect(dirNames).toContain('react-input');
+    expect(dirNames).toContain('react-progress');
+    expect(dirNames).toContain('react-search');
+    expect(dirNames).toContain('react-table');
+    expect(dirNames).not.toContain('react-components');
+    expect(packages.length).toBe(6);
   });
 
-  it('should extract all components from mock packages', () => {
-    const config = getVersionConfig('v9');
-    const packages = discoverPackages(MOCK_ROOT, config);
-    const adapter = new V9Adapter();
+  it(
+    'should extract every component from the mock packages',
+    () => {
+      const config = getVersionConfig('v9');
+      const packages = discoverPackages(MOCK_ROOT, config);
+      const adapter = new V9Adapter();
 
-    components = packages
-      .filter((pkg) => pkg.type === 'component')
-      .map((pkg) => adapter.extractComponent(pkg))
-      .filter((entry): entry is ComponentEntry => entry !== null);
+      components = packages
+        .filter((pkg) => pkg.type === 'component')
+        .flatMap((pkg) => adapter.extractComponents(pkg));
 
-    expect(components.length).toBe(3);
-    const names = components.map((c) => c.name);
-    expect(names).toContain('Button');
-    expect(names).toContain('Dialog');
-    expect(names).toContain('Input');
-  });
+      // Button family (5) + Dialog + Input + ProgressBar + SearchBox + DataGrid
+      const names = components.map((c) => c.name);
+      expect(names).toContain('Button');
+      expect(names).toContain('CompoundButton');
+      expect(names).toContain('MenuButton');
+      expect(names).toContain('SplitButton');
+      expect(names).toContain('ToggleButton');
+      expect(names).toContain('Dialog');
+      expect(names).toContain('Input');
+      expect(names).toContain('ProgressBar');
+      expect(names).toContain('SearchBox');
+      expect(names).toContain('DataGrid');
+      expect(components.length).toBe(10);
+    },
+    60_000,
+  );
 
   it('should produce valid ComponentEntry structure', () => {
     const button = components.find((c) => c.name === 'Button')!;
@@ -190,13 +205,18 @@ describe('Scraper pipeline integration', () => {
     const utilities: UtilityEntry[] = [];
     const stats = computeStats(components, utilities);
 
-    expect(stats.totalComponents).toBe(3);
+    expect(stats.totalComponents).toBe(10);
     expect(stats.totalUtilities).toBe(0);
     expect(stats.totalProps).toBeGreaterThan(0);
     expect(stats.totalStories).toBeGreaterThan(0);
-    expect(stats.categoryCounts['buttons']).toBe(1);
-    expect(stats.categoryCounts['forms']).toBe(1);
-    expect(stats.categoryCounts['feedback']).toBe(1);
+    // Button family shares the react-button package category.
+    expect(stats.categoryCounts['buttons']).toBe(5);
+    // Input + SearchBox.
+    expect(stats.categoryCounts['forms']).toBe(2);
+    // Dialog + ProgressBar.
+    expect(stats.categoryCounts['feedback']).toBe(2);
+    // DataGrid.
+    expect(stats.categoryCounts['data-display']).toBe(1);
   });
 
   it('should write valid schema JSON to disk', () => {
@@ -229,7 +249,7 @@ describe('Scraper pipeline integration', () => {
 
     expect(parsed.schemaVersion).toBe('1.0');
     expect(parsed.version).toBe('v9');
-    expect(parsed.components.length).toBe(3);
+    expect(parsed.components.length).toBe(10);
     expect(parsed.utilities.length).toBe(0);
     expect(parsed.foundation).toEqual([]);
     expect(parsed.patterns).toEqual([]);
@@ -245,7 +265,7 @@ describe('Scraper pipeline integration', () => {
   });
 
   it('should include stats in schema', () => {
-    expect(schema.stats.totalComponents).toBe(3);
+    expect(schema.stats.totalComponents).toBe(10);
     expect(schema.stats.totalProps).toBeGreaterThan(0);
     expect(schema.stats.totalStories).toBeGreaterThan(0);
   });

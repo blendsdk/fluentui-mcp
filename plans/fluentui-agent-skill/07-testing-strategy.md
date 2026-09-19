@@ -97,10 +97,10 @@
 
 | Test file | ST cases | Component |
 | --------- | -------- | --------- |
-| `scripts/scraper/__tests__/coverage.spec.test.ts` | ST-1..ST-4 | Scraper |
-| `scripts/enhancer/__tests__/deepseek.spec.test.ts` | ST-5..ST-11 | Enhancer |
-| `scripts/skill/__tests__/generate.spec.test.ts` | ST-12..ST-18 | Generator |
-| `scripts/skill/__tests__/gates.spec.test.ts` | ST-19..ST-26 | Gates |
+| `src/__tests__/scraper/coverage.spec.test.ts` | ST-1..ST-4 | Scraper |
+| `src/__tests__/enhancer/deepseek.spec.test.ts` | ST-5..ST-11 | Enhancer |
+| `src/__tests__/skill/generate.spec.test.ts` | ST-12..ST-18 | Generator |
+| `src/__tests__/skill/gates.spec.test.ts` | ST-19..ST-26 | Gates |
 | `src/__tests__/skill/install-skill.spec.test.ts` | ST-27..ST-33 | Installer |
 | `src/__tests__/repo/repo-hygiene.spec.test.ts` | ST-34..ST-37 | Cleanup/Docs |
 
@@ -109,9 +109,9 @@
 
 | Test file | Description | Priority |
 | --------- | ----------- | -------- |
-| `scripts/enhancer/__tests__/deepseek.impl.test.ts` | Retry/backoff, token accounting, config parsing | High |
-| `scripts/skill/__tests__/render.impl.test.ts` | Escaping, story selection, empty sections | High |
-| `scripts/skill/__tests__/install-skill.impl.test.ts` | Atomic replace, symlink, leftover cleanup | Med |
+| `src/__tests__/enhancer/deepseek.impl.test.ts` | Retry/backoff, token accounting, config parsing | High |
+| `src/__tests__/skill/render.impl.test.ts` | Escaping, story selection, empty sections | High |
+| `src/__tests__/skill/install-skill.impl.test.ts` | Atomic replace, symlink, leftover cleanup | Med |
 
 ### Integration Tests
 

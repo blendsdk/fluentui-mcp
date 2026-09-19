@@ -14,15 +14,19 @@
  */
 
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
-import type { ScraperAdapter } from './adapter.js';
+import type {
+  ComponentDiscoveryOptions,
+  ScraperAdapter,
+} from './adapter.js';
 import type { DiscoveredPackage } from '../types.js';
 import type {
   ComponentEntry,
   UtilityEntry,
   PropEntry,
 } from '../../../src/types/schema.js';
+import { compareStrings } from '../order.js';
 import { classifyCategory, classifyStability } from '../classify.js';
 import { extractProps } from '../extractors/props-extractor.js';
 import { extractSlots } from '../extractors/slots-extractor.js';
@@ -59,8 +63,113 @@ export class V9Adapter implements ScraperAdapter {
    * @returns Complete ComponentEntry, or null if extraction fails entirely
    */
   extractComponent(pkg: DiscoveredPackage): ComponentEntry | null {
-    const componentName = deriveComponentName(pkg.dirName);
+    return this.extractComponentByName(pkg, deriveComponentName(pkg.dirName));
+  }
 
+  /**
+   * Extract every component exported by a v9 package.
+   *
+   * Unlike {@link extractComponent}, which derives a single name from the
+   * package directory, this method discovers each component from the package's
+   * public exports and confirms each with a `<Name>.types.ts` file. That is
+   * what surfaces the Button family (CompoundButton, MenuButton, SplitButton,
+   * ToggleButton) and components whose name does not match the package
+   * (ProgressBar, SearchBox, DataGrid), without inventing names for context
+   * or state files that are not public components.
+   *
+   * @param pkg - Discovered component package
+   * @param options - Optional exported names to restrict discovery to
+   * @returns Extracted components, sorted by component name
+   */
+  extractComponents(
+    pkg: DiscoveredPackage,
+    options?: ComponentDiscoveryOptions,
+  ): ComponentEntry[] {
+    const names = this.discoverComponentNames(pkg, options);
+
+    // The all-stories fallback is only safe when a package has one component;
+    // otherwise it would attach every component's stories to every component.
+    const allowStoryFallback = names.length === 1;
+
+    return names
+      .map((name) =>
+        this.extractComponentByName(pkg, name, { allowStoryFallback }),
+      )
+      .filter((entry): entry is ComponentEntry => entry !== null)
+      .sort((a, b) => compareStrings(a.name, b.name));
+  }
+
+  /**
+   * Discover the component names defined by a v9 package.
+   *
+   * When `options.exportedNames` is provided, candidates are taken from the
+   * package's public exports and kept only when a matching `<Name>.types.ts`
+   * file exists. When there is no export list, or the export list yields no
+   * name with a matching types file (for example a contrib package or a
+   * package whose types files are named differently), the method falls back to
+   * scanning `<Name>.types.ts` files. If neither yields a name, the package
+   * directory name is used so the package still produces a best-effort entry.
+   *
+   * @param pkg - Discovered component package
+   * @param options - Optional exported names to restrict discovery to
+   * @returns Sorted component names
+   */
+  discoverComponentNames(
+    pkg: DiscoveredPackage,
+    options?: ComponentDiscoveryOptions,
+  ): string[] {
+    const exported = (options?.exportedNames ?? []).filter(isComponentName);
+
+    if (exported.length > 0) {
+      const confirmed = new Set<string>();
+      for (const name of exported) {
+        if (this.findTypesFile(pkg, name) !== null) {
+          confirmed.add(name);
+        }
+      }
+      if (confirmed.size > 0) {
+        return [...confirmed].sort(compareStrings);
+      }
+    }
+
+    const srcDir = findSrcDir(pkg.path);
+    if (!srcDir) {
+      return [deriveComponentName(pkg.dirName)];
+    }
+
+    const names = new Set<string>();
+    for (const file of findFilesRecursive(srcDir, '.types.ts')) {
+      const base = basename(file).replace(/\.types\.ts$/, '');
+      if (isComponentName(base)) {
+        names.add(base);
+      }
+    }
+
+    if (names.size === 0) {
+      names.add(deriveComponentName(pkg.dirName));
+    }
+
+    return [...names].sort(compareStrings);
+  }
+
+  /**
+   * Extract a single named component from a v9 package.
+   *
+   * Runs the full extraction pipeline for one component: props from
+   * `.types.ts` (with an `.api.md` fallback), slots, defaults from the hook,
+   * stories, and classification. The method always returns an entry; a name
+   * with no types file still yields a best-effort entry with empty props.
+   *
+   * @param pkg - Discovered package
+   * @param componentName - PascalCase component name to extract
+   * @param options - Extraction options (story-fallback control)
+   * @returns Complete ComponentEntry for the name
+   */
+  extractComponentByName(
+    pkg: DiscoveredPackage,
+    componentName: string,
+    options?: { allowStoryFallback?: boolean },
+  ): ComponentEntry | null {
     // Step 1: Find and extract props from .types.ts via ts-morph
     const typesFile = this.findTypesFile(pkg, componentName);
     let props: PropEntry[] = [];
@@ -86,8 +195,13 @@ export class V9Adapter implements ScraperAdapter {
       props = mergeDefaults(props, defaults);
     }
 
-    // Step 5: Extract stories from individual .stories.tsx files
-    const storyFiles = this.findStoryFiles(pkg, componentName);
+    // Step 5: Extract stories from individual .stories.tsx files. The
+    // all-stories fallback is only used when the caller allows it.
+    const storyFiles = this.findStoryFiles(
+      pkg,
+      componentName,
+      options?.allowStoryFallback ?? true,
+    );
     const stories = storyFiles.flatMap((filePath) =>
       extractStoriesFromFile(filePath),
     );
@@ -171,9 +285,15 @@ export class V9Adapter implements ScraperAdapter {
    *
    * @param pkg - Package to search in
    * @param componentName - PascalCase component name
+   * @param allowFallback - Whether to fall back to all package stories when no
+   *                        component-specific directory exists
    * @returns Sorted array of absolute paths to story files
    */
-  findStoryFiles(pkg: DiscoveredPackage, componentName: string): string[] {
+  findStoryFiles(
+    pkg: DiscoveredPackage,
+    componentName: string,
+    allowFallback = true,
+  ): string[] {
     // Primary location: stories/src/<ComponentName>/
     const componentStoriesDir = join(
       pkg.path,
@@ -186,6 +306,12 @@ export class V9Adapter implements ScraperAdapter {
       statSync(componentStoriesDir).isDirectory()
     ) {
       return findFilesRecursive(componentStoriesDir, '.stories.tsx');
+    }
+
+    // Multi-component packages must not share stories; only single-component
+    // packages fall back to all stories in the package.
+    if (!allowFallback) {
+      return [];
     }
 
     // Fallback: search all of stories/src/ for any story files
@@ -239,6 +365,20 @@ export function deriveComponentName(dirName: string): string {
     .split('-')
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join('');
+}
+
+/**
+ * Check whether a file base name looks like a React component name.
+ *
+ * Component type files are named after the component in PascalCase (for
+ * example `ProgressBar.types.ts`). Names that start with a dot, a digit, or a
+ * lowercase letter are helper or barrel files and are not components.
+ *
+ * @param name - File base name with the `.types.ts` suffix removed
+ * @returns True when the name is a PascalCase component name
+ */
+function isComponentName(name: string): boolean {
+  return /^[A-Z][A-Za-z0-9]*$/.test(name);
 }
 
 /**

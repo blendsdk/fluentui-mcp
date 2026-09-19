@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 11:46
-> **Progress**: 0/81 tasks (0%)
+> **Last Updated**: 2026-09-19 11:58
+> **Progress**: 12/103 tasks (12%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -41,7 +41,8 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 >    `- [~] 1.1.1 Task description ⏳ (implemented: YYYY-MM-DD HH:MM)`
 > 2. **On verify pass:** promote it to `[x]` —
 >    `- [x] 1.1.1 Task description ✅ (completed: YYYY-MM-DD HH:MM)`
-> 3. **Update the Progress header** (`> **Progress**: X/81 tasks (Z%)`) and the Last Updated stamp
+> 3. **Update the Progress header** (`> **Progress**: X/103 tasks (Z%)`; the engine counts the 81
+>    numbered tasks plus the 22 Deliverable checks) and the Last Updated stamp
 >    after EVERY task — never batch updates. Only `[x]` counts as complete.
 > 4. **Resume** by scanning the phase sections top-to-bottom: the first `[~]` task is resumed first,
 >    else the first `[ ]` task.
@@ -53,30 +54,33 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ## Phase 1: Scraper coverage (RD-01)
 
+> **Phase baseline tree**: a6b1a796d31f11d74291e989af7065d39038d85f
+> **Scope**: strict · **Expected modification set**: `scripts/scraper/**`, `src/__tests__/fixtures/mock-fluentui/**`, `src/__tests__/scraper/**`
+
 **Reference**: [03-01 §Scraper](03-01-content-pipeline.md) · AR-02, AR-20, AR-21
 
 ### Step 1.1: Specification Tests (before implementation)
 
-- [ ] 1.1.1 [spec-author] Write scraper spec tests (ST-1..ST-4) — `scripts/scraper/__tests__/coverage.spec.test.ts`
-- [ ] 1.1.2 Run scraper spec tests; verify they FAIL (red phase)
+- [x] 1.1.1 [spec-author] Write scraper spec tests (ST-1..ST-4) — `src/__tests__/scraper/coverage.spec.test.ts` ✅ (completed: 2026-09-19 11:52)
+- [x] 1.1.2 Run scraper spec tests; verify they FAIL (red phase) ✅ (completed: 2026-09-19 11:52)
 
 ### Step 1.2: Implementation
 
-- [ ] 1.2.1 Fix component discovery and classification to cover the Button family and exact names — `scripts/scraper/classify.ts`, `scripts/scraper/adapters/v9-adapter.ts`
-- [ ] 1.2.2 Pin the source to the latest stable release tag and record `sources.fluentui.{ref,commit}` — `scripts/scraper/clone.ts`, `scripts/scraper/config.ts`
-- [ ] 1.2.3 Emit the coverage report with explicit exclusion reasons — `scripts/scraper/output.ts`
-- [ ] 1.2.4 Extend the mock FluentUI fixture with the Button family and abbreviated-name packages — `src/__tests__/fixtures/mock-fluentui/**`
-- [ ] 1.2.5 Run scraper spec tests; verify they PASS (green phase)
+- [x] 1.2.1 Fix component discovery and classification to cover the Button family and exact names — `scripts/scraper/adapters/v9-adapter.ts` ✅ (completed: 2026-09-19 11:57)
+- [x] 1.2.2 Pin the source to the latest stable release tag and record `sources.fluentui.{ref,commit}` — `scripts/scraper/git-ref.ts`, `scripts/scraper/pipeline.ts` ✅ (completed: 2026-09-19 11:57)
+- [x] 1.2.3 Emit the coverage report with explicit exclusion reasons — `scripts/scraper/coverage.ts` ✅ (completed: 2026-09-19 11:57)
+- [x] 1.2.4 Extend the mock FluentUI fixture with the Button family and abbreviated-name packages — `src/__tests__/fixtures/mock-fluentui/**` ✅ (completed: 2026-09-19 11:57)
+- [x] 1.2.5 Run scraper spec tests; verify they PASS (green phase) ✅ (completed: 2026-09-19 11:57)
 
 ### Step 1.3: Implementation Tests & Hardening
 
-- [ ] 1.3.1 Write scraper impl tests (classification edges, id normalization) — `scripts/scraper/__tests__/coverage.impl.test.ts`
-- [ ] 1.3.2 Full verify (PR-1)
+- [x] 1.3.1 Write scraper impl tests (classification edges, id normalization) — `src/__tests__/scraper/coverage.impl.test.ts` ✅ (completed: 2026-09-19 11:58)
+- [x] 1.3.2 Full verify (PR-1) ✅ (completed: 2026-09-19 11:58)
 
 **Deliverables**:
-- [ ] Raw schema has complete v9 component coverage
-- [ ] Coverage report test passes
-- [ ] All verification passing
+- [x] Raw schema has complete v9 component coverage ✅ (completed: 2026-09-19 11:58)
+- [x] Coverage report test passes ✅ (completed: 2026-09-19 11:58)
+- [x] All verification passing ✅ (completed: 2026-09-19 11:58)
 
 **Verify**: `yarn build && yarn test`
 
@@ -88,7 +92,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 2.1: Specification Tests (before implementation)
 
-- [ ] 2.1.1 [spec-author] Write enhancement spec tests (ST-5..ST-11) — `scripts/enhancer/__tests__/deepseek.spec.test.ts`
+- [ ] 2.1.1 [spec-author] Write enhancement spec tests (ST-5..ST-11) — `src/__tests__/enhancer/deepseek.spec.test.ts`
 - [ ] 2.1.2 Run enhancement spec tests; verify they FAIL (red phase)
 
 ### Step 2.2: Implementation — provider and cost gate
@@ -112,7 +116,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 2.5: Implementation Tests & Hardening
 
-- [ ] 2.5.1 Write enhancement impl tests (retry, token accounting, config parsing) — `scripts/enhancer/__tests__/deepseek.impl.test.ts`
+- [ ] 2.5.1 Write enhancement impl tests (retry, token accounting, config parsing) — `src/__tests__/enhancer/deepseek.impl.test.ts`
 - [ ] 2.5.2 Run `yarn enhance --version v9 --dry-run --verbose` and inspect the cost report (no paid calls)
 - [ ] 2.5.3 Full verify (PR-1)
 
@@ -136,7 +140,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 3.1: Specification Tests (before implementation)
 
-- [ ] 3.1.1 [spec-author] Write generator spec tests (ST-12..ST-18) — `scripts/skill/__tests__/generate.spec.test.ts`, plus format test `src/__tests__/skill/skill-format.spec.test.ts`
+- [ ] 3.1.1 [spec-author] Write generator spec tests (ST-12..ST-18) — `src/__tests__/skill/generate.spec.test.ts`, plus format test `src/__tests__/skill/skill-format.spec.test.ts`
 - [ ] 3.1.2 Run generator spec tests; verify they FAIL (red phase)
 
 ### Step 3.2: Implementation
@@ -154,7 +158,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 3.4: Implementation Tests & Hardening
 
-- [ ] 3.4.1 Write generator impl tests (escaping, story selection, empty sections) — `scripts/skill/__tests__/render.impl.test.ts`
+- [ ] 3.4.1 Write generator impl tests (escaping, story selection, empty sections) — `src/__tests__/skill/render.impl.test.ts`
 - [ ] 3.4.2 Generate the committed skill tree and review a sample of files
 - [ ] 3.4.3 Full verify (PR-1)
 
@@ -173,7 +177,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 4.1: Specification Tests (before implementation)
 
-- [ ] 4.1.1 [spec-author] Write gate spec tests (ST-19..ST-26) — `scripts/skill/__tests__/gates.spec.test.ts`
+- [ ] 4.1.1 [spec-author] Write gate spec tests (ST-19..ST-26) — `src/__tests__/skill/gates.spec.test.ts`
 - [ ] 4.1.2 Run gate spec tests; verify they FAIL (red phase)
 
 ### Step 4.2: Implementation
@@ -190,7 +194,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 4.4: Implementation Tests & Hardening
 
-- [ ] 4.4.1 Write gate impl tests (report shape, throwaway project, extraction rules) — `scripts/skill/__tests__/gates.impl.test.ts`
+- [ ] 4.4.1 Write gate impl tests (report shape, throwaway project, extraction rules) — `src/__tests__/skill/gates.impl.test.ts`
 - [ ] 4.4.2 Wire gates into `ci.yml` and add the four `skill:*` scripts — `.github/workflows/ci.yml`, `package.json`
 - [ ] 4.4.3 Full verify (PR-1)
 

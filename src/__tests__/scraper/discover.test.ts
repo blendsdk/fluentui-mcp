@@ -5,7 +5,7 @@
  * package type classification, and edge case handling.
  *
  * Uses the mock-fluentui fixture directory which mimics the real
- * FluentUI monorepo structure with 3 component packages.
+ * FluentUI monorepo structure with 6 component packages.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -66,12 +66,15 @@ describe('discoverPackages', () => {
   it('should discover all component packages in the mock directory', () => {
     const packages = discoverPackages(MOCK_FLUENTUI_DIR, V9_CONFIG);
 
-    // Should find react-button, react-dialog, react-input (sorted alphabetically)
-    expect(packages.length).toBe(3);
+    // Component packages only (sorted alphabetically), no umbrella package.
+    expect(packages.length).toBe(6);
     expect(packages.map((p) => p.dirName)).toEqual([
       'react-button',
       'react-dialog',
       'react-input',
+      'react-progress',
+      'react-search',
+      'react-table',
     ]);
   });
 
@@ -106,7 +109,7 @@ describe('discoverPackages', () => {
   it('should mark packages as stable based on exports index', () => {
     const packages = discoverPackages(MOCK_FLUENTUI_DIR, V9_CONFIG);
 
-    // All 3 mock packages are in the stable exports index
+    // The mock component packages are in the stable exports index
     const button = packages.find((p) => p.dirName === 'react-button')!;
     expect(button.isStableExport).toBe(true);
 
@@ -151,7 +154,7 @@ describe('discoverPackages', () => {
     const packages = discoverPackages(MOCK_FLUENTUI_DIR, configWithSkip);
 
     expect(packages.find((p) => p.dirName === 'react-button')).toBeUndefined();
-    expect(packages.length).toBe(2);
+    expect(packages.length).toBe(5);
   });
 
   it('should return empty array for non-existent source directory', () => {
