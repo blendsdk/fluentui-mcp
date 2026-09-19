@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 13:04
-> **Progress**: 29/103 tasks (28%)
+> **Last Updated**: 2026-09-19 14:03
+> **Progress**: 32/103 tasks (31%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -130,12 +130,12 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 2.6: Regeneration (authorized paid run)
 
-- [ ] 2.6.1 Regenerate the enhanced schema with `yarn enhance --version v9 --full` after explicit authorization
-- [ ] 2.6.2 Confirm zero dropped entries and 8 categories + 19 recipes in the output
+- [x] 2.6.1 Regenerate the enhanced schema with `yarn enhance --version v9 --full` after explicit authorization ✅ (completed: 2026-09-19 14:03)
+- [x] 2.6.2 Confirm zero dropped entries and 8 categories + 19 recipes in the output ✅ (completed: 2026-09-19 14:03)
 
 **Deliverables**:
 - [x] DeepSeek provider with fail-fast and cost gate ✅ (completed: 2026-09-19 13:04)
-- [ ] Prose-only enhanced schema with categories and recipes
+- [x] Prose-only enhanced schema with categories and recipes ✅ (completed: 2026-09-19 14:03)
 - [x] All verification passing ✅ (completed: 2026-09-19 13:04)
 
 **Verify**: `yarn build && yarn test`
