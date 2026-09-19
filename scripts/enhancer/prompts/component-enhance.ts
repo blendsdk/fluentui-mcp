@@ -18,15 +18,14 @@ import { GROUNDING_SELF_CHECK } from './shared.js';
  * System prompt instructing the model to generate component documentation
  * as strict JSON. The required shape mirrors {@link ComponentEnhanced}.
  *
- * Maximum-richness: explicit high content quotas, story-anchored examples, and
- * the new schema fields (propGuidance, antiPatterns, performanceNotes,
- * themingNotes, compositionExamples, relatedPatterns, edgeCases). Quality and
- * completeness are the priority — never sacrifice grounding for brevity.
+ * The model produces PROSE ONLY. Code examples come from the deterministically
+ * scraped stories, so the prompt forbids fenced code blocks and code-bearing
+ * fields entirely. This keeps the hallucination surface small and the cost low.
  */
 export const COMPONENT_ENHANCE_SYSTEM_PROMPT = `You are a FluentUI React (v9) component documentation expert.
 Given the raw component data (props, slots, Storybook examples, related
-components, and additional exports), generate the richest possible grounded
-documentation. Prioritize completeness and accuracy over brevity.
+components, and additional exports), write grounded PROSE documentation.
+Prioritize accuracy and completeness over brevity.
 
 You MUST return ONLY valid JSON (no markdown fences) matching this exact structure:
 {
@@ -42,46 +41,34 @@ You MUST return ONLY valid JSON (no markdown fences) matching this exact structu
     "ariaAttributes": ["aria-label", "aria-disabled"],
     "screenReaderBehavior": "How screen readers interact with this component"
   },
-  "commonPatterns": [
-    {
-      "name": "Pattern name",
-      "description": "When to use this pattern",
-      "code": "// Complete runnable TSX with real imports"
-    }
-  ],
   "stylingTips": "Common styling customizations and real Griffel tokens to use",
   "migrationNotes": "Differences from previous version (optional, omit if N/A)",
   "propGuidance": [
-    {"prop": "appearance", "guidance": "How/when to use this prop", "example": "<Button appearance=\\"primary\\" />"}
+    {"prop": "appearance", "guidance": "How and when to use this prop", "example": "primary"}
   ],
   "antiPatterns": [
-    {"title": "Anti-pattern name", "problem": "Why it is wrong", "solution": "What to do instead", "code": "// optional corrected TSX"}
+    {"title": "Anti-pattern name", "problem": "Why it is wrong", "solution": "What to do instead"}
   ],
-  "performanceNotes": "Rendering/perf considerations specific to this component",
-  "themingNotes": "How this component responds to theme tokens (cite real tokens.*)",
-  "compositionExamples": [
-    {"name": "Composition name", "description": "Slot override demonstrated", "code": "// Complete TSX overriding slots"}
-  ],
-  "relatedPatterns": ["pattern-id-or-name"],
+  "performanceNotes": "Rendering and performance considerations specific to this component",
+  "themingNotes": "How this component responds to theme tokens (name real tokens.*)",
+  "relatedRecipes": ["recipe-id this component participates in"],
   "edgeCases": ["Edge case or gotcha to be aware of"]
 }
 
 Content quotas (minimums — produce MORE when the API surface warrants):
 - bestPractices.dos: at least 5; bestPractices.donts: at least 5.
-- commonPatterns: at least 4, each with complete runnable TSX using real imports.
-- compositionExamples: at least 2 demonstrating real slot overrides.
 - antiPatterns: at least 3, each with problem + solution.
 - propGuidance: cover every non-trivial prop in the data.
 - accessibility.keyboardSupport: cover every interactive key.
-- stylingTips and themingNotes: cite real Griffel tokens (tokens.*).
+- stylingTips and themingNotes: name real Griffel tokens (tokens.*).
 - edgeCases: at least 3 where applicable.
 
 Rules:
+- This is PROSE ONLY. Never output code, code snippets, JSX, or fenced code
+  blocks (\`\`\`). Use parameter names such as "appearance" as plain text.
 - Use ONLY the props and slots provided in the data — do NOT invent props that don't exist.
-- Base code examples on the provided story code; adapt the real API, never invent.
-- Code examples MUST use correct import paths and prop names from the data.
 - Best practices should be specific to this component, not generic React advice.
-- Accessibility guidance should reference actual ARIA attributes relevant to the component.
+- Accessibility guidance should reference the actual ARIA attributes relevant to the component.
 
 ${GROUNDING_SELF_CHECK}`;
 

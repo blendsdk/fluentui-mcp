@@ -34,11 +34,7 @@ const COMPONENT_RESPONSE = JSON.stringify({
     ariaAttributes: ['aria-label'],
     screenReaderBehavior: 'Announces label.',
   },
-  commonPatterns: [
-    { name: 'Basic', description: 'Basic usage', code: '<X />' },
-  ],
   stylingTips: 'Use tokens.',
-  // New Phase 3 enrichment fields — exercised by the new-fields test below.
   propGuidance: [
     { prop: 'appearance', guidance: 'Use primary for the main action.' },
   ],
@@ -47,10 +43,7 @@ const COMPONENT_RESPONSE = JSON.stringify({
   ],
   performanceNotes: 'Memoize handlers.',
   themingNotes: 'Respects tokens.colorBrandBackground.',
-  compositionExamples: [
-    { name: 'With icon', description: 'Slot override', code: '<X icon={<I/>} />' },
-  ],
-  relatedPatterns: ['login-form'],
+  relatedRecipes: ['login-form'],
   edgeCases: ['Disabled state suppresses onClick.'],
 });
 
@@ -71,17 +64,32 @@ const GUIDE_RESPONSE = JSON.stringify({
   referencedComponents: ['Button'],
 });
 
-const PATTERN_RESPONSE = JSON.stringify({
-  content: '# Pattern\n\nSome content.',
+const CATEGORY_RESPONSE = JSON.stringify({
+  overview: 'Category overview.',
+  whenToUse: 'Use these components for their intended jobs.',
+  bestPractices: { dos: ['Do it'], donts: ["Don't misuse it"] },
+  accessibility: 'Keep everything keyboard reachable.',
+  antiPatterns: [
+    { title: 'Misuse', problem: 'Wrong component.', solution: 'Pick the right one.' },
+  ],
+});
+
+const RECIPE_RESPONSE = JSON.stringify({
+  goal: 'Achieve the recipe goal.',
+  whenToUse: 'Use this recipe when it fits.',
+  whenNotToUse: 'Avoid when a component suffices.',
+  content: '# Recipe\n\nSome content.',
   examples: [
     {
       name: 'Ex',
       description: 'desc',
       code: '<Form />',
-      components: ['Input', 'Button'],
+      language: 'tsx',
     },
   ],
   referencedComponents: ['Input', 'Button'],
+  accessibilityNotes: 'Label every field.',
+  pitfalls: ['Missing labels.'],
 });
 
 /**
@@ -96,10 +104,13 @@ function routeResponse(messages: LLMMessage[]): string {
   if (system.includes('utilities documentation expert')) {
     return UTILITY_RESPONSE;
   }
-  if (system.includes('patterns expert')) {
-    return PATTERN_RESPONSE;
+  if (system.includes('design-system expert')) {
+    return CATEGORY_RESPONSE;
   }
-  // foundation / enterprise / quick-reference all share the guide shape.
+  if (system.includes('application engineer')) {
+    return RECIPE_RESPONSE;
+  }
+  // foundation / quick-reference share the guide shape.
   return GUIDE_RESPONSE;
 }
 
@@ -133,12 +144,13 @@ describe('runEnhancement — first run', () => {
       );
     }
 
-    // Guides + patterns generated.
+    // Guides, category guidance, and recipes generated.
     expect(schema.foundation.length).toBeGreaterThan(0);
-    expect(schema.enterprise.length).toBeGreaterThan(0);
+    expect(schema.categoryGuidance.length).toBeGreaterThan(0);
     expect(schema.quickReference.length).toBeGreaterThan(0);
-    expect(schema.patterns.length).toBeGreaterThan(0);
-    expect(stats.patternsGenerated).toBe(schema.patterns.length);
+    expect(schema.recipes.length).toBeGreaterThan(0);
+    expect(stats.recipesGenerated).toBe(schema.recipes.length);
+    expect(stats.categoryGuidanceGenerated).toBe(schema.categoryGuidance.length);
 
     // generatedAt refreshed.
     expect(schema.generatedAt).not.toBe(raw.generatedAt);
@@ -156,8 +168,9 @@ describe('runEnhancement — first run', () => {
     expect(button?.enhanced?.antiPatterns?.[0]?.title).toBe('Avoid X');
     expect(button?.enhanced?.performanceNotes).toBe('Memoize handlers.');
     expect(button?.enhanced?.themingNotes).toContain('colorBrandBackground');
-    expect(button?.enhanced?.compositionExamples?.[0]?.name).toBe('With icon');
-    expect(button?.enhanced?.relatedPatterns).toContain('login-form');
+    expect(button?.enhanced?.relatedRecipes).toContain('login-form');
+    expect(button?.enhanced).not.toHaveProperty('commonPatterns');
+    expect(button?.enhanced).not.toHaveProperty('compositionExamples');
     expect(button?.enhanced?.edgeCases?.length).toBeGreaterThan(0);
   });
 
@@ -297,7 +310,8 @@ describe('runEnhancement — generation flags', () => {
 
     expect(stats.componentsEnhanced).toBe(0);
     expect(schema.foundation.length).toBeGreaterThan(0);
-    expect(schema.patterns.length).toBeGreaterThan(0);
+    expect(schema.categoryGuidance.length).toBeGreaterThan(0);
+    expect(schema.recipes.length).toBeGreaterThan(0);
   });
 
   it('components-only skips guide generation', async () => {
@@ -320,6 +334,7 @@ describe('runEnhancement — generation flags', () => {
     expect(stats.componentsEnhanced).toBe(raw.components.length);
     expect(stats.guidesGenerated).toBe(0);
     expect(schema.foundation).toHaveLength(0);
-    expect(schema.patterns).toHaveLength(0);
+    expect(schema.categoryGuidance).toHaveLength(0);
+    expect(schema.recipes).toHaveLength(0);
   });
 });

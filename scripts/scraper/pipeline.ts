@@ -161,8 +161,8 @@ export function scrape(options: ScrapeOptions): ScrapeResult {
     utilities,
     // Enhancer-populated fields — empty in scraper output.
     foundation: [],
-    patterns: [],
-    enterprise: [],
+    categoryGuidance: [],
+    recipes: [],
     quickReference: [],
     stats: computeStats(components, utilities),
   };

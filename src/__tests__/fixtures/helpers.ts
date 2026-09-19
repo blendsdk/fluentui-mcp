@@ -25,8 +25,9 @@ import type {
   ParameterEntry,
   GuideEntry,
   GuideCodeExample,
-  PatternEntry,
-  PatternEntryExample,
+  CategoryGuidanceEntry,
+  RecipeEntry,
+  RecipeExample,
   StabilityLevel,
   UtilityExportKind,
 } from '../../types/index.js';
@@ -214,7 +215,6 @@ export function createComponentEnhanced(
       ariaAttributes: ['aria-label', 'aria-disabled'],
       screenReaderBehavior: 'Announces the component role and label.',
     },
-    commonPatterns: [createPatternExample()],
     stylingTips: 'Use design tokens for consistent theming.',
     sourceHash: 'test-hash-enhanced',
     enhancedAt: '2025-06-01T12:00:00Z',
@@ -307,39 +307,79 @@ export function createGuideEntry(
 }
 
 /**
- * Create a test PatternEntryExample (a working example within a pattern).
+ * Create a test RecipeExample (a working example within a recipe).
  */
-export function createPatternEntryExample(
-  overrides?: Partial<PatternEntryExample>,
-): PatternEntryExample {
+export function createRecipeExample(
+  overrides?: Partial<RecipeExample>,
+): RecipeExample {
   return {
     name: 'Basic Example',
-    description: 'A basic working example of the pattern',
+    description: 'A basic working example of the recipe',
     code: '<Form>\n  <Input />\n  <Button>Submit</Button>\n</Form>',
-    components: ['Input', 'Button'],
+    language: 'tsx',
     ...overrides,
   };
 }
 
 /**
- * Create a test PatternEntry (a usage pattern grouping multiple components).
+ * Create a test RecipeEntry (a task-oriented composition of components).
  *
- * @param id - Pattern ID (default: 'basic-form')
+ * @param id - Recipe ID (default: 'login-form')
  * @param overrides - Override any fields
  */
-export function createPatternEntry(
+export function createRecipeEntry(
   id?: string,
-  overrides?: Partial<PatternEntry>,
-): PatternEntry {
-  const patternId = id ?? 'basic-form';
+  overrides?: Partial<RecipeEntry>,
+): RecipeEntry {
+  const recipeId = id ?? 'login-form';
   return {
-    id: patternId,
-    title: `Pattern: ${patternId}`,
+    id: recipeId,
+    title: `Recipe: ${recipeId}`,
     group: 'forms',
-    content: `# ${patternId}\n\nPattern content for ${patternId}.`,
-    examples: [createPatternEntryExample()],
+    goal: `Achieve ${recipeId} with FluentUI components.`,
+    whenToUse: `Use when you need to build ${recipeId}.`,
+    whenNotToUse: 'Avoid when a simpler component suffices.',
+    content: `# ${recipeId}\n\nRecipe content for ${recipeId}.`,
+    examples: [createRecipeExample()],
     referencedComponents: ['Input', 'Button'],
-    sourceHash: `pattern-hash-${patternId}`,
+    accessibilityNotes: 'Ensure every interactive element is labelled.',
+    pitfalls: ['Forgetting to label inputs.'],
+    sourceHash: `recipe-hash-${recipeId}`,
+    enhancedAt: '2025-06-01T12:00:00Z',
+    ...overrides,
+  };
+}
+
+/**
+ * Create a test CategoryGuidanceEntry (one guidance document per category).
+ *
+ * @param category - Category id (default: 'buttons')
+ * @param overrides - Override any fields
+ */
+export function createCategoryGuidanceEntry(
+  category?: string,
+  overrides?: Partial<CategoryGuidanceEntry>,
+): CategoryGuidanceEntry {
+  const categoryId = category ?? 'buttons';
+  return {
+    id: categoryId,
+    category: categoryId,
+    overview: `Overview of the ${categoryId} category.`,
+    whenToUse: `Use ${categoryId} components for their intended jobs.`,
+    bestPractices: {
+      dos: ['Prefer the semantic component.'],
+      donts: ['Do not over-customize.'],
+    },
+    accessibility: 'Every interactive element must be keyboard reachable.',
+    antiPatterns: [
+      {
+        title: 'Generic misuse',
+        problem: 'Using the wrong component for the job.',
+        solution: 'Choose the component that matches the intent.',
+      },
+    ],
+    componentIds: [],
+    sourceHash: `category-hash-${categoryId}`,
     enhancedAt: '2025-06-01T12:00:00Z',
     ...overrides,
   };
@@ -417,8 +457,8 @@ export function createFluentUISchema(
     components: [],
     utilities: [],
     foundation: [],
-    patterns: [],
-    enterprise: [],
+    categoryGuidance: [],
+    recipes: [],
     quickReference: [],
     stats: createSchemaStats(),
     ...overrides,
@@ -633,18 +673,6 @@ export function createEnhancedTestSchema(): FluentUISchema {
       ariaAttributes: ['aria-label', 'aria-pressed', 'aria-disabled', 'aria-expanded'],
       screenReaderBehavior: 'Announces as "button" role with the label text. Disabled state is announced.',
     },
-    commonPatterns: [
-      createPatternExample({
-        name: 'Primary Action',
-        description: 'Primary button for main form action',
-        code: '<Button appearance="primary">Submit</Button>',
-      }),
-      createPatternExample({
-        name: 'With Icon',
-        description: 'Button with a leading icon',
-        code: '<Button icon={<AddRegular />}>Add Item</Button>',
-      }),
-    ],
     stylingTips: 'Use tokens.colorBrandBackground for custom brand buttons. Override with makeStyles() and Griffel.',
     sourceHash: 'button-enhanced-hash',
     enhancedAt: '2025-06-01T12:00:00Z',
@@ -673,13 +701,6 @@ export function createEnhancedTestSchema(): FluentUISchema {
       ariaAttributes: ['aria-label', 'aria-required', 'aria-invalid', 'aria-describedby'],
       screenReaderBehavior: 'Announces as text input with its label and current value.',
     },
-    commonPatterns: [
-      createPatternExample({
-        name: 'With Field',
-        description: 'Input with proper labeling via Field',
-        code: '<Field label="Name">\n  <Input />\n</Field>',
-      }),
-    ],
     stylingTips: 'Use appearance variants for different visual contexts. The underline appearance works well in dense forms.',
     sourceHash: 'input-enhanced-hash',
     enhancedAt: '2025-06-01T12:00:00Z',
@@ -709,13 +730,6 @@ export function createEnhancedTestSchema(): FluentUISchema {
       ariaAttributes: ['aria-modal', 'aria-labelledby', 'aria-describedby'],
       screenReaderBehavior: 'Announces as dialog role with the title. Focus trap ensures screen reader stays within dialog.',
     },
-    commonPatterns: [
-      createPatternExample({
-        name: 'Confirmation Dialog',
-        description: 'A simple confirmation dialog with accept/reject actions',
-        code: '<Dialog>\n  <DialogSurface>\n    <DialogBody>\n      <DialogTitle>Confirm</DialogTitle>\n      <DialogContent>Are you sure?</DialogContent>\n      <DialogActions>\n        <Button appearance="primary">Yes</Button>\n        <Button>No</Button>\n      </DialogActions>\n    </DialogBody>\n  </DialogSurface>\n</Dialog>',
-      }),
-    ],
     stylingTips: 'Use DialogSurface for custom width. Leverage CSS grid in DialogBody for complex layouts.',
     sourceHash: 'dialog-enhanced-hash',
     enhancedAt: '2025-06-01T12:00:00Z',
@@ -778,36 +792,28 @@ export function createEnhancedTestSchema(): FluentUISchema {
     referencedComponents: ['FluentProvider', 'Button'],
   });
 
-  // Add a pattern
-  const loginFormPattern = createPatternEntry('login-form', {
-    title: 'Login Form Pattern',
+  // Add a recipe
+  const loginFormRecipe = createRecipeEntry('login-form', {
+    title: 'Login Form',
     group: 'forms',
+    goal: 'Build a login form with email and password fields.',
+    whenToUse: 'Use when an app needs an authentication screen.',
+    whenNotToUse: 'Avoid for single-field sign-in flows that need no layout.',
     content: '# Login Form\n\nA standard login form using FluentUI components.\n\nCombines Input, Field, Button, and Card for a clean login experience.',
     examples: [
-      createPatternEntryExample({
+      createRecipeExample({
         name: 'Basic Login',
         description: 'Simple email/password login form',
         code: '<Card>\n  <Field label="Email">\n    <Input type="email" />\n  </Field>\n  <Field label="Password">\n    <Input type="password" />\n  </Field>\n  <Button appearance="primary">Sign In</Button>\n</Card>',
-        components: ['Card', 'Field', 'Input', 'Button'],
       }),
     ],
     referencedComponents: ['Card', 'Field', 'Input', 'Button'],
   });
 
-  // Add an enterprise guide
-  const appShellGuide = createGuideEntry('app-shell', {
-    title: 'Application Shell Pattern',
-    category: 'enterprise',
-    content: '# Application Shell\n\nThe app shell pattern provides the outer frame of an enterprise application.\n\n## Structure\n\nUses Nav for sidebar, Breadcrumb for wayfinding, and Toolbar for actions.',
-    codeExamples: [
-      createGuideCodeExample({
-        title: 'App Shell Layout',
-        description: 'Basic application shell with sidebar navigation',
-        code: '<div className={styles.shell}>\n  <Nav />\n  <main>\n    <Breadcrumb />\n    <Toolbar />\n    {children}\n  </main>\n</div>',
-        language: 'tsx',
-      }),
-    ],
-    referencedComponents: ['Nav', 'Breadcrumb', 'Toolbar'],
+  // Add category guidance
+  const formsCategoryGuidance = createCategoryGuidanceEntry('forms', {
+    overview: 'Form components collect and validate user input.',
+    componentIds: ['input'],
   });
 
   // Add a quick reference guide
@@ -839,8 +845,8 @@ export function createEnhancedTestSchema(): FluentUISchema {
     },
     utilities: [positioningUtility],
     foundation: [gettingStartedGuide],
-    patterns: [loginFormPattern],
-    enterprise: [appShellGuide],
+    categoryGuidance: [formsCategoryGuidance],
+    recipes: [loginFormRecipe],
     quickReference: [quickRefGuide],
     stats: createSchemaStats({
       totalComponents: base.components.length,

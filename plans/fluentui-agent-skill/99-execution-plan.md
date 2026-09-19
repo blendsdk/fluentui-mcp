@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 12:54
-> **Progress**: 18/103 tasks (18%)
+> **Last Updated**: 2026-09-19 13:04
+> **Progress**: 29/103 tasks (28%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -112,21 +112,21 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 ### Step 2.3: Implementation — content model
 
 - [x] 2.3.1 Evolve schema types (drop code fields; add `categoryGuidance`, `recipes`) — `src/types/schema.ts` ✅ (completed: 2026-09-19 12:54)
-- [ ] 2.3.2 Rewrite the component prompt to prose-only — `scripts/enhancer/prompts/component-enhance.ts`
-- [ ] 2.3.3 Add the category-guidance prompt — `scripts/enhancer/prompts/category-guidance.ts`
-- [ ] 2.3.4 Replace the pattern prompt with the recipe prompt — `scripts/enhancer/prompts/recipe.ts`
-- [ ] 2.3.5 Configure 8 category guides and 19 recipes — `scripts/enhancer/config.ts`
-- [ ] 2.3.6 Map the new sections through the orchestrator and validator — `scripts/enhancer/enhancer.ts`, `scripts/enhancer/merge.ts`, `src/schema/schema-validator.ts`
+- [x] 2.3.2 Rewrite the component prompt to prose-only — `scripts/enhancer/prompts/component-enhance.ts` ✅ (completed: 2026-09-19 13:04)
+- [x] 2.3.3 Add the category-guidance prompt — `scripts/enhancer/prompts/category-guidance.ts` ✅ (completed: 2026-09-19 13:04)
+- [x] 2.3.4 Replace the pattern prompt with the recipe prompt — `scripts/enhancer/prompts/recipe.ts` ✅ (completed: 2026-09-19 13:04)
+- [x] 2.3.5 Configure 8 category guides and 19 recipes — `scripts/enhancer/config.ts` ✅ (completed: 2026-09-19 13:04)
+- [x] 2.3.6 Map the new sections through the orchestrator and validator — `scripts/enhancer/enhancer.ts`, `scripts/enhancer/merge.ts`, `src/schema/schema-validator.ts` ✅ (completed: 2026-09-19 13:04)
 
 ### Step 2.4: Green phase
 
-- [ ] 2.4.1 Run enhancement spec tests; verify they PASS (green phase)
+- [x] 2.4.1 Run enhancement spec tests; verify they PASS (green phase) ✅ (completed: 2026-09-19 13:04)
 
 ### Step 2.5: Implementation Tests & Hardening
 
-- [ ] 2.5.1 Write enhancement impl tests (retry, token accounting, config parsing) — `src/__tests__/enhancer/deepseek.impl.test.ts`
-- [ ] 2.5.2 Run `yarn enhance --version v9 --dry-run --verbose` and inspect the cost report (no paid calls)
-- [ ] 2.5.3 Full verify (PR-1)
+- [x] 2.5.1 Write enhancement impl tests (retry, token accounting, config parsing) — `src/__tests__/enhancer/deepseek.impl.test.ts` ✅ (completed: 2026-09-19 13:04)
+- [x] 2.5.2 Run `yarn enhance --version v9 --dry-run --verbose` and inspect the cost report (no paid calls) ✅ (completed: 2026-09-19 13:04)
+- [x] 2.5.3 Full verify (PR-1) ✅ (completed: 2026-09-19 13:04)
 
 ### Step 2.6: Regeneration (authorized paid run)
 
@@ -134,9 +134,9 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 - [ ] 2.6.2 Confirm zero dropped entries and 8 categories + 19 recipes in the output
 
 **Deliverables**:
-- [ ] DeepSeek provider with fail-fast and cost gate
+- [x] DeepSeek provider with fail-fast and cost gate ✅ (completed: 2026-09-19 13:04)
 - [ ] Prose-only enhanced schema with categories and recipes
-- [ ] All verification passing
+- [x] All verification passing ✅ (completed: 2026-09-19 13:04)
 
 **Verify**: `yarn build && yarn test`
 

@@ -33,8 +33,9 @@ import {
   type ParameterEntry,
   type GuideEntry,
   type GuideCodeExample,
-  type PatternEntry,
-  type PatternEntryExample,
+  type CategoryGuidanceEntry,
+  type RecipeEntry,
+  type RecipeExample,
 } from '../../types/index.js';
 
 // ============================================================================
@@ -201,20 +202,12 @@ describe('ComponentEnhanced type conformance', () => {
         ariaAttributes: ['aria-label', 'aria-pressed'],
         screenReaderBehavior: 'Announces as "button" role with label',
       },
-      commonPatterns: [
-        {
-          name: 'Primary action',
-          description: 'Use for the main action in a dialog or form',
-          code: '<Button appearance="primary">Submit</Button>',
-        },
-      ],
       stylingTips: 'Use tokens.colorBrandBackground for custom styling.',
       sourceHash: 'abc123',
       enhancedAt: '2025-01-15T10:30:00Z',
     };
     expect(enhanced.bestPractices.dos).toHaveLength(2);
     expect(enhanced.accessibility.keyboardSupport).toHaveLength(2);
-    expect(enhanced.commonPatterns).toHaveLength(1);
     expect(enhanced.migrationNotes).toBeUndefined();
   });
 
@@ -229,7 +222,6 @@ describe('ComponentEnhanced type conformance', () => {
         ariaAttributes: [],
         screenReaderBehavior: '',
       },
-      commonPatterns: [],
       stylingTips: '',
       migrationNotes: 'Renamed from PrimaryButton to Button with appearance="primary"',
       sourceHash: 'def456',
@@ -388,40 +380,67 @@ describe('GuideCodeExample type conformance', () => {
   });
 });
 
-describe('PatternEntry type conformance', () => {
-  it('should accept a valid PatternEntry', () => {
-    const pattern: PatternEntry = {
+describe('RecipeEntry type conformance', () => {
+  it('should accept a valid RecipeEntry', () => {
+    const recipe: RecipeEntry = {
       id: 'login-form',
-      title: 'Login Form Pattern',
+      title: 'Login Form',
       group: 'forms',
-      content: '# Login Form\n\nA standard login form pattern...',
+      goal: 'Build a login form.',
+      whenToUse: 'Use for authentication screens.',
+      whenNotToUse: 'Avoid for SSO-only flows.',
+      content: '# Login Form\n\nA standard login form recipe...',
       examples: [
         {
           name: 'Basic Login',
           description: 'Simple email/password login form',
           code: '<form>...</form>',
-          components: ['Input', 'Button', 'Field', 'Label'],
+          language: 'tsx',
         },
       ],
       referencedComponents: ['Input', 'Button', 'Field', 'Label'],
-      sourceHash: 'pattern-hash-456',
+      accessibilityNotes: 'Associate labels with inputs via Field.',
+      pitfalls: ['Missing autocomplete attributes.'],
+      sourceHash: 'recipe-hash-456',
       enhancedAt: '2025-01-15T10:30:00Z',
     };
-    expect(pattern.group).toBe('forms');
-    expect(pattern.examples).toHaveLength(1);
-    expect(pattern.examples[0].components).toContain('Input');
+    expect(recipe.group).toBe('forms');
+    expect(recipe.examples).toHaveLength(1);
+    expect(recipe.referencedComponents).toContain('Input');
   });
 });
 
-describe('PatternEntryExample type conformance', () => {
-  it('should accept a valid PatternEntryExample', () => {
-    const example: PatternEntryExample = {
+describe('RecipeExample type conformance', () => {
+  it('should accept a valid RecipeExample', () => {
+    const example: RecipeExample = {
       name: 'Sidebar Navigation',
-      description: 'A responsive sidebar navigation pattern',
+      description: 'A responsive sidebar navigation recipe',
       code: '<Nav>...</Nav>',
-      components: ['Nav', 'NavItem', 'NavCategory'],
+      language: 'tsx',
     };
-    expect(example.components).toHaveLength(3);
+    expect(example.language).toBe('tsx');
+  });
+});
+
+describe('CategoryGuidanceEntry type conformance', () => {
+  it('should accept a valid CategoryGuidanceEntry', () => {
+    const guidance: CategoryGuidanceEntry = {
+      id: 'forms',
+      category: 'forms',
+      overview: 'Form components collect user input.',
+      whenToUse: 'Use for any data entry.',
+      bestPractices: { dos: ['Label every field.'], donts: ['Avoid unlabeled inputs.'] },
+      accessibility: 'Every field needs an accessible name.',
+      antiPatterns: [
+        { title: 'Unlabeled input', problem: 'Screen readers cannot announce it.', solution: 'Use Field.' },
+      ],
+      componentIds: ['input', 'field'],
+      sourceHash: 'category-hash-789',
+      enhancedAt: '2025-01-15T10:30:00Z',
+    };
+    expect(guidance.category).toBe('forms');
+    expect(guidance.componentIds).toContain('input');
+    expect(guidance.antiPatterns).toHaveLength(1);
   });
 });
 
@@ -526,7 +545,6 @@ describe('ComponentEntry type conformance', () => {
           ariaAttributes: ['aria-label'],
           screenReaderBehavior: 'Announces as button',
         },
-        commonPatterns: [],
         stylingTips: 'Use design tokens',
         sourceHash: 'hash',
         enhancedAt: '2025-01-15T10:30:00Z',
@@ -562,8 +580,8 @@ describe('FluentUISchema type conformance', () => {
       components: [],
       utilities: [],
       foundation: [],
-      patterns: [],
-      enterprise: [],
+      categoryGuidance: [],
+      recipes: [],
       quickReference: [],
       stats: {
         totalComponents: 0,
@@ -602,8 +620,8 @@ describe('FluentUISchema type conformance', () => {
       components: [],
       utilities: [],
       foundation: [],
-      patterns: [],
-      enterprise: [],
+      categoryGuidance: [],
+      recipes: [],
       quickReference: [],
       stats: {
         totalComponents: 0,

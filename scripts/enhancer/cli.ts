@@ -29,11 +29,11 @@ import { diffSchemas, formatDiffReport } from './diff.js';
 
 import { computeComponentHash, computeUtilityHash } from './hasher.js';
 import {
+  CATEGORY_GUIDES,
   DEFAULT_DEEPSEEK_MODEL,
-  ENTERPRISE_GUIDES,
   FOUNDATION_GUIDES,
-  PATTERN_GUIDES,
   QUICK_REFERENCE_GUIDES,
+  RECIPE_GUIDES,
   resolveEnhancerConfig,
 } from './config.js';
 import { runEnhancement } from './enhancer.js';
@@ -279,9 +279,9 @@ export function estimateRunCost(
   if (!options.componentsOnly) {
     const guideCount =
       FOUNDATION_GUIDES.length +
-      PATTERN_GUIDES.length +
-      ENTERPRISE_GUIDES.length +
-      QUICK_REFERENCE_GUIDES.length;
+      QUICK_REFERENCE_GUIDES.length +
+      CATEGORY_GUIDES.length +
+      RECIPE_GUIDES.length;
     callCount += guideCount;
     inputTokens += guideCount * AVG_GUIDE_INPUT_TOKENS;
   }
@@ -432,7 +432,10 @@ export async function runEnhancer(options: EnhancerCliOptions): Promise<void> {
   console.log(`  Utilities enhanced:         ${stats.utilitiesEnhanced}`);
   console.log(`  Utilities carried forward:  ${stats.utilitiesCarriedForward}`);
   console.log(`  Guides generated:           ${stats.guidesGenerated}`);
-  console.log(`  Patterns generated:         ${stats.patternsGenerated}`);
+  console.log(
+    `  Category guidance generated:${String(stats.categoryGuidanceGenerated).padStart(3)}`,
+  );
+  console.log(`  Recipes generated:          ${stats.recipesGenerated}`);
   console.log(`  Failures:                   ${stats.failures}`);
   console.log(`  Validation errors:          ${validationErrors.length}`);
   console.log(`  Validation warnings:        ${validationWarnings.length}`);

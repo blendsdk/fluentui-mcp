@@ -21,7 +21,7 @@
       "name": "Button",
       "id": "button",
       "packageName": "@fluentui/react-button",
-      "packageVersion": "9.9.1",
+      "packageVersion": "9.0.0",
       "importPath": "@fluentui/react-components",
       "importStatement": "import { Button } from '@fluentui/react-components'",
       "category": "buttons",
@@ -41,11 +41,11 @@
           "name": "size",
           "type": "'small' | 'medium' | 'large'",
           "required": false,
-          "defaultValue": "'medium'",
           "description": "A button supports different sizes.",
           "deprecated": false,
           "inherited": false,
-          "source": "ButtonProps"
+          "source": "ButtonProps",
+          "defaultValue": "'medium'"
         },
         {
           "name": "disabled",
@@ -87,7 +87,9 @@
           "code": "export const Default = () => <Button>Default</Button>;",
           "renderCode": "<Button>Default</Button>",
           "sourceFile": "packages/react-button/stories/src/Button/ButtonDefault.stories.tsx",
-          "imports": ["import { Button } from '@fluentui/react-components'"]
+          "imports": [
+            "import { Button } from '@fluentui/react-components'"
+          ]
         },
         {
           "name": "Appearance",
@@ -95,8 +97,20 @@
           "code": "export const Appearance = () => (\n  <>\n    <Button appearance=\"primary\">Primary</Button>\n    <Button appearance=\"secondary\">Secondary</Button>\n  </>\n);",
           "renderCode": "<>\n  <Button appearance=\"primary\">Primary</Button>\n  <Button appearance=\"secondary\">Secondary</Button>\n</>",
           "sourceFile": "packages/react-button/stories/src/Button/ButtonAppearance.stories.tsx",
-          "imports": ["import { Button } from '@fluentui/react-components'"]
+          "imports": [
+            "import { Button } from '@fluentui/react-components'"
+          ]
         }
+      ],
+      "relatedComponents": [
+        "CompoundButton",
+        "ToggleButton",
+        "SplitButton",
+        "MenuButton"
+      ],
+      "additionalExports": [
+        "buttonClassNames",
+        "useButtonStyles_unstable"
       ],
       "enhanced": {
         "description": "Button triggers an action or event when activated. It is the most common interactive element in any UI.",
@@ -116,36 +130,33 @@
         "accessibility": {
           "requirements": "Must have an accessible name (label text or aria-label). Must be keyboard operable.",
           "keyboardSupport": [
-            { "key": "Enter", "action": "Activates the button" },
-            { "key": "Space", "action": "Activates the button" }
+            {
+              "key": "Enter",
+              "action": "Activates the button"
+            },
+            {
+              "key": "Space",
+              "action": "Activates the button"
+            }
           ],
-          "ariaAttributes": ["aria-label", "aria-pressed", "aria-disabled", "aria-expanded"],
+          "ariaAttributes": [
+            "aria-label",
+            "aria-pressed",
+            "aria-disabled",
+            "aria-expanded"
+          ],
           "screenReaderBehavior": "Announces as \"button\" role with the label text. Disabled state is announced."
         },
-        "commonPatterns": [
-          {
-            "name": "Primary Action",
-            "description": "Primary button for main form action",
-            "code": "<Button appearance=\"primary\">Submit</Button>"
-          },
-          {
-            "name": "With Icon",
-            "description": "Button with a leading icon",
-            "code": "<Button icon={<AddRegular />}>Add Item</Button>"
-          }
-        ],
         "stylingTips": "Use tokens.colorBrandBackground for custom brand buttons. Override with makeStyles() and Griffel.",
         "sourceHash": "button-enhanced-hash",
         "enhancedAt": "2025-06-01T12:00:00Z"
-      },
-      "relatedComponents": ["CompoundButton", "ToggleButton", "SplitButton", "MenuButton"],
-      "additionalExports": ["buttonClassNames", "useButtonStyles_unstable"]
+      }
     },
     {
       "name": "Input",
       "id": "input",
       "packageName": "@fluentui/react-input",
-      "packageVersion": "9.5.0",
+      "packageVersion": "9.0.0",
       "importPath": "@fluentui/react-components",
       "importStatement": "import { Input } from '@fluentui/react-components'",
       "category": "forms",
@@ -174,21 +185,21 @@
           "name": "type",
           "type": "'text' | 'password' | 'email' | 'number' | 'search' | 'tel' | 'url'",
           "required": false,
-          "defaultValue": "'text'",
           "description": "The type of the input element.",
           "deprecated": false,
           "inherited": false,
-          "source": "InputProps"
+          "source": "InputProps",
+          "defaultValue": "'text'"
         },
         {
           "name": "appearance",
           "type": "'outline' | 'underline' | 'filled-darker' | 'filled-lighter'",
           "required": false,
-          "defaultValue": "'outline'",
           "description": "Controls the colors and borders of the input.",
           "deprecated": false,
           "inherited": false,
-          "source": "InputProps"
+          "source": "InputProps",
+          "defaultValue": "'outline'"
         },
         {
           "name": "disabled",
@@ -233,8 +244,19 @@
           "code": "export const Default = () => <Input />;",
           "renderCode": "<Input />",
           "sourceFile": "packages/react-input/stories/src/Input/InputDefault.stories.tsx",
-          "imports": ["import { Input } from '@fluentui/react-components'"]
+          "imports": [
+            "import { Input } from '@fluentui/react-components'"
+          ]
         }
+      ],
+      "relatedComponents": [
+        "Textarea",
+        "SearchBox",
+        "SpinButton"
+      ],
+      "additionalExports": [
+        "inputClassNames",
+        "useInputStyles_unstable"
       ],
       "enhanced": {
         "description": "Input provides a single-line text field for user input. It supports various types including text, password, email, and number.",
@@ -253,30 +275,29 @@
         "accessibility": {
           "requirements": "Must have an associated label via Field or aria-label.",
           "keyboardSupport": [
-            { "key": "Tab", "action": "Moves focus to the input" }
+            {
+              "key": "Tab",
+              "action": "Moves focus to the input"
+            }
           ],
-          "ariaAttributes": ["aria-label", "aria-required", "aria-invalid", "aria-describedby"],
+          "ariaAttributes": [
+            "aria-label",
+            "aria-required",
+            "aria-invalid",
+            "aria-describedby"
+          ],
           "screenReaderBehavior": "Announces as text input with its label and current value."
         },
-        "commonPatterns": [
-          {
-            "name": "With Field",
-            "description": "Input with proper labeling via Field",
-            "code": "<Field label=\"Name\">\n  <Input />\n</Field>"
-          }
-        ],
         "stylingTips": "Use appearance variants for different visual contexts. The underline appearance works well in dense forms.",
         "sourceHash": "input-enhanced-hash",
         "enhancedAt": "2025-06-01T12:00:00Z"
-      },
-      "relatedComponents": ["Textarea", "SearchBox", "SpinButton"],
-      "additionalExports": ["inputClassNames", "useInputStyles_unstable"]
+      }
     },
     {
       "name": "Dialog",
       "id": "dialog",
       "packageName": "@fluentui/react-dialog",
-      "packageVersion": "9.11.0",
+      "packageVersion": "9.0.0",
       "importPath": "@fluentui/react-components",
       "importStatement": "import { Dialog } from '@fluentui/react-components'",
       "category": "feedback",
@@ -296,11 +317,11 @@
           "name": "modalType",
           "type": "'modal' | 'non-modal' | 'alert'",
           "required": false,
-          "defaultValue": "'modal'",
           "description": "The type of modal behavior.",
           "deprecated": false,
           "inherited": false,
-          "source": "DialogProps"
+          "source": "DialogProps",
+          "defaultValue": "'modal'"
         },
         {
           "name": "onOpenChange",
@@ -333,6 +354,18 @@
           ]
         }
       ],
+      "relatedComponents": [
+        "DialogTrigger",
+        "DialogSurface",
+        "DialogBody",
+        "DialogTitle",
+        "DialogContent",
+        "DialogActions"
+      ],
+      "additionalExports": [
+        "dialogClassNames",
+        "useDialogStyles_unstable"
+      ],
       "enhanced": {
         "description": "Dialog displays a modal or non-modal overlay that requires user attention or interaction.",
         "whenToUse": "Use Dialog for confirmations, form dialogs, alerts, and any workflow that interrupts the main flow.",
@@ -350,25 +383,26 @@
         "accessibility": {
           "requirements": "Must trap focus within the dialog when modal. Must have an accessible title.",
           "keyboardSupport": [
-            { "key": "Escape", "action": "Closes the dialog (modal and non-modal)" },
-            { "key": "Tab", "action": "Moves focus through focusable elements within the dialog" }
+            {
+              "key": "Escape",
+              "action": "Closes the dialog (modal and non-modal)"
+            },
+            {
+              "key": "Tab",
+              "action": "Moves focus through focusable elements within the dialog"
+            }
           ],
-          "ariaAttributes": ["aria-modal", "aria-labelledby", "aria-describedby"],
+          "ariaAttributes": [
+            "aria-modal",
+            "aria-labelledby",
+            "aria-describedby"
+          ],
           "screenReaderBehavior": "Announces as dialog role with the title. Focus trap ensures screen reader stays within dialog."
         },
-        "commonPatterns": [
-          {
-            "name": "Confirmation Dialog",
-            "description": "A simple confirmation dialog with accept/reject actions",
-            "code": "<Dialog>\n  <DialogSurface>\n    <DialogBody>\n      <DialogTitle>Confirm</DialogTitle>\n      <DialogContent>Are you sure?</DialogContent>\n      <DialogActions>\n        <Button appearance=\"primary\">Yes</Button>\n        <Button>No</Button>\n      </DialogActions>\n    </DialogBody>\n  </DialogSurface>\n</Dialog>"
-          }
-        ],
         "stylingTips": "Use DialogSurface for custom width. Leverage CSS grid in DialogBody for complex layouts.",
         "sourceHash": "dialog-enhanced-hash",
         "enhancedAt": "2025-06-01T12:00:00Z"
-      },
-      "relatedComponents": ["DialogTrigger", "DialogSurface", "DialogBody", "DialogTitle", "DialogContent", "DialogActions"],
-      "additionalExports": ["dialogClassNames", "useDialogStyles_unstable"]
+      }
     }
   ],
   "utilities": [
@@ -419,7 +453,7 @@
             "code": "<Component>Hello</Component>"
           }
         ],
-        "sourceHash": "positioning-enhanced-hash",
+        "sourceHash": "utility-hash-enhanced",
         "enhancedAt": "2025-06-01T12:00:00Z"
       }
     }
@@ -444,46 +478,71 @@
           "language": "tsx"
         }
       ],
-      "referencedComponents": ["FluentProvider", "Button"],
+      "referencedComponents": [
+        "FluentProvider",
+        "Button"
+      ],
       "sourceHash": "guide-hash-getting-started",
       "enhancedAt": "2025-06-01T12:00:00Z"
     }
   ],
-  "patterns": [
+  "categoryGuidance": [
+    {
+      "id": "forms",
+      "category": "forms",
+      "overview": "Form components collect and validate user input.",
+      "whenToUse": "Use forms components for their intended jobs.",
+      "bestPractices": {
+        "dos": [
+          "Prefer the semantic component."
+        ],
+        "donts": [
+          "Do not over-customize."
+        ]
+      },
+      "accessibility": "Every interactive element must be keyboard reachable.",
+      "antiPatterns": [
+        {
+          "title": "Generic misuse",
+          "problem": "Using the wrong component for the job.",
+          "solution": "Choose the component that matches the intent."
+        }
+      ],
+      "componentIds": [
+        "input"
+      ],
+      "sourceHash": "category-hash-forms",
+      "enhancedAt": "2025-06-01T12:00:00Z"
+    }
+  ],
+  "recipes": [
     {
       "id": "login-form",
-      "title": "Login Form Pattern",
+      "title": "Login Form",
       "group": "forms",
+      "goal": "Build a login form with email and password fields.",
+      "whenToUse": "Use when an app needs an authentication screen.",
+      "whenNotToUse": "Avoid for single-field sign-in flows that need no layout.",
       "content": "# Login Form\n\nA standard login form using FluentUI components.\n\nCombines Input, Field, Button, and Card for a clean login experience.",
       "examples": [
         {
           "name": "Basic Login",
           "description": "Simple email/password login form",
           "code": "<Card>\n  <Field label=\"Email\">\n    <Input type=\"email\" />\n  </Field>\n  <Field label=\"Password\">\n    <Input type=\"password\" />\n  </Field>\n  <Button appearance=\"primary\">Sign In</Button>\n</Card>",
-          "components": ["Card", "Field", "Input", "Button"]
-        }
-      ],
-      "referencedComponents": ["Card", "Field", "Input", "Button"],
-      "sourceHash": "pattern-hash-login-form",
-      "enhancedAt": "2025-06-01T12:00:00Z"
-    }
-  ],
-  "enterprise": [
-    {
-      "id": "app-shell",
-      "title": "Application Shell Pattern",
-      "category": "enterprise",
-      "content": "# Application Shell\n\nThe app shell pattern provides the outer frame of an enterprise application.\n\n## Structure\n\nUses Nav for sidebar, Breadcrumb for wayfinding, and Toolbar for actions.",
-      "codeExamples": [
-        {
-          "title": "App Shell Layout",
-          "description": "Basic application shell with sidebar navigation",
-          "code": "<div className={styles.shell}>\n  <Nav />\n  <main>\n    <Breadcrumb />\n    <Toolbar />\n    {children}\n  </main>\n</div>",
           "language": "tsx"
         }
       ],
-      "referencedComponents": ["Nav", "Breadcrumb", "Toolbar"],
-      "sourceHash": "guide-hash-app-shell",
+      "referencedComponents": [
+        "Card",
+        "Field",
+        "Input",
+        "Button"
+      ],
+      "accessibilityNotes": "Ensure every interactive element is labelled.",
+      "pitfalls": [
+        "Forgetting to label inputs."
+      ],
+      "sourceHash": "recipe-hash-login-form",
       "enhancedAt": "2025-06-01T12:00:00Z"
     }
   ],
@@ -494,7 +553,12 @@
       "category": "quick-reference",
       "content": "# Component Cheatsheet\n\n## Buttons\n- Button: Standard button\n- CompoundButton: Button with secondary text\n\n## Forms\n- Input: Single-line text\n- Textarea: Multi-line text",
       "codeExamples": [],
-      "referencedComponents": ["Button", "CompoundButton", "Input", "Textarea"],
+      "referencedComponents": [
+        "Button",
+        "CompoundButton",
+        "Input",
+        "Textarea"
+      ],
       "sourceHash": "guide-hash-component-cheatsheet",
       "enhancedAt": "2025-06-01T12:00:00Z"
     }

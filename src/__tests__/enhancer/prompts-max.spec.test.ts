@@ -19,8 +19,8 @@ import {
   COMPONENT_ENHANCE_SYSTEM_PROMPT,
   UTILITY_ENHANCE_SYSTEM_PROMPT,
   FOUNDATION_GUIDE_SYSTEM_PROMPT,
-  PATTERN_GUIDE_SYSTEM_PROMPT,
-  ENTERPRISE_GUIDE_SYSTEM_PROMPT,
+  CATEGORY_GUIDANCE_SYSTEM_PROMPT,
+  RECIPE_SYSTEM_PROMPT,
   QUICK_REFERENCE_SYSTEM_PROMPT,
   buildComponentEnhanceMessages,
   buildComponentSummaries,
@@ -33,8 +33,8 @@ const ALL_SYSTEM_PROMPTS = [
   COMPONENT_ENHANCE_SYSTEM_PROMPT,
   UTILITY_ENHANCE_SYSTEM_PROMPT,
   FOUNDATION_GUIDE_SYSTEM_PROMPT,
-  PATTERN_GUIDE_SYSTEM_PROMPT,
-  ENTERPRISE_GUIDE_SYSTEM_PROMPT,
+  CATEGORY_GUIDANCE_SYSTEM_PROMPT,
+  RECIPE_SYSTEM_PROMPT,
   QUICK_REFERENCE_SYSTEM_PROMPT,
 ];
 
@@ -68,25 +68,24 @@ describe('ST-26: shared grounding self-check', () => {
 // ============================================================================
 
 describe('ST-23: component & utility prompt richness', () => {
-  it('component prompt requests every new schema field', () => {
+  it('component prompt requests every prose schema field', () => {
     for (const key of [
       'propGuidance',
       'antiPatterns',
       'performanceNotes',
       'themingNotes',
-      'compositionExamples',
-      'relatedPatterns',
+      'relatedRecipes',
       'edgeCases',
     ]) {
       expect(COMPONENT_ENHANCE_SYSTEM_PROMPT).toContain(key);
     }
+    // Prose-only contract: no code-bearing fields are requested.
+    expect(COMPONENT_ENHANCE_SYSTEM_PROMPT).not.toContain('compositionExamples');
   });
 
   it('component prompt states explicit minimum quotas', () => {
-    // dos/donts >= 5, commonPatterns >= 4, compositionExamples >= 2,
-    // antiPatterns >= 3 — assert the numbers appear.
+    // dos/donts >= 5, antiPatterns >= 3, edgeCases >= 3.
     expect(COMPONENT_ENHANCE_SYSTEM_PROMPT).toMatch(/at least 5|≥\s*5|5 or more/);
-    expect(COMPONENT_ENHANCE_SYSTEM_PROMPT).toMatch(/at least 4|≥\s*4|4 or more/);
     expect(COMPONENT_ENHANCE_SYSTEM_PROMPT).toMatch(/at least 3|≥\s*3|3 or more/);
   });
 
@@ -113,7 +112,7 @@ describe('ST-23: component & utility prompt richness', () => {
 // ST-24: foundation / enterprise / quick-reference guide fields
 // ============================================================================
 
-describe('ST-24: foundation/enterprise/quick-ref guide richness', () => {
+describe('ST-24: foundation/quick-ref guide richness', () => {
   it('foundation prompt requests keyTakeaways, pitfalls, accessibilityNotes', () => {
     for (const key of ['keyTakeaways', 'pitfalls', 'accessibilityNotes']) {
       expect(FOUNDATION_GUIDE_SYSTEM_PROMPT).toContain(key);
@@ -121,11 +120,11 @@ describe('ST-24: foundation/enterprise/quick-ref guide richness', () => {
     expect(FOUNDATION_GUIDE_SYSTEM_PROMPT).toMatch(/at least 4|≥\s*4|4 or more/);
   });
 
-  it('enterprise prompt requests keyTakeaways, pitfalls, accessibilityNotes', () => {
-    for (const key of ['keyTakeaways', 'pitfalls', 'accessibilityNotes']) {
-      expect(ENTERPRISE_GUIDE_SYSTEM_PROMPT).toContain(key);
+  it('category-guidance prompt requests bestPractices and antiPatterns', () => {
+    for (const key of ['bestPractices', 'antiPatterns', 'accessibility']) {
+      expect(CATEGORY_GUIDANCE_SYSTEM_PROMPT).toContain(key);
     }
-    expect(ENTERPRISE_GUIDE_SYSTEM_PROMPT).toMatch(/at least 4|≥\s*4|4 or more/);
+    expect(CATEGORY_GUIDANCE_SYSTEM_PROMPT).toMatch(/at least 3|≥\s*3|3 or more/);
   });
 
   it('quick-reference prompt requests keyTakeaways and pitfalls', () => {
@@ -140,20 +139,21 @@ describe('ST-24: foundation/enterprise/quick-ref guide richness', () => {
 // ST-25: pattern guide fields
 // ============================================================================
 
-describe('ST-25: pattern guide richness', () => {
-  it('pattern prompt requests whenToUse/whenNotToUse/accessibilityNotes/pitfalls', () => {
+describe('ST-25: recipe richness', () => {
+  it('recipe prompt requests goal/whenToUse/whenNotToUse/accessibilityNotes/pitfalls', () => {
     for (const key of [
+      'goal',
       'whenToUse',
       'whenNotToUse',
       'accessibilityNotes',
       'pitfalls',
     ]) {
-      expect(PATTERN_GUIDE_SYSTEM_PROMPT).toContain(key);
+      expect(RECIPE_SYSTEM_PROMPT).toContain(key);
     }
   });
 
-  it('pattern prompt states a minimum examples quota', () => {
-    expect(PATTERN_GUIDE_SYSTEM_PROMPT).toMatch(/at least 3|≥\s*3|3 or more/);
+  it('recipe prompt states a minimum examples quota', () => {
+    expect(RECIPE_SYSTEM_PROMPT).toMatch(/at least 2|≥\s*2|2 or more/);
   });
 });
 

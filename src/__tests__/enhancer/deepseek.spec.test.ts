@@ -131,8 +131,8 @@ function rawSchemaWithButton(component: Partial<ComponentEntry> = {}): FluentUIS
     components: [button],
     utilities: [],
     foundation: [],
-    patterns: [],
-    enterprise: [],
+    categoryGuidance: [],
+    recipes: [],
     quickReference: [],
     stats: {
       totalComponents: 1,

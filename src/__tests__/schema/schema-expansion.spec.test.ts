@@ -23,7 +23,7 @@ import {
   mapComponentEnhanced,
   mapUtilityEnhanced,
   mapGuideEntry,
-  mapPatternEntry,
+  mapRecipeEntry,
 } from '../../../scripts/enhancer/enhancer.js';
 import { validateSchema } from '../../schema/schema-validator.js';
 import {
@@ -46,42 +46,36 @@ const GUIDE_SPEC: GuideSpec = {
   id: 'getting-started',
   title: 'Getting Started',
   group: 'foundation',
-  description: 'A getting-started guide.',
 };
 
-const PATTERN_SPEC: GuideSpec = {
+const RECIPE_SPEC: GuideSpec = {
   id: 'login-form',
   title: 'Login Form',
   group: 'forms',
-  description: 'A login-form pattern.',
 };
 
 // ============================================================================
 // Phase 3 — Schema Expansion: mapping
 // ============================================================================
 
-describe('ST-18: mapComponentEnhanced copies new optional fields', () => {
+describe('ST-18: mapComponentEnhanced copies prose fields and relatedRecipes', () => {
   it('copies propGuidance, antiPatterns, and scalar/array enrichment fields', () => {
     const raw: AnyRaw = {
       description: 'desc',
       whenToUse: 'when',
       propGuidance: [
-        { prop: 'appearance', guidance: 'Use primary for the main action', example: 'appearance="primary"' },
+        { prop: 'appearance', guidance: 'Use primary for the main action', example: 'primary' },
       ],
       antiPatterns: [
         {
           title: 'Button for navigation',
           problem: 'Using Button to navigate',
           solution: 'Use Link instead',
-          code: '<Link href="/x">Go</Link>',
         },
       ],
       performanceNotes: 'Memoize icon slots to avoid re-renders.',
       themingNotes: 'Use tokens.colorBrandBackground; supports RTL.',
-      compositionExamples: [
-        { name: 'Icon slot', description: 'Override icon slot', code: '<Button icon={<AddRegular />} />' },
-      ],
-      relatedPatterns: ['login-form', 'dialog-patterns'],
+      relatedRecipes: ['login-form', 'data-table'],
       edgeCases: ['Disabled buttons do not fire onClick'],
     };
 
@@ -91,23 +85,24 @@ describe('ST-18: mapComponentEnhanced copies new optional fields', () => {
     expect(mapped.antiPatterns).toEqual(raw.antiPatterns);
     expect(mapped.performanceNotes).toBe('Memoize icon slots to avoid re-renders.');
     expect(mapped.themingNotes).toBe('Use tokens.colorBrandBackground; supports RTL.');
-    expect(mapped.compositionExamples).toEqual(raw.compositionExamples);
-    expect(mapped.relatedPatterns).toEqual(['login-form', 'dialog-patterns']);
+    expect(mapped.relatedRecipes).toEqual(['login-form', 'data-table']);
     expect(mapped.edgeCases).toEqual(['Disabled buttons do not fire onClick']);
+    // Prose-only contract: no code-bearing fields exist on the mapped object.
+    expect(mapped).not.toHaveProperty('commonPatterns');
+    expect(mapped).not.toHaveProperty('compositionExamples');
   });
 
-  it('leaves new fields undefined when the raw response omits them', () => {
+  it('leaves optional prose fields undefined when the raw response omits them', () => {
     const mapped = mapComponentEnhanced({ description: 'd', whenToUse: 'w' } as AnyRaw, 'hash-2');
 
     expect(mapped.propGuidance).toBeUndefined();
     expect(mapped.antiPatterns).toBeUndefined();
     expect(mapped.performanceNotes).toBeUndefined();
     expect(mapped.themingNotes).toBeUndefined();
-    expect(mapped.compositionExamples).toBeUndefined();
-    expect(mapped.relatedPatterns).toBeUndefined();
+    expect(mapped.relatedRecipes).toBeUndefined();
     expect(mapped.edgeCases).toBeUndefined();
-    // Existing required fields still default cleanly.
-    expect(mapped.commonPatterns).toEqual([]);
+    // Required prose fields still default cleanly.
+    expect(mapped.stylingTips).toBe('');
   });
 });
 
@@ -159,29 +154,32 @@ describe('ST-19: utility/guide/pattern mapping copies new optional fields', () =
     expect(mapped.accessibilityNotes).toBeUndefined();
   });
 
-  it('mapPatternEntry copies whenToUse, whenNotToUse, accessibilityNotes, pitfalls', () => {
+  it('mapRecipeEntry copies goal, whenToUse, whenNotToUse, accessibility, pitfalls', () => {
     const raw: AnyRaw = {
-      content: '# Pattern',
+      content: '# Recipe',
+      goal: 'Build a login form.',
       whenToUse: 'Use for credential entry.',
       whenNotToUse: 'Avoid for SSO-only flows.',
       accessibilityNotes: 'Associate labels with inputs via Field.',
       pitfalls: ['Missing autocomplete attributes'],
     };
 
-    const mapped = mapPatternEntry(PATTERN_SPEC, raw);
+    const mapped = mapRecipeEntry(RECIPE_SPEC, raw);
 
+    expect(mapped.goal).toBe('Build a login form.');
     expect(mapped.whenToUse).toBe('Use for credential entry.');
     expect(mapped.whenNotToUse).toBe('Avoid for SSO-only flows.');
     expect(mapped.accessibilityNotes).toBe('Associate labels with inputs via Field.');
     expect(mapped.pitfalls).toEqual(['Missing autocomplete attributes']);
   });
 
-  it('mapPatternEntry leaves new fields undefined when omitted', () => {
-    const mapped = mapPatternEntry(PATTERN_SPEC, { content: '# P' } as AnyRaw);
-    expect(mapped.whenToUse).toBeUndefined();
-    expect(mapped.whenNotToUse).toBeUndefined();
-    expect(mapped.accessibilityNotes).toBeUndefined();
-    expect(mapped.pitfalls).toBeUndefined();
+  it('mapRecipeEntry defaults omitted fields to empty values', () => {
+    const mapped = mapRecipeEntry(RECIPE_SPEC, { content: '# R' } as AnyRaw);
+    expect(mapped.goal).toBe('');
+    expect(mapped.whenToUse).toBe('');
+    expect(mapped.whenNotToUse).toBe('');
+    expect(mapped.accessibilityNotes).toBe('');
+    expect(mapped.pitfalls).toEqual([]);
   });
 });
 

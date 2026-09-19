@@ -252,8 +252,8 @@ describe('Scraper pipeline integration', () => {
     expect(parsed.components.length).toBe(10);
     expect(parsed.utilities.length).toBe(0);
     expect(parsed.foundation).toEqual([]);
-    expect(parsed.patterns).toEqual([]);
-    expect(parsed.enterprise).toEqual([]);
+    expect(parsed.categoryGuidance).toEqual([]);
+    expect(parsed.recipes).toEqual([]);
     expect(parsed.quickReference).toEqual([]);
   });
 

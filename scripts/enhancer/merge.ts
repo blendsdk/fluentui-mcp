@@ -100,19 +100,19 @@ export function mergeEnhancements(options: MergeOptions): FluentUISchema {
     ...rawSchema,
     components: mergedComponents,
     utilities: mergedUtilities,
-    // Carry forward guides from previous if they exist and no new ones generated
+    // Carry forward generated sections from previous when the raw schema has none
     foundation:
       rawSchema.foundation.length > 0
         ? rawSchema.foundation
         : (previousSchema?.foundation ?? []),
-    patterns:
-      rawSchema.patterns.length > 0
-        ? rawSchema.patterns
-        : (previousSchema?.patterns ?? []),
-    enterprise:
-      rawSchema.enterprise.length > 0
-        ? rawSchema.enterprise
-        : (previousSchema?.enterprise ?? []),
+    categoryGuidance:
+      rawSchema.categoryGuidance.length > 0
+        ? rawSchema.categoryGuidance
+        : (previousSchema?.categoryGuidance ?? []),
+    recipes:
+      rawSchema.recipes.length > 0
+        ? rawSchema.recipes
+        : (previousSchema?.recipes ?? []),
     quickReference:
       rawSchema.quickReference.length > 0
         ? rawSchema.quickReference

@@ -15,7 +15,7 @@
       "name": "Button",
       "id": "button",
       "packageName": "@fluentui/react-button",
-      "packageVersion": "9.9.1",
+      "packageVersion": "9.0.0",
       "importPath": "@fluentui/react-components",
       "importStatement": "import { Button } from '@fluentui/react-components'",
       "category": "buttons",
@@ -35,11 +35,11 @@
           "name": "size",
           "type": "'small' | 'medium' | 'large'",
           "required": false,
-          "defaultValue": "'medium'",
           "description": "A button supports different sizes.",
           "deprecated": false,
           "inherited": false,
-          "source": "ButtonProps"
+          "source": "ButtonProps",
+          "defaultValue": "'medium'"
         },
         {
           "name": "disabled",
@@ -81,7 +81,9 @@
           "code": "export const Default = () => <Button>Default</Button>;",
           "renderCode": "<Button>Default</Button>",
           "sourceFile": "packages/react-button/stories/src/Button/ButtonDefault.stories.tsx",
-          "imports": ["import { Button } from '@fluentui/react-components'"]
+          "imports": [
+            "import { Button } from '@fluentui/react-components'"
+          ]
         },
         {
           "name": "Appearance",
@@ -89,17 +91,27 @@
           "code": "export const Appearance = () => (\n  <>\n    <Button appearance=\"primary\">Primary</Button>\n    <Button appearance=\"secondary\">Secondary</Button>\n  </>\n);",
           "renderCode": "<>\n  <Button appearance=\"primary\">Primary</Button>\n  <Button appearance=\"secondary\">Secondary</Button>\n</>",
           "sourceFile": "packages/react-button/stories/src/Button/ButtonAppearance.stories.tsx",
-          "imports": ["import { Button } from '@fluentui/react-components'"]
+          "imports": [
+            "import { Button } from '@fluentui/react-components'"
+          ]
         }
       ],
-      "relatedComponents": ["CompoundButton", "ToggleButton", "SplitButton", "MenuButton"],
-      "additionalExports": ["buttonClassNames", "useButtonStyles_unstable"]
+      "relatedComponents": [
+        "CompoundButton",
+        "ToggleButton",
+        "SplitButton",
+        "MenuButton"
+      ],
+      "additionalExports": [
+        "buttonClassNames",
+        "useButtonStyles_unstable"
+      ]
     },
     {
       "name": "Input",
       "id": "input",
       "packageName": "@fluentui/react-input",
-      "packageVersion": "9.5.0",
+      "packageVersion": "9.0.0",
       "importPath": "@fluentui/react-components",
       "importStatement": "import { Input } from '@fluentui/react-components'",
       "category": "forms",
@@ -128,21 +140,21 @@
           "name": "type",
           "type": "'text' | 'password' | 'email' | 'number' | 'search' | 'tel' | 'url'",
           "required": false,
-          "defaultValue": "'text'",
           "description": "The type of the input element.",
           "deprecated": false,
           "inherited": false,
-          "source": "InputProps"
+          "source": "InputProps",
+          "defaultValue": "'text'"
         },
         {
           "name": "appearance",
           "type": "'outline' | 'underline' | 'filled-darker' | 'filled-lighter'",
           "required": false,
-          "defaultValue": "'outline'",
           "description": "Controls the colors and borders of the input.",
           "deprecated": false,
           "inherited": false,
-          "source": "InputProps"
+          "source": "InputProps",
+          "defaultValue": "'outline'"
         },
         {
           "name": "disabled",
@@ -187,17 +199,26 @@
           "code": "export const Default = () => <Input />;",
           "renderCode": "<Input />",
           "sourceFile": "packages/react-input/stories/src/Input/InputDefault.stories.tsx",
-          "imports": ["import { Input } from '@fluentui/react-components'"]
+          "imports": [
+            "import { Input } from '@fluentui/react-components'"
+          ]
         }
       ],
-      "relatedComponents": ["Textarea", "SearchBox", "SpinButton"],
-      "additionalExports": ["inputClassNames", "useInputStyles_unstable"]
+      "relatedComponents": [
+        "Textarea",
+        "SearchBox",
+        "SpinButton"
+      ],
+      "additionalExports": [
+        "inputClassNames",
+        "useInputStyles_unstable"
+      ]
     },
     {
       "name": "Dialog",
       "id": "dialog",
       "packageName": "@fluentui/react-dialog",
-      "packageVersion": "9.11.0",
+      "packageVersion": "9.0.0",
       "importPath": "@fluentui/react-components",
       "importStatement": "import { Dialog } from '@fluentui/react-components'",
       "category": "feedback",
@@ -217,11 +238,11 @@
           "name": "modalType",
           "type": "'modal' | 'non-modal' | 'alert'",
           "required": false,
-          "defaultValue": "'modal'",
           "description": "The type of modal behavior.",
           "deprecated": false,
           "inherited": false,
-          "source": "DialogProps"
+          "source": "DialogProps",
+          "defaultValue": "'modal'"
         },
         {
           "name": "onOpenChange",
@@ -254,14 +275,24 @@
           ]
         }
       ],
-      "relatedComponents": ["DialogTrigger", "DialogSurface", "DialogBody", "DialogTitle", "DialogContent", "DialogActions"],
-      "additionalExports": ["dialogClassNames", "useDialogStyles_unstable"]
+      "relatedComponents": [
+        "DialogTrigger",
+        "DialogSurface",
+        "DialogBody",
+        "DialogTitle",
+        "DialogContent",
+        "DialogActions"
+      ],
+      "additionalExports": [
+        "dialogClassNames",
+        "useDialogStyles_unstable"
+      ]
     }
   ],
   "utilities": [],
   "foundation": [],
-  "patterns": [],
-  "enterprise": [],
+  "categoryGuidance": [],
+  "recipes": [],
   "quickReference": [],
   "stats": {
     "totalComponents": 3,
