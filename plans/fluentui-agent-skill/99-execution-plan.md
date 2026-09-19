@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 17:23
-> **Progress**: 69/103 tasks (67%)
+> **Last Updated**: 2026-09-19 17:26
+> **Progress**: 75/103 tasks (73%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -249,14 +249,14 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 5.4: Implementation Tests & Hardening
 
-- [ ] 5.4.1 Write installer impl tests (atomic replace, symlink, leftover cleanup) — `src/__tests__/skill/install-skill.impl.test.ts`
-- [ ] 5.4.2 Verify `npm pack --dry-run` contents
-- [ ] 5.4.3 Full verify (PR-1)
+- [x] 5.4.1 Write installer impl tests (atomic replace, symlink, leftover cleanup) — `src/__tests__/skill/install-skill.impl.test.ts` ✅ (completed: 2026-09-19 17:26)
+- [x] 5.4.2 Verify `npm pack --dry-run` contents ✅ (completed: 2026-09-19 17:26)
+- [x] 5.4.3 Full verify (PR-1) ✅ (completed: 2026-09-19 17:26)
 
 **Deliverables**:
-- [ ] Working `fluentui skill install|status|uninstall`
-- [ ] Packable `fluentui-skill` package with no `data/`
-- [ ] All verification passing
+- [x] Working `fluentui skill install|status|uninstall` ✅ (completed: 2026-09-19 17:26)
+- [x] Packable `fluentui-skill` package with no `data/` ✅ (completed: 2026-09-19 17:26)
+- [x] All verification passing ✅ (completed: 2026-09-19 17:26)
 
 **Verify**: `yarn build && yarn test`
 
