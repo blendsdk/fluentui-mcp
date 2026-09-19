@@ -259,12 +259,8 @@ function flattenDiagnostic(message: string | DiagnosticMessageChain): string {
     return message;
   }
   const parts: string[] = [String(message.getMessageText())];
-  let next = message.getNext();
-  while (next) {
-    for (const link of next) {
-      parts.push(String(link.getMessageText()));
-    }
-    next = next[0]?.getNext();
+  for (const link of message.getNext() ?? []) {
+    parts.push(flattenDiagnostic(link));
   }
   return parts.join(' ');
 }
@@ -438,6 +434,15 @@ export async function runValidate(
   );
   const { scanSkillDir } = await import('./secrets.js');
 
+  // The API-reference check needs both schemas. Check them before the
+  // (expensive) example type check so a missing oracle fails fast instead of
+  // after a full compile.
+  for (const path of [enhancedPath, rawPath]) {
+    if (!existsSync(resolve(cwd, path))) {
+      throw new Error(`Schema not found: ${path}`);
+    }
+  }
+
   const resolver = createPackageExportResolver(cwd);
   const report = validateExamples({
     skillDir: resolve(cwd, skillDir),
@@ -445,14 +450,6 @@ export async function runValidate(
     typeCheck: typecheck ? undefined : () => [],
     cwd,
   });
-
-  // The API-reference check needs both schemas. A missing oracle is a failure,
-  // not a reason to skip the check silently.
-  for (const path of [enhancedPath, rawPath]) {
-    if (!existsSync(resolve(cwd, path))) {
-      throw new Error(`Schema not found: ${path}`);
-    }
-  }
 
   const readJson = (path: string): unknown =>
     JSON.parse(readFileSync(resolve(cwd, path), 'utf-8'));

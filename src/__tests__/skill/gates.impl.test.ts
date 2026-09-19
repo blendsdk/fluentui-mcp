@@ -39,7 +39,6 @@ import {
   createCategoryGuidanceEntry,
   createComponentEntry,
   createFluentUISchema,
-  createGuideEntry,
   createRecipeEntry,
   createComponentEnhanced,
 } from '../fixtures/helpers.js';
@@ -380,25 +379,29 @@ describe('typeCheckWithTsc', () => {
   });
 
   it(
-    'reports a tier-2 finding for a real type error',
+    'reports type errors even when another block has a syntax error',
     () => {
       const findings = typeCheckWithTsc([
         {
-          file: 'references/components/button.md',
-          line: 10,
+          file: 'references/a.md',
+          line: 1,
           language: 'tsx',
-          code: [
-            "import { Button } from '@fluentui/react-components';",
-            '',
-            'export const Demo = () => <Button appearance={42} />;',
-          ].join('\n'),
+          code: 'const broken = (;',
+          fullCheck: true,
+        },
+        {
+          file: 'references/b.md',
+          line: 20,
+          language: 'ts',
+          code: "const value: number = 'not a number';",
           fullCheck: true,
         },
       ]);
-      expect(findings.length).toBeGreaterThan(0);
-      expect(findings[0].tier).toBe('2');
-      expect(findings[0].file).toBe('references/components/button.md');
-      expect(findings[0].line).toBeGreaterThanOrEqual(10);
+      const typeError = findings.find(
+        (finding) => finding.file === 'references/b.md' && finding.tier === '2',
+      );
+      expect(typeError).toBeDefined();
+      expect(typeError?.line).toBeGreaterThanOrEqual(20);
     },
     120000,
   );

@@ -34,7 +34,6 @@ import { generateSkill } from '../../../scripts/skill/generate.js';
 import {
   validateExamples,
   type ExampleBlock,
-  type ExampleFinding,
   type PackageExportResolver,
   type TypeChecker,
 } from '../../../scripts/skill/validate-examples.js';

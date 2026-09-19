@@ -61,4 +61,23 @@ ruling.
 | F11 | Fix | Freshness hashes the schema once. |
 
 Full verify after the fixes: `yarn build && yarn test && yarn skill:check && yarn skill:validate`
-all pass (670 tests). The one required re-review of the fix diff follows.
+all pass (670 tests).
+
+## Re-review (fix diff `e6662aa..30302c0`)
+
+One focused re-review. Verdict: **PASS WITH MINOR FINDINGS — no critical or major finding
+remains.** It confirmed F1–F3 and F5–F8/F10 fixed, F2 genuinely reports semantic diagnostics in
+the presence of a syntax error, and no unsafe casts or plan IDs in the code. Four minor
+follow-ups were raised and applied:
+
+| ID | Fix |
+|----|-----|
+| N1 | The F2 guard now passes a malformed block and a type-error block together and asserts the type error is reported. It uses a lightweight pure-TypeScript case so the suite is not starved by a full FluentUI compile. |
+| N2 | Removed the unused test imports (`createGuideEntry`, `ExampleFinding`). |
+| N3 | `flattenDiagnostic` now recurses through every linked diagnostic, not just the first. |
+| N4 | `runValidate` checks schema existence before running the expensive example compile. |
+
+## Outcome
+
+Phase 4 is complete and its acceptance criteria are met. F4 (the component inventory) is tracked
+as PR-14 for a Phase 1/2 correction.
