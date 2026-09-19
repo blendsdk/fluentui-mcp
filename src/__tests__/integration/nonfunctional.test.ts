@@ -8,6 +8,9 @@
  * every relative link resolves inside the tree. Reading it needs no network, no
  * package install, and no interpreter.
  *
+ * The same suite proves the no-execution guarantee: example validation compiles
+ * example code with the TypeScript compiler but never runs it.
+ *
  * @module tests/integration/nonfunctional
  */
 
@@ -24,6 +27,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 
 import { installSkill } from '../../skill/install-skill.js';
+import { typeCheckWithTsc } from '../../../scripts/skill/validate-examples.js';
 
 /** The hand-written and generated skill tree committed to the repository. */
 const SOURCE_DIR = join(process.cwd(), '.agents', 'skills', 'fluentui');
@@ -108,4 +112,34 @@ describe('offline use', () => {
 
     expect(missing).toEqual([]);
   });
+});
+
+describe('no-execution guarantee', () => {
+  it(
+    'compiles example code with the compiler without running it',
+    () => {
+      const sentinel = join(WORK_DIR, 'should-not-exist.txt');
+      const findings = typeCheckWithTsc(
+        [
+          {
+            file: 'references/security.md',
+            line: 1,
+            language: 'ts',
+            code: [
+              "import { writeFileSync } from 'node:fs';",
+              `writeFileSync(${JSON.stringify(sentinel)}, 'executed');`,
+            ].join('\n'),
+            fullCheck: true,
+          },
+        ],
+        WORK_DIR,
+      );
+
+      // The compiler only parses and type-checks the block. If validation ever
+      // executed it, the sentinel would exist.
+      expect(existsSync(sentinel)).toBe(false);
+      expect(Array.isArray(findings)).toBe(true);
+    },
+    120_000,
+  );
 });
