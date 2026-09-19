@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 17:26
-> **Progress**: 75/103 tasks (73%)
+> **Last Updated**: 2026-09-19 21:06
+> **Progress**: 77/103 tasks (75%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -273,16 +273,19 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 **Reference**: [03-05](03-05-retirement-cleanup.md) · AR-03, AR-15, AR-16
 
+> **Phase baseline tree**: de66f1da891a157dac6d487e6597f8ceaa4b1e86
+> **Scope**: strict · **Expected modification set**: `package.json`, `yarn.lock`, `src/types/index.ts`, `src/schema/**`, `src/__tests__/**`, `docs/**`, `techdocs/**`, `.github/workflows/**`, `tsconfig.build.json`, `vitest.config.ts`, `.gitignore`
+
 ### Step 6.1: Specification Tests (before implementation)
 
-- [ ] 6.1.1 [spec-author] Write repo-hygiene spec tests (ST-34, ST-35) — `src/__tests__/repo/repo-hygiene.spec.test.ts`
-- [ ] 6.1.2 Run hygiene spec tests; verify they FAIL (red phase)
+- [x] 6.1.1 [spec-author] Write repo-hygiene spec tests (ST-34, ST-35) — `src/__tests__/repo/repo-hygiene.spec.test.ts` ✅ (completed: 2026-09-19 21:06)
+- [x] 6.1.2 Run hygiene spec tests; verify they FAIL (red phase) ✅ (completed: 2026-09-19 21:06)
 
 ### Step 6.2: Implementation
 
-- [ ] 6.2.1 Drop the MCP SDK dependency and the residual `src/types/index.ts` barrel — `package.json`, `src/types/index.ts` (the runtime files were already deleted under PR-8 before Phase 2; renderers were relocated to `scripts/skill/render/`)
+- [!] 6.2.1 Drop the MCP SDK dependency and the residual `src/types/index.ts` barrel — `package.json`, `src/types/index.ts` (the runtime files were already deleted under PR-8 before Phase 2; renderers were relocated to `scripts/skill/render/`) Blocked: where the shared `src/schema/schema-validator.ts` lives after retirement — PR-15 pending user ruling.
 - [ ] 6.2.2 Delete legacy `docs/` and `techdocs/` with the Pages workflow — `docs/**`, `techdocs/**`, `.github/workflows/deploy-techdocs.yml`
-- [ ] 6.2.3 Update build/test/governance config — `tsconfig.build.json`, `vitest.config.ts`, `.gitignore`, `.github/workflows/ci.yml`, `.github/workflows/publish.yml`
+- [!] 6.2.3 Update build/test/governance config — `tsconfig.build.json`, `vitest.config.ts`, `.gitignore`, `.github/workflows/ci.yml`, `.github/workflows/publish.yml` Blocked: depends on the PR-15 validator-location ruling.
 - [ ] 6.2.4 Replace `update-docs.yml` with `update-skill.yml` — `.github/workflows/update-skill.yml`
 
 ### Step 6.3: Green phase
