@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-19 17:21
-> **Progress**: 63/103 tasks (61%)
+> **Last Updated**: 2026-09-19 17:23
+> **Progress**: 69/103 tasks (67%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -237,15 +237,15 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 
 ### Step 5.2: Implementation
 
-- [ ] 5.2.1 Implement client detection and target resolution — `src/skill/install-skill.ts`
-- [ ] 5.2.2 Implement atomic install, marker, status, and uninstall — `src/skill/install-skill.ts`
-- [ ] 5.2.3 Implement the `fluentui` bin dispatcher — `src/bin.ts`
-- [ ] 5.2.4 Implement the assemble step — `scripts/skill/assemble.ts`
-- [ ] 5.2.5 Update package name, bin, files, scripts, and drop `data/` — `package.json`
+- [x] 5.2.1 Implement client detection and target resolution — `src/skill/install-skill.ts` ✅ (completed: 2026-09-19 17:23)
+- [x] 5.2.2 Implement atomic install, marker, status, and uninstall — `src/skill/install-skill.ts` ✅ (completed: 2026-09-19 17:23)
+- [x] 5.2.3 Implement the `fluentui` bin dispatcher — `src/bin.ts` ✅ (completed: 2026-09-19 17:23)
+- [x] 5.2.4 Implement the assemble step — `scripts/skill/assemble.ts` ✅ (completed: 2026-09-19 17:23)
+- [x] 5.2.5 Update package name, bin, files, scripts, and drop `data/` — `package.json` ✅ (completed: 2026-09-19 17:23)
 
 ### Step 5.3: Green phase
 
-- [ ] 5.3.1 Run installer spec tests; verify they PASS (green phase)
+- [x] 5.3.1 Run installer spec tests; verify they PASS (green phase) ✅ (completed: 2026-09-19 17:23)
 
 ### Step 5.4: Implementation Tests & Hardening
 
