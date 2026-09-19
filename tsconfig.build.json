@@ -5,5 +5,5 @@
     "noEmit": false
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "docs", "plans", "src/__tests__"]
+  "exclude": ["node_modules", "dist", "plans", "src/__tests__"]
 }

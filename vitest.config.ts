@@ -8,7 +8,7 @@ export default defineConfig({
     // heavy. Under parallel execution those tests can starve each other, so
     // the default 5s timeout is too tight for the slower integration cases.
     testTimeout: 15000,
-    include: ['src/__tests__/**/*.test.ts'],
+    include: ['src/__tests__/**/*.test.ts', 'scripts/**/tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
