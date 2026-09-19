@@ -1,10 +1,10 @@
 # Roadmap: FluentUI Agent Skill
 
 > **Feature-Set**: FluentUI Agent Skill
-> **Status**: In Progress
+> **Status**: Complete
 > **Created**: 2026-09-19
-> **Last Updated**: 2026-09-19 22:29
-> **Progress**: 7 / 8 (88%)
+> **Last Updated**: 2026-09-19 23:26
+> **Progress**: 8 / 8 (100%)
 > **CodeOps Artifact Schema**: 1
 
 ## Legend
@@ -22,4 +22,4 @@
 | RD-05 | Installer & packaging | [RD-05](../requirements/RD-05-installer-packaging.md) | [plan](fluentui-agent-skill/00-index.md) | Done | ✅ | 2026-09-19 | depends on RD-03 |
 | RD-06 | MCP retirement & cleanup | [RD-06](../requirements/RD-06-mcp-retirement.md) | [plan](fluentui-agent-skill/00-index.md) | Done | ✅ | 2026-09-19 | depends on RD-03, RD-05 |
 | RD-07 | Non-functional requirements | [RD-07](../requirements/RD-07-non-functional.md) | [plan](fluentui-agent-skill/00-index.md) | Done | ✅ | 2026-09-19 | depends on RD-01 … RD-06 |
-| RD-08 | Documentation, decisions & evaluation | [RD-08](../requirements/RD-08-docs-evaluation.md) | [plan](fluentui-agent-skill/00-index.md) | Plan Created | 📋 | 2026-09-19 | depends on RD-03, RD-06 |
+| RD-08 | Documentation, decisions & evaluation | [RD-08](../requirements/RD-08-docs-evaluation.md) | [plan](fluentui-agent-skill/00-index.md) | Done | ✅ | 2026-09-19 | depends on RD-03, RD-06 |

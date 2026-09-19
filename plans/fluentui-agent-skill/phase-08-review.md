@@ -3,7 +3,7 @@
 > **Phase diff**: `f5bb855908aa17a8f474778df72f45929d6246f8` → `980fd08`
 > **Reviewers**: correctness reviewer + security auditor (parallel, strict scope)
 > **Verdicts**: correctness **FAIL** (one major) · security **PASS WITH MINOR FINDINGS**
-> **Status**: ✅ Closed after an approved fix and one re-review
+> **Status**: ✅ Closed — major fixed, re-review PASS
 
 Phase 8 adds the skill-first README, five ADRs, project `AGENTS.md`, the one-time skill-vs-MCP
 evaluation report, and the repository-hygiene spec tests for the docs. No production code changed.
@@ -46,4 +46,6 @@ All fixes are documentation or test-only; no production behavior changed.
 - `npx vitest run src/__tests__/repo/repo-hygiene.spec.test.ts` → 9 passing.
 - `yarn skill:freshness` → "Skill is fresh."
 - `yarn build && yarn test` → 35 files / 713 tests passing.
-- One re-review scoped to the fix diff: pending.
+- One re-review scoped to the fix diff → **PASS**. The freshness wording now matches
+  `check-freshness.ts`; the evaluation provenance is accurate; the strengthened ADR test passes on
+  the real ADRs and fails on a planted `AR-999`. No new critical or major finding.
