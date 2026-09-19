@@ -15,6 +15,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -98,6 +99,28 @@ describe('ST-27 packaging contract', () => {
 
   it('requires Node 20 or newer', () => {
     expect(pkg.engines?.node).toBe('>=20');
+  });
+
+  it('packs skills and dist while leaving data out', () => {
+    const pkgDir = makeTempDir();
+    writeFileSync(join(pkgDir, 'package.json'), JSON.stringify(pkg));
+    mkdirSync(join(pkgDir, 'dist'), { recursive: true });
+    writeFileSync(join(pkgDir, 'dist', 'bin.js'), '#!/usr/bin/env node\n');
+    mkdirSync(join(pkgDir, 'skills', 'fluentui'), { recursive: true });
+    writeFileSync(join(pkgDir, 'skills', 'fluentui', 'SKILL.md'), '# FluentUI\n');
+    mkdirSync(join(pkgDir, 'data'), { recursive: true });
+    writeFileSync(join(pkgDir, 'data', 'fluentui-schema.json'), '{}');
+
+    const output = execFileSync('npm', ['pack', '--ignore-scripts', '--dry-run', '--json'], {
+      cwd: pkgDir,
+      encoding: 'utf-8',
+    });
+    const packed = JSON.parse(output) as Array<{ files: Array<{ path: string }> }>;
+    const paths = packed[0].files.map((file) => file.path);
+
+    expect(paths).toContain('skills/fluentui/SKILL.md');
+    expect(paths.some((path) => path.startsWith('dist/'))).toBe(true);
+    expect(paths.some((path) => path.startsWith('data/'))).toBe(false);
   });
 });
 

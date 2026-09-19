@@ -7,6 +7,10 @@
  * `skills/fluentui/`. It always replaces the destination, which keeps the
  * packaged copy an exact match of the committed one.
  *
+ * Both directories are derived from the project root; the step accepts no
+ * destination override, so it can only ever replace the packaged skill
+ * directory inside the repository.
+ *
  * @module scripts/skill/assemble
  */
 
@@ -15,22 +19,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** The committed skill directory, relative to the project root. */
-export const DEFAULT_SOURCE_DIR = path.join('.agents', 'skills', 'fluentui');
+export const SOURCE_DIR = path.join('.agents', 'skills', 'fluentui');
 
 /** The packaged skill directory, relative to the project root. */
-export const DEFAULT_DEST_DIR = path.join('skills', 'fluentui');
-
-/**
- * Options for an assemble run.
- */
-export interface AssembleOptions {
-  /** Project root directory. */
-  cwd?: string;
-  /** Source skill directory, absolute or relative to `cwd`. */
-  sourceDir?: string;
-  /** Destination skill directory, absolute or relative to `cwd`. */
-  destDir?: string;
-}
+export const DEST_DIR = path.join('skills', 'fluentui');
 
 /**
  * The outcome of an assemble run.
@@ -69,14 +61,13 @@ function countFiles(dir: string): number {
 /**
  * Copies the committed skill tree into the packaged location.
  *
- * @param options - Assemble inputs.
+ * @param cwd - Project root directory.
  * @returns The resolved directories and the file count.
  * @throws When the source does not contain a `SKILL.md`.
  */
-export function assembleSkill(options: AssembleOptions = {}): AssembleResult {
-  const cwd = options.cwd ?? process.cwd();
-  const sourceDir = path.resolve(cwd, options.sourceDir ?? DEFAULT_SOURCE_DIR);
-  const destDir = path.resolve(cwd, options.destDir ?? DEFAULT_DEST_DIR);
+export function assembleSkill(cwd: string = process.cwd()): AssembleResult {
+  const sourceDir = path.resolve(cwd, SOURCE_DIR);
+  const destDir = path.resolve(cwd, DEST_DIR);
 
   if (!fs.existsSync(path.join(sourceDir, 'SKILL.md'))) {
     throw new Error(`skill source is missing SKILL.md: ${sourceDir}`);
@@ -92,24 +83,12 @@ export function assembleSkill(options: AssembleOptions = {}): AssembleResult {
 /**
  * Runs the assemble CLI.
  *
- * @param argv - Command-line arguments (currently unused).
  * @param cwd - Project root.
  * @returns Process exit code.
  */
-export function runAssemble(argv: string[] = [], cwd: string = process.cwd()): number {
-  let sourceDir: string | undefined;
-  let destDir: string | undefined;
-
-  for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--source') {
-      sourceDir = argv[++i] ?? sourceDir;
-    } else if (argv[i] === '--dest') {
-      destDir = argv[++i] ?? destDir;
-    }
-  }
-
+export function runAssemble(cwd: string = process.cwd()): number {
   try {
-    const result = assembleSkill({ cwd, sourceDir, destDir });
+    const result = assembleSkill(cwd);
     process.stdout.write(`Assembled ${result.files} file(s) into ${result.destDir}\n`);
     return 0;
   } catch (error) {
@@ -125,5 +104,5 @@ const invokedDirectly =
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
-  process.exitCode = runAssemble(process.argv.slice(2));
+  process.exitCode = runAssemble();
 }

@@ -228,7 +228,7 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 **Reference**: [03-04](03-04-installer-packaging.md) · AR-07, AR-13, AR-14
 
 > **Phase baseline tree**: 74bc9d9599e95d82c7b0b4d2ac01bfa4fa31c2bc
-> **Scope**: strict · **Expected modification set**: `src/skill/**`, `src/bin.ts`, `scripts/skill/**`, `src/__tests__/skill/**`, `package.json`, `.gitignore`
+> **Scope**: strict · **Expected modification set**: `src/skill/**`, `src/bin.ts`, `scripts/skill/**`, `src/__tests__/skill/**`, `package.json`, `.gitignore`, `vitest.config.ts`
 
 ### Step 5.1: Specification Tests (before implementation)
 
@@ -259,6 +259,13 @@ and documentation/evaluation. Every phase follows spec tests → red → impleme
 - [x] All verification passing ✅ (completed: 2026-09-19 17:26)
 
 **Verify**: `yarn build && yarn test`
+
+> **Review ruling applied**: the security audit found the assemble step accepted an unconstrained
+> destination and deleted it before use. The `--dest`/`--source` flags were removed and the step is
+> now fixed to `<cwd>/skills/fluentui`. The follow-up also hardened leftover cleanup, marker
+> validation, and status output, removed an unused export, made the packaging spec run a real
+> `npm pack`, and raised the vitest timeout so the pre-existing heavy tests stop flaking. See
+> `phase-05-review.md`.
 
 ---
 

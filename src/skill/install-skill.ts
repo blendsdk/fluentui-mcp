@@ -342,11 +342,23 @@ function writeMarker(dir: string, version: string): void {
  * @param targetDir - Skills directory to clean.
  */
 function cleanLeftovers(targetDir: string): void {
+  const leftover = new RegExp(`^(${escapeForRegExp(TEMP_PREFIX)}|${escapeForRegExp(BACKUP_PREFIX)})\\d+$`);
+
   for (const entry of fs.readdirSync(targetDir)) {
-    if (entry.startsWith(TEMP_PREFIX) || entry.startsWith(BACKUP_PREFIX)) {
+    if (leftover.test(entry)) {
       fs.rmSync(path.join(targetDir, entry), { recursive: true, force: true });
     }
   }
+}
+
+/**
+ * Escapes regular-expression metacharacters in a literal string.
+ *
+ * @param value - Literal text to escape.
+ * @returns The text safe to embed in a regular expression.
+ */
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -360,13 +372,30 @@ function cleanLeftovers(targetDir: string): void {
  * @throws When the destination exists but does not look like a skill.
  */
 function assertReplaceable(dest: string): void {
-  if (!entryExists(dest) || fs.existsSync(path.join(dest, MARKER_FILE))) {
+  if (!entryExists(dest)) {
     return;
   }
 
-  if (!fs.existsSync(path.join(dest, 'SKILL.md'))) {
-    throw new Error(`refusing to replace unrelated directory: ${dest}`);
+  // A valid marker or a `SKILL.md` identifies a directory as a skill install.
+  // Anything else is unrelated content and must be left untouched.
+  if (readMarker(dest) || fs.existsSync(path.join(dest, 'SKILL.md'))) {
+    return;
   }
+
+  throw new Error(`refusing to replace unrelated directory: ${dest}`);
+}
+
+/**
+ * Removes control characters from a value before printing it.
+ *
+ * The installed version is read back from disk, so it is untrusted input; the
+ * raw value could otherwise carry terminal escape sequences into the output.
+ *
+ * @param value - Text to sanitize.
+ * @returns The text without control characters.
+ */
+function sanitizeForDisplay(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '');
 }
 
 /**
@@ -645,7 +674,7 @@ export async function main(argv: string[], io: InstallerIo = {}): Promise<number
       const marker = readMarker(dest);
 
       if (marker) {
-        console.log(`${dest}: installed ${marker.version}`);
+        console.log(`${dest}: installed ${sanitizeForDisplay(marker.version)}`);
       } else if (entryExists(dest)) {
         console.log(`${dest}: installed (linked)`);
       } else {
@@ -683,22 +712,4 @@ export async function main(argv: string[], io: InstallerIo = {}): Promise<number
   }
 
   return 0;
-}
-
-/**
- * True when this module is the process entry point, resolving symlinks so the
- * guard also works through npm's `.bin` shims.
- *
- * @returns True when this file is the entry point.
- */
-export function isMainModule(): boolean {
-  if (!process.argv[1]) {
-    return false;
-  }
-
-  try {
-    return fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
-  } catch {
-    return false;
-  }
 }
