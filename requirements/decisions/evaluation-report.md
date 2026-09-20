@@ -15,7 +15,7 @@ arm produces.
 
 | Arm | Content source |
 | --- | --- |
-| Skill | The generated tree at `.agents/skills/fluentui/` (schema hash `8c045d9514aa489c58edbcf29ce3042a569df850323a78d4787cfcb33fdad3c5`). |
+| Skill | The generated tree at `.agents/skills/fluentui/` (schema hash `8c045d9514aa489c58edbcf29ce3042a569df850323a78d4787cfcb33fdad3c5` at evaluation time; see the addendum for the corrected-inventory hash). |
 | MCP | The enhanced schema the server served, recovered from Git history: `git show 5eeab6a:data/v9/fluentui-schema-enhanced.json`. `5eeab6a` is the last revision before the runtime was deleted at `3bfc3fb`. |
 
 Both arms trace to the same raw FluentUI source revision (`sources.fluentui`), but their enhanced
@@ -93,9 +93,21 @@ entries whose scraped inventory was wrong.
   sources.
 - **Five prompts.** The set is small and was chosen to cover the common themes; it is not a
   statistical sample.
-- **Component inventory.** The scraped inventory still contains non-exported names such as
-  `Provider` and `Tabs`; correcting it is tracked separately. This evaluation did not fix that
-  inventory, and the skill's routing is what keeps those entries from being chosen for the tested
-  prompts.
+- **Component inventory at evaluation time.** The scraped inventory then contained non-exported
+  names such as `Provider` and `Tabs`. It was corrected after this evaluation (see the addendum);
+  the skill's routing is what kept those entries from being chosen for the tested prompts.
 
 No credential material appears in this report.
+
+## Addendum (2026-09-20): corrected component inventory
+
+The scraped inventory was corrected after this evaluation. The scraper now treats the umbrella
+export index as authoritative, so the skill documents 198 unique public components with exact
+export names, and the phantom and duplicate entries the earlier limitation described are gone.
+The regenerated skill's manifest schema hash is
+`e93f15e9189f4a7677c3f8e507db398b307f0b9ea256ffa9cb66849d2986aa8c`.
+
+The five fixed prompts target forms, tables, dialogs, navigation, and theming. Their answers and
+scores are unchanged: the scoring is mechanical against the installed package, and the navigation
+recipe already used only `TabList` and `Tab`. The MCP arm's three unknown exports (`Tabs`,
+`TabPanels`, `TabPanel`) remain the only errors on the fixed prompt set.
