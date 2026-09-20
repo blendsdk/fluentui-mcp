@@ -172,6 +172,39 @@ describe('example validation', () => {
     }
   });
 
+  it('ignores comments inside an import clause so it does not report a false positive', () => {
+    const dir = makeTempDir();
+    try {
+      writeTreeFile(dir, 'SKILL.md', skillMarkdown());
+      writeTreeFile(
+        dir,
+        'references/components/button.md',
+        [
+          '# Button',
+          '',
+          '```tsx',
+          'import {',
+          '  // the primary action control',
+          '  Button,',
+          '  Input, // text entry',
+          '} from \'@fluentui/react-components\';',
+          '```',
+          '',
+        ].join('\n'),
+      );
+
+      const report = validateExamples({
+        skillDir: dir,
+        resolveExports: BUTTON_ONLY_EXPORTS,
+        typeCheck: NO_TYPE_ERRORS,
+      });
+
+      expect(report.errors).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('reports a tier-2 type error without failing the gate', () => {
     const dir = makeTempDir();
     try {

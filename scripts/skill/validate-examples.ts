@@ -185,7 +185,12 @@ function parseImports(code: string): ParsedImport[] {
     const specifier = match[3];
     const names: string[] = [];
     if (clause.trimStart().startsWith('{')) {
-      const inner = clause.replace(/^\{/, '').replace(/\}$/, '');
+      // Comments inside the braces are documentation, not imported names.
+      const inner = clause
+        .replace(/^\{/, '')
+        .replace(/\}$/, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/[^\n]*/g, '');
       for (const raw of inner.split(',')) {
         const name = raw
           .trim()
