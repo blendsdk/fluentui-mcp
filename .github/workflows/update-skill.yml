@@ -62,10 +62,10 @@ jobs:
         steps:
             # --- Setup ---
             - name: Checkout fluentui-mcp
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v7
               with:
                   node-version: 22
                   cache: "yarn"
@@ -127,7 +127,7 @@ jobs:
             # --- Stage 5: Commit & PR (skip on dry run) ---
             - name: Create Pull Request
               if: ${{ github.event.inputs.dry_run != 'true' }}
-              uses: peter-evans/create-pull-request@v6
+              uses: peter-evans/create-pull-request@v8
               with:
                   token: ${{ secrets.GITHUB_TOKEN }}
                   commit-message: "chore(${{ env.FLUENTUI_VERSION }}): update FluentUI skill"
@@ -152,7 +152,7 @@ jobs:
             # --- Summary ---
             - name: Upload schema artifacts
               if: always()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               with:
                   name: schema-${{ env.FLUENTUI_VERSION }}
                   path: |
