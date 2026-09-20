@@ -6,15 +6,21 @@
 # long-lived NPM_TOKEN is required. See
 # https://docs.npmjs.com/trusted-publishers.
 #
+# This file is the MANUAL publisher (dry run / emergency release). Automated
+# version bumps and releases are handled by release-please.yml together with
+# release-please-config.json and .release-please-manifest.json.
+#
 # One-time setup:
 #   1. Publish the first version by hand (`npm login` then `npm publish`). The
 #      trusted-publisher settings live on the package's npm page, which exists
 #      only after the first publish.
 #   2. On npmjs.com: Package -> Settings -> Trusted publishing -> Add ->
-#      GitHub Actions, with:
+#      GitHub Actions. Add one connection for the automated publisher
+#      (`release-please.yml`) and, if you want to publish manually as well, a
+#      second for this workflow (`publish.yml`):
 #        - Organization or user: blendsdk
 #        - Repository:           fluentui-mcp
-#        - Workflow filename:    publish.yml
+#        - Workflow filename:    release-please.yml  (and/or publish.yml)
 #        - Environment name:     (leave blank)
 #        - Allowed actions:      tick "npm publish" (connections created after
 #          2026-09-03 default to `npm stage publish` only).
@@ -24,8 +30,8 @@
 #      Publishing access to "Require 2FA and disallow tokens" and revoke any
 #      token that is no longer needed.
 #
-# To publish: Actions -> "Publish to npm" -> Run workflow. `dry_run` defaults
-# to true; set it to false to publish.
+# To publish manually: Actions -> "Publish to npm" -> Run workflow. `dry_run`
+# defaults to true; set it to false to publish.
 #
 # Requirements verified by this workflow:
 #   - `id-token: write` on the publishing job.
@@ -52,9 +58,9 @@ on:
                     - "true"
                     - "false"
 
-    # UNCOMMENT TO ACTIVATE: Publish on GitHub release
-    # release:
-    #   types: [published]
+    # Automated releases are handled by release-please.yml, which publishes in
+    # the same workflow that tags the release. Do not add a `release:` trigger
+    # here, or every release would be published twice.
 
 jobs:
     # ===========================================================================

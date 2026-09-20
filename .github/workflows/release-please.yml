@@ -1,0 +1,89 @@
+# =============================================================================
+# FluentUI Agent Skill — Release Please
+# =============================================================================
+#
+# Automatic semantic versioning from Conventional Commits. On every push to
+# `master`, release-please opens (or updates) a release PR that bumps
+# `package.json` and `CHANGELOG.md`. Merging that PR tags the commit
+# (`vX.Y.Z`) and creates the GitHub Release.
+#
+# When a release is created, this same workflow publishes to npm with trusted
+# publishing (OIDC). Publishing happens here rather than in `publish.yml`
+# because artifacts created with the default `GITHUB_TOKEN` do not trigger
+# other workflows — a `release:` trigger would never fire.
+#
+# Commit -> version mapping: `feat:` -> minor, `fix:` -> patch,
+# `feat!:`/`fix!:`/any `!` -> major.
+#
+# Bootstrap (first publish only; see the publish workflow header):
+#   1. The npm package must exist before a trusted publisher can be configured,
+#      so the first release is published by hand.
+#   2. Until then, leave the repository variable `NPM_TRUSTED_PUBLISHING`
+#      unset; the publish steps are skipped and the release is still tagged.
+#   3. After the manual publish and the npm trusted-publisher setup, set the
+#      repository variable `NPM_TRUSTED_PUBLISHING=true`. Later releases then
+#      publish automatically.
+# =============================================================================
+
+name: Release Please
+
+on:
+    push:
+        branches: [master]
+
+permissions:
+    contents: write
+    issues: write
+    pull-requests: write
+    # Required for the npm trusted-publishing (OIDC) exchange.
+    id-token: write
+
+jobs:
+    release-please:
+        name: Release Please
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Run release-please
+              id: release
+              uses: googleapis/release-please-action@v4
+              with:
+                  config-file: release-please-config.json
+                  manifest-file: .release-please-manifest.json
+
+            # -----------------------------------------------------------------
+            # Publish the new version with trusted publishing (OIDC).
+            # Every step below runs only when release-please created a release
+            # AND the trusted publisher is configured (repository variable).
+            # -----------------------------------------------------------------
+            - name: Checkout release tag
+              if: ${{ steps.release.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ steps.release.outputs.tag_name }}
+
+            - name: Setup Node.js 24
+              if: ${{ steps.release.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+                  registry-url: "https://registry.npmjs.org"
+                  package-manager-cache: false
+
+            - name: Install dependencies
+              if: ${{ steps.release.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+              run: yarn install --frozen-lockfile
+
+            - name: Upgrade npm for trusted publishing
+              if: ${{ steps.release.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+              run: npm install -g npm@^11.5.1
+
+            - name: Build the published artifacts
+              if: ${{ steps.release.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+              run: yarn build && yarn assemble
+
+            # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a
+            # short-lived registry token. Provenance is generated automatically.
+            - name: Publish to npm
+              if: ${{ steps.release.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+              run: npm publish
