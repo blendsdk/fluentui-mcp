@@ -40,7 +40,7 @@ tells the agent how to route a task to the right reference.
 
 ## Install
 
-Install the skill into your agent's skills directory:
+Install the skill into your agent's skills directory. Requires Node.js 20 or later:
 
 ```bash
 npx -y fluentui-skill skill install

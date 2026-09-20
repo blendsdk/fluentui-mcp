@@ -3,8 +3,8 @@
 # =============================================================================
 #
 # Builds and tests the package, then runs the skill integrity gates, on every
-# push to master and on every pull request targeting master. Runs against the
-# supported Node.js LTS versions.
+# push to master and on every pull request targeting master. Targets the
+# project's supported Node.js version.
 # =============================================================================
 
 name: CI
@@ -20,22 +20,17 @@ on:
 
 jobs:
     build-and-test:
-        name: Build & Test (Node ${{ matrix.node-version }})
+        name: Build & Test
         runs-on: ubuntu-latest
-
-        strategy:
-            fail-fast: false
-            matrix:
-                node-version: [20, 22]
 
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
 
-            - name: Setup Node.js ${{ matrix.node-version }}
+            - name: Setup Node.js 22
               uses: actions/setup-node@v4
               with:
-                  node-version: ${{ matrix.node-version }}
+                  node-version: 22
                   cache: "yarn"
 
             - name: Install dependencies

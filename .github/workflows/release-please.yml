@@ -15,14 +15,15 @@
 # Commit -> version mapping: `feat:` -> minor, `fix:` -> patch,
 # `feat!:`/`fix!:`/any `!` -> major.
 #
-# Bootstrap (first publish only; see the publish workflow header):
-#   1. The npm package must exist before a trusted publisher can be configured,
-#      so the first release is published by hand.
-#   2. Until then, leave the repository variable `NPM_TRUSTED_PUBLISHING`
-#      unset; the publish steps are skipped and the release is still tagged.
-#   3. After the manual publish and the npm trusted-publisher setup, set the
-#      repository variable `NPM_TRUSTED_PUBLISHING=true`. Later releases then
-#      publish automatically.
+# npm trusted publishing (OIDC):
+#   npm requires the package to exist before a trusted publisher can be set,
+#   so the very first version was published by hand (bootstrap). From then on
+#   every release is published here automatically. Configure the trusted
+#   publisher on npmjs.com (Package -> Settings -> Trusted publishing) for:
+#     - Organization or user: blendsdk
+#     - Repository:           fluentui-mcp
+#     - Workflow filename:    release-please.yml
+#   Provenance attestations are generated automatically.
 # =============================================================================
 
 name: Release Please
@@ -57,13 +58,13 @@ jobs:
             # AND the trusted publisher is configured (repository variable).
             # -----------------------------------------------------------------
             - name: Checkout release tag
-              if: ${{ steps.release.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+              if: ${{ steps.release.outputs.release_created == 'true' }}
               uses: actions/checkout@v4
               with:
                   ref: ${{ steps.release.outputs.tag_name }}
 
             - name: Setup Node.js 24
-              if: ${{ steps.release.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+              if: ${{ steps.release.outputs.release_created == 'true' }}
               uses: actions/setup-node@v4
               with:
                   node-version: 24
@@ -71,19 +72,19 @@ jobs:
                   package-manager-cache: false
 
             - name: Install dependencies
-              if: ${{ steps.release.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+              if: ${{ steps.release.outputs.release_created == 'true' }}
               run: yarn install --frozen-lockfile
 
             - name: Upgrade npm for trusted publishing
-              if: ${{ steps.release.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+              if: ${{ steps.release.outputs.release_created == 'true' }}
               run: npm install -g npm@^11.5.1
 
             - name: Build the published artifacts
-              if: ${{ steps.release.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+              if: ${{ steps.release.outputs.release_created == 'true' }}
               run: yarn build && yarn assemble
 
             # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a
             # short-lived registry token. Provenance is generated automatically.
             - name: Publish to npm
-              if: ${{ steps.release.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+              if: ${{ steps.release.outputs.release_created == 'true' }}
               run: npm publish
