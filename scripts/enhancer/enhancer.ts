@@ -28,7 +28,7 @@ import { runBatch } from './llm/batch.js';
 import { chatComplete } from './llm/complete.js';
 import { diffSchemas } from './diff.js';
 import { buildHashIndex, computeComponentHash, computeUtilityHash } from './hasher.js';
-import { parseJsonResponse } from './parse.js';
+import { parseJsonResponse, ResponseParseError } from './parse.js';
 import {
   buildComponentEnhanceMessages,
   buildUtilityEnhanceMessages,
@@ -48,6 +48,29 @@ import {
   RECIPE_GUIDES,
   type EnhancerConfig,
 } from './config.js';
+
+// ============================================================================
+// Failure Reporting
+// ============================================================================
+
+/**
+ * Describe a failed enhancement item for the run report.
+ *
+ * A parse failure carries the raw model output, which is the most useful clue
+ * when a response could not be decoded. The snippet is whitespace-collapsed
+ * and truncated so the report stays readable.
+ *
+ * @param error - The error the batch recorded, when any
+ * @param fallback - Message to use when the error has no message
+ * @returns A one-line description
+ */
+function describeFailure(error: Error | undefined, fallback: string): string {
+  if (error instanceof ResponseParseError) {
+    const snippet = error.rawContent.replace(/\s+/g, ' ').trim().slice(0, 200);
+    return `${error.message}: ${snippet}`;
+  }
+  return error?.message ?? fallback;
+}
 
 // ============================================================================
 // Raw LLM Response Shapes
@@ -271,8 +294,8 @@ export async function runEnhancement(
     }
     stats.failures += componentResults.failed.length;
     stats.failureDetails.push(
-      ...componentResults.failed.map(
-        (item) => item.error?.message ?? `component #${item.index} failed`,
+      ...componentResults.failed.map((item) =>
+        describeFailure(item.error, `component #${item.index} failed`),
       ),
     );
 
@@ -353,8 +376,8 @@ export async function runEnhancement(
     }
     stats.failures += utilityResults.failed.length;
     stats.failureDetails.push(
-      ...utilityResults.failed.map(
-        (item) => item.error?.message ?? `utility #${item.index} failed`,
+      ...utilityResults.failed.map((item) =>
+        describeFailure(item.error, `utility #${item.index} failed`),
       ),
     );
 
@@ -547,8 +570,8 @@ async function generateGuides(
     entries: results.items
       .filter((item) => item.ok && item.result)
       .map((item) => item.result as GuideEntry),
-    failures: results.failed.map(
-      (item) => item.error?.message ?? `${label} #${item.index} failed`,
+    failures: results.failed.map((item) =>
+      describeFailure(item.error, `${label} #${item.index} failed`),
     ),
   };
 }
@@ -608,8 +631,8 @@ async function generateCategoryGuidance(
     entries: results.items
       .filter((item) => item.ok && item.result)
       .map((item) => item.result as CategoryGuidanceEntry),
-    failures: results.failed.map(
-      (item) => item.error?.message ?? `category #${item.index} failed`,
+    failures: results.failed.map((item) =>
+      describeFailure(item.error, `category #${item.index} failed`),
     ),
   };
 }
@@ -668,8 +691,8 @@ async function generateRecipes(
     entries: results.items
       .filter((item) => item.ok && item.result)
       .map((item) => item.result as RecipeEntry),
-    failures: results.failed.map(
-      (item) => item.error?.message ?? `recipe #${item.index} failed`,
+    failures: results.failed.map((item) =>
+      describeFailure(item.error, `recipe #${item.index} failed`),
     ),
   };
 }
