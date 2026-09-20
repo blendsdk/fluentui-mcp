@@ -10,25 +10,20 @@
 # version bumps and releases are handled by release-please.yml together with
 # release-please-config.json and .release-please-manifest.json.
 #
-# One-time setup:
-#   1. Publish the first version by hand (`npm login` then `npm publish`). The
-#      trusted-publisher settings live on the package's npm page, which exists
-#      only after the first publish.
-#   2. On npmjs.com: Package -> Settings -> Trusted publishing -> Add ->
-#      GitHub Actions. Add one connection for the automated publisher
-#      (`release-please.yml`) and, if you want to publish manually as well, a
-#      second for this workflow (`publish.yml`):
-#        - Organization or user: blendsdk
-#        - Repository:           fluentui-mcp
-#        - Workflow filename:    release-please.yml  (and/or publish.yml)
-#        - Environment name:     (leave blank)
-#        - Allowed actions:      tick "npm publish" (connections created after
-#          2026-09-03 default to `npm stage publish` only).
-#      To use staged publishing instead, change the publish step to
-#      `npm stage publish` and approve each release by hand before it is public.
-#   3. After the first OIDC publish succeeds, optionally set the package's
-#      Publishing access to "Require 2FA and disallow tokens" and revoke any
-#      token that is no longer needed.
+# Setup: the first version was published by hand to create the package.
+# Configure the trusted publisher on npmjs.com (Package -> Settings ->
+# Trusted publishing -> Add -> GitHub Actions) for the automated publisher:
+#   - Organization or user: blendsdk
+#   - Repository:           fluentui-mcp
+#   - Workflow filename:    release-please.yml
+#   - Allowed actions:      tick "npm publish" (connections created after
+#     2026-09-03 default to `npm stage publish` only).
+# Add a second connection for `publish.yml` only if you also publish manually.
+# To use staged publishing instead, change the publish step to
+# `npm stage publish` and approve each release by hand before it is public.
+# After the first OIDC publish succeeds, optionally set the package's
+# Publishing access to "Require 2FA and disallow tokens" and revoke any token
+# that is no longer needed.
 #
 # To publish manually: Actions -> "Publish to npm" -> Run workflow. `dry_run`
 # defaults to true; set it to false to publish.
@@ -70,18 +65,14 @@ jobs:
         name: Build & Test
         runs-on: ubuntu-latest
 
-        strategy:
-            matrix:
-                node-version: [22]
-
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
 
-            - name: Setup Node.js ${{ matrix.node-version }}
+            - name: Setup Node.js 22
               uses: actions/setup-node@v4
               with:
-                  node-version: ${{ matrix.node-version }}
+                  node-version: 22
                   cache: "yarn"
 
             - name: Install dependencies
