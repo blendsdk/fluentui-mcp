@@ -67,6 +67,11 @@ jobs:
         permissions:
             contents: read
             id-token: write
+        # `setup-node` writes an `.npmrc` that references `${NODE_AUTH_TOKEN}`.
+        # Define it empty so Yarn classic can resolve it during `yarn install`;
+        # the publish itself authenticates with OIDC, never this variable.
+        env:
+            NODE_AUTH_TOKEN: ""
 
         steps:
             - name: Checkout release tag

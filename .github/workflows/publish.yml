@@ -102,6 +102,11 @@ jobs:
         permissions:
             contents: read
             id-token: write
+        # `setup-node` writes an `.npmrc` that references `${NODE_AUTH_TOKEN}`.
+        # Define it empty so Yarn classic can resolve it during `yarn install`;
+        # the publish itself authenticates with OIDC, never this variable.
+        env:
+            NODE_AUTH_TOKEN: ""
 
         steps:
             - name: Checkout repository
@@ -154,7 +159,7 @@ jobs:
             # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a
             # short-lived registry token. Provenance is generated automatically.
             - name: Publish to npm
-              if: ${{ github.event.inputs.dry_run == 'false' || github.event_name == 'release' }}
+              if: ${{ github.event.inputs.dry_run == 'false' }}
               run: npm publish
 
     # ===========================================================================
@@ -164,7 +169,7 @@ jobs:
         name: Verify Published Package
         runs-on: ubuntu-latest
         needs: publish
-        if: ${{ github.event.inputs.dry_run == 'false' || github.event_name == 'release' }}
+        if: ${{ github.event.inputs.dry_run == 'false' }}
 
         steps:
             - name: Setup Node.js 24
