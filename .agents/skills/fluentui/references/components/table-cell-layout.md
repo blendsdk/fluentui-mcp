@@ -1,0 +1,59 @@
+# TableCellLayout
+
+> **Package**: `@fluentui/react-table` v9.19.16
+> **Import**: `import { TableCellLayout } from '@fluentui/react-components';`
+> **Category**: data-display
+> **Stability**: stable
+
+## Overview
+
+TableCellLayout is a presentational layout primitive that composes the typical content of a data table cell: an optional visual (media), a line of primary text (main), and an optional line of secondary text (description). It renders a flex-based root element whose inner content slot wraps the main and description slots, so the standard patterns of icon-plus-label, avatar-plus-name, and primary-plus-secondary text all align consistently across rows without any custom CSS. It is designed to be placed inside TableCell (or a DataGridCell) and does not draw cell borders, padding, or hover backgrounds itself; those concerns stay with the cell and row components. Children supplied to the root are automatically rendered in the main slot, so a simple text cell needs no explicit slot assignment, while richer cells opt into media and description explicitly.
+
+**When to use**: Use TableCellLayout whenever a table cell contains more than a bare string and you want the built-in text hierarchy and spacing: name with an avatar, label with a supporting subtitle, icon with a value, or a truncated value column. Reach for it instead of hand-rolled flex wrappers inside TableCell, because it centralizes typography (font size, weight, and color for primary vs. secondary text) and the overflow behavior for truncation. Do not use it for cells whose content is purely interactive controls laid out in a row (use TableCellActions for that), for header cells (use TableHeaderCell), or as a generic layout container outside of a table cell, since it assumes the cell supplies padding, borders, and background states.
+
+## Props Reference
+
+| Prop | Type | Default | Required | Description |
+| --- | --- | --- | --- | --- |
+| `appearance` | `"primary" \| undefined` | `undefined` | No | Renders design variants of the table cell |
+| `truncate` | `boolean \| undefined` | — | No | Renders content with overflow: hidden and text-overflow: ellipsis |
+
+### Slots
+
+| Slot | Element | Required | Description |
+| --- | --- | --- | --- |
+| `content` | — | Yes | A layout wrapper for the main and description slots |
+| `description` | — | Yes | Secondary text that describes or complements the main text |
+| `main` | — | Yes | Main text for the table cell. Children of the root slot are automatically rendered here |
+| `media` | — | Yes | Slot for an icon or other visual element |
+| `root` | — | Yes | — |
+
+## Best Practices
+
+### Do's
+
+- Put the primary value of the cell in the main slot (or pass it as children to the root) and any supporting context in the description slot, so the two-line hierarchy is rendered with the correct type ramp.
+- Use the media slot for the leading visual — an Avatar, Badge, PresenceBadge, or icon — so leading spacing is handled for you and rows stay vertically aligned.
+- Set truncate only in combination with a constrained column width (fixed column sizing or a max width on the cell) and pair the cell with a Tooltip on the full value so users can still read what was clipped.
+- Use appearance set to primary on the single column that carries the row's identity (for example the name column) so scanning the table has a clear anchor.
+- Keep the description to a short clause; it is styled as secondary text and long sentences reduce the scannability of the grid.
+- Compose TableCellLayout inside TableCell (or a DataGrid cell) and let the cell and row own padding, borders, hover, and selection background states.
+- Size the media element deliberately (for example an Avatar with an explicit size) so all rows in the column keep the same height.
+
+### Don'ts
+
+- Don't use TableCellLayout to arrange a row of buttons or links inside a cell; use TableCellActions, which is built for action affordances and their spacing.
+- Don't use it to render column headers or header content; TableHeaderCell provides the correct header semantics and typography.
+- Don't enable truncate on a cell whose width is unconstrained — with automatic table layout the column simply grows and the ellipsis never appears, hiding the real layout problem.
+- Don't nest a TableCellLayout inside another TableCellLayout, or place one outside a table cell; the nested padding and typography will fight each other.
+- Don't push multi-paragraph or block-level layout into the main slot; main is intended for a single line of primary text.
+- Don't rely on appearance set to primary alone to signal importance or state; the heavier weight is purely visual and carries no meaning for assistive technology.
+- Don't provide a description without a main value — the secondary line has no anchor and reads as orphaned text in the cell.
+
+## Accessibility
+
+## See Also
+
+- [data-display category](../categories/data-display.md)
+
+<!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

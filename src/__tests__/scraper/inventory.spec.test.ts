@@ -43,7 +43,7 @@ describe('scraper component inventory', () => {
     ]);
   });
 
-  it('does not duplicate a component reachable from more than one package', () => {
+  it('assigns a unique id to every scraped component', () => {
     const ids = schema.components.map((component) => component.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
