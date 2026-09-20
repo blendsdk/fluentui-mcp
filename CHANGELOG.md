@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/blendsdk/fluentui-mcp/compare/v1.3.0...v1.3.1) (2026-09-20)
+
+
+### Bug Fixes
+
+* **ci:** publish on every release and target Node 22 ([#4](https://github.com/blendsdk/fluentui-mcp/issues/4)) ([6f19eb2](https://github.com/blendsdk/fluentui-mcp/commit/6f19eb266016db204b75570a3b41934b8f48deaf))
+
 ## [1.3.0](https://github.com/blendsdk/fluentui-mcp/compare/v1.2.1...v1.3.0) (2026-09-20)
 
 
