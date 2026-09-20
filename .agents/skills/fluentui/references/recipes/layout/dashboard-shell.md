@@ -4,984 +4,912 @@
 
 ## Goal
 
-Build a responsive, themeable dashboard shell in Fluent UI React v9: a full-width app bar, a collapsible side navigation built with Nav, a single scrolling content canvas with a breadcrumb + Toolbar page header and a fluid Card grid, plus Dialog/Drawer surfaces and loading, empty, and error states for every widget.
+Build a complete dashboard shell in Fluent UI v9: a persistent NavDrawer sidebar with collapsible sections, a utility top bar (breadcrumb, search, toolbar, account menu), and a scrollable content region that renders a page header, status MessageBar and a Card-based KPI/activity grid.
 
 ## When to Use
 
-Use this recipe for internal tools, admin consoles, and analytics products where users move between several persistent destinations, need global search/alerts/account actions in a header, and consume a scrollable canvas of cards, tables, and detail panes. It is also the right base when the same shell must adapt from a persistent desktop sidebar to an overlay navigation pane on narrow screens, and when every widget has to render loading, empty, error, and ready states.
+Use this recipe when you are building the outer frame of an application or admin surface: multiple top-level destinations, one screen that hosts many panels/cards, and a header that must stay visible while the content scrolls. It also fits when the navigation has to collapse to an icon rail on wide screens and become a floating overlay on narrow ones.
 
 ## When Not to Use
 
-Do not reach for a shell when the app has a single view with no cross-navigation: render a Card or Field layout directly on the page instead. Do not use it for marketing or content pages where a simple header plus content column is enough. If the page is essentially one big data grid, start from the Table recipe and add only a minimal header. If the task is a settings form, use Dialog + Field rather than a shell. Finally, if your product needs full app chrome with routing, auth guards, and theming bootstrapped for you, start from the Fluent UI app template and drop these regions into it.
+Do not use a full shell for single-purpose pages (a sign-in screen, a wizard, a marketing page) - they have no persistent navigation and should just use a centered layout with Card/Field/Dialog. If your navigation is only two or three inline views inside one page, use TabList instead of NavDrawer. If you need a modal task flow rather than a destination change, use Dialog or a Drawer, not the shell's navigation state.
 
-A dashboard shell is the persistent frame that stays on screen while the user moves between views. It has four stable regions and one scroll container:
+A dashboard shell is the frame that every screen in your product lives inside: persistent navigation on one side, a utility header on the other, and a scrollable content region in the middle. This recipe assembles that frame from Fluent UI v9 navigation, toolbar, messaging and surface primitives, and wires up sidebar collapse plus section routing.
 
-- **App bar** (`<header>`, full width): brand, global search, alerts, account menu.
-- **Side navigation** (`<aside>`): primary destinations rendered with `Nav`; hidden below the nav breakpoint and opened as an overlay instead.
-- **Content canvas** (`<main>`): the only scroll container. Holds the page header (breadcrumb + title + `Toolbar`) and the widget grid.
-- **Transient surfaces**: `Dialog` for blocking edits and destructive confirmations, `Drawer` for side detail panes, `MessageBar` for inline status.
+## Anatomy
 
-Wrap the whole thing in your app's `FluentProvider` (theme + `dir`) so `tokens` resolve and the shell mirrors correctly in RTL.
+    +---------------+------------------------------------------+
+    | NavDrawer     | top bar: breadcrumb - search - tools     |
+    |   header      +------------------------------------------+
+    |   body        | content (scrolls)                        |
+    |   footer      |   page header, MessageBar, Card grid     |
+    +---------------+------------------------------------------+
 
-## 1. Root layout: one grid, one scroll container
+Three structural rules keep the frame stable:
 
-```tsx
-const useStyles = makeStyles({
-  shell: {
-    display: 'grid',
-    gridTemplateColumns: '264px 1fr',
-    gridTemplateRows: 'auto 1fr',
-    gridTemplateAreas: '"header header" "nav main"',
-    height: '100vh',
-    backgroundColor: tokens.colorNeutralBackground2,
-    '@media (max-width: 900px)': {
-      gridTemplateColumns: '1fr',
-      gridTemplateAreas: '"header" "main"',
-    },
-  },
-  header: { gridArea: 'header', backgroundColor: tokens.colorNeutralBackground1 },
-  nav: {
-    gridArea: 'nav',
-    overflowY: 'auto',
-    '@media (max-width: 900px)': { display: 'none' },
-  },
-  main: { gridArea: 'main', overflowY: 'auto', minHeight: 0 },
-});
-```
+1. The frame is a CSS grid: `gridTemplateColumns: 'auto minmax(0, 1fr)'`. Use `minmax(0, 1fr)` rather than `1fr` so wide content (tables, long breadcrumb trails) shrinks instead of blowing out the column.
+2. The main column is a flex column: a fixed header on top and the content below it.
+3. The content region owns the scroll: `flexGrow: 1`, `minHeight: 0` and `overflowY: 'auto'`. Without `minHeight: 0` a flex child refuses to shrink and the whole page scrolls instead.
 
-Key points:
+## 1. Sidebar: NavDrawer and the nav primitives
 
-- `gridTemplateRows: 'auto 1fr'` gives the app bar its intrinsic height and lets the canvas take the rest.
-- `overflowY: 'auto'` **plus** `minHeight: 0` on the canvas. Grid items default to `min-height: auto`, so without this the row grows with content and the entire document scrolls instead of the canvas - the classic broken-app-shell bug.
-- Every color, gap, and radius comes from `tokens`, so the shell follows the active theme for free.
-- Define `makeStyles` at module scope, never inside the render function.
+`NavDrawer` is both the sidebar container and the owner of navigation state.
 
-## 2. App bar
+| Concern | API |
+| --- | --- |
+| Current destination | `defaultSelectedValue`, or `selectedValue` + `onNavItemSelect` when controlled |
+| Expanded categories | `defaultOpenCategories` / `openCategories` + `onNavCategoryItemToggle` |
+| Several categories open at once | `multiple` |
+| In-layout rail vs. floating panel | `type='inline'` vs. `type='overlay'` |
+| Regions | `NavDrawerHeader`, `NavDrawerBody`, `NavDrawerFooter` |
 
-A flex row: brand block, search field, a flexible spacer, then trailing actions.
+Nesting inside the body:
 
 ```tsx
-<header className={styles.header}>
-  <Avatar name='Contoso' shape='square' size={32} color='brand' />
-  <Text weight='semibold'>Contoso Analytics</Text>
-  <div className={styles.search}>
-    <Input appearance='filled-darker' placeholder='Search dashboards' />
-  </div>
-  <div className={styles.spacer} />
-  <Tooltip content='3 unread alerts' relationship='description'>
-    <Button appearance='subtle'>
-      Alerts
-      <Badge appearance='filled' color='danger' size='small'>3</Badge>
-    </Button>
-  </Tooltip>
-  <Menu>
-    <MenuTrigger disableButtonEnhancement>
-      <Button appearance='transparent' aria-label='Account and settings'>
-        <Avatar name='Adele Vance' size={28} />
-      </Button>
-    </MenuTrigger>
-    <MenuPopover>
-      <MenuList>
-        <MenuItem>Profile</MenuItem>
-        <MenuDivider />
-        <MenuItem>Sign out</MenuItem>
-      </MenuList>
-    </MenuPopover>
-  </Menu>
-</header>
-```
-
-Rules of thumb: give every icon-only `Button` an `aria-label`, wrap it in a `Tooltip` with `relationship='description'` (or `relationship='label'` when the tooltip is the only label), and always pair badge color with text or a number. `disableButtonEnhancement` on `MenuTrigger` stops the trigger button from gaining a chevron it does not need.
-
-## 3. Side navigation
-
-```tsx
-<Nav
-  selectedValue={selectedNav}
-  onNavItemSelect={(_, data) => setSelectedNav(data.value)}
-  defaultOpenCategories={['reports']}
->
-  <NavItem value='overview'>Overview</NavItem>
+<NavDrawerBody>
+  <NavItem value='overview' icon={<GridIcon />}>Overview</NavItem>
   <NavCategory value='reports'>
-    <NavCategoryItem>Reports</NavCategoryItem>
+    <NavCategoryItem icon={<TrendIcon />}>Reports</NavCategoryItem>
     <NavSubItemGroup>
-      <NavSubItem value='reports-daily'>Daily</NavSubItem>
-      <NavSubItem value='reports-monthly'>Monthly</NavSubItem>
+      <NavSubItem value='reports-traffic'>Traffic</NavSubItem>
+      <NavSubItem value='reports-revenue'>Revenue</NavSubItem>
     </NavSubItemGroup>
   </NavCategory>
-</Nav>
+  <NavDivider />
+  <NavSectionHeader>Workspace</NavSectionHeader>
+  <NavItem value='environments' icon={<LayersIcon />}>Environments</NavItem>
+</NavDrawerBody>
 ```
 
-- Drive `selectedValue` from the router so deep links and back/forward stay in sync.
-- Keep category expansion uncontrolled with `defaultOpenCategories` unless you persist expansion in user preferences.
-- Below your nav breakpoint, render the exact same `Nav` inside `NavDrawer` or `Drawer type='overlay'`. Hide the inline pane with CSS `display: none` rather than unmounting it, so only one navigation landmark and one set of tab stops is ever exposed.
+- `NavCategory` takes the category `value`; `NavCategoryItem` renders the clickable, expandable row; `NavSubItemGroup` holds the child rows.
+- `NavDivider` separates groups, `NavSectionHeader` labels them.
+- Put daily destinations in `NavDrawerBody` and account-level destinations (Settings, Help) in `NavDrawerFooter`, so they are separated from the work surface but always reachable.
+- Every `value` in the nav must be unique across items, categories and sub-items: it is the selection key.
 
-## 4. Page header: breadcrumb, title, actions
+## 2. Top bar: breadcrumb, search, tools, account
+
+Keep the header a single flex row so it never wraps unpredictably:
+
+1. A toggle `Button` (and the `Hamburger` inside `NavDrawerHeader`) controls the sidebar.
+2. `Breadcrumb` > `BreadcrumbItem` > `BreadcrumbButton` shows location; mark the last item with `current`. Give the breadcrumb an `aria-label` and let it take the leftover width (`flexGrow: 1`, `minWidth: 0`).
+3. `SearchBox` for global search, with a fixed width so long labels do not push the tools off screen.
+4. `Toolbar` with `ToolbarGroup`, `ToolbarDivider` and `ToolbarButton` for icon-only utilities; `size='small'` keeps a dense header.
+5. A `Menu` on a transparent `Button` whose `icon` slot holds an `Avatar`, for profile actions.
+
+## 3. Content region
+
+- Page header: an `h1` wrapping `Text size={800} weight='semibold'`, plus secondary and primary `Button`s pushed right with a growing spacer.
+- `MessageBar` for tenant-wide status. `MessageBarBody` + `MessageBarTitle` carry the copy; `MessageBarActions` carries the response button and the dismiss button in its `containerAction` slot.
+- KPI tiles: `Card appearance='filled-alternative'` with `CardHeader` (header / description / action slots), the headline value, a `ProgressBar`, and a `CardFooter` action.
+- Panels: `Card appearance='outline'` for denser content such as an activity feed.
+
+## 4. Wiring selection to content
+
+Keep the shell dumb and let the parent own routing:
 
 ```tsx
-<Breadcrumb>
-  <BreadcrumbItem><BreadcrumbButton>Workspace</BreadcrumbButton></BreadcrumbItem>
-  <BreadcrumbDivider />
-  <BreadcrumbItem><BreadcrumbButton current>Overview</BreadcrumbButton></BreadcrumbItem>
-</Breadcrumb>
-<Text size={800} weight='semibold'>Overview</Text>
-<Toolbar>
-  <ToolbarButton onClick={refresh}>Refresh</ToolbarButton>
-  <ToolbarDivider />
-  <ToolbarButton>Export</ToolbarButton>
-  <ToolbarButton appearance='primary'>New report</ToolbarButton>
-</Toolbar>
+const [selectedNav, setSelectedNav] = React.useState('overview');
+
+<NavDrawer
+  defaultSelectedValue='overview'
+  onNavItemSelect={(_, data) => setSelectedNav(data.value as string)}
+  defaultOpenCategories={['reports']}
+  multiple
+/>
 ```
 
-`current` on the last `BreadcrumbButton` emits `aria-current='page'`. Render the page title inside an `h1` in your app and use `Text size={800} weight='semibold'` for its visual weight, so the document outline stays correct. Put the primary action last (right-most in LTR) and keep secondary actions `subtle` or `secondary`.
+`data.value` is the `value` you gave the `NavItem` or `NavSubItem`. In a real app, translate that value into a route in the same handler and let your router render the view inside the content region.
 
-## 5. Content canvas
+## 5. Responsive strategy
 
-```tsx
-cardGrid: {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-  gap: tokens.spacingHorizontalM,
-}
-```
+Render one drawer and change its `type`:
 
-`auto-fit` + `minmax` gives a fluid metric grid with no media queries. Each KPI is a `Card` whose `CardHeader` uses the `header`, `description`, and `action` slots; the metric value and the trend `Badge` live in the card body. Long-form panels use `Card appearance='outline'` with a `CardHeader` (whose `action` is a see-all `Button`), a `Divider`, then rows of content or skeleton rows.
+- Wide viewport: `type='inline'` and `open={true}`. The rail is part of the grid and collapses to an icon rail when closed.
+- Narrow viewport: `type='overlay'`. The drawer floats above the content with a backdrop, so render it as a sibling of the header and content - not as a grid column - otherwise it claims a track in the grid.
 
-## 6. Editing and confirming: Dialog vs Drawer
+Drive both from a single `isNavOpen` boolean so the toolbar toggle and the in-drawer `Hamburger` stay in sync, and close the overlay drawer from `onNavItemSelect` after a destination is chosen.
 
-Use `Dialog` for short, blocking work that should interrupt the user (edit form, destructive confirmation) and `Drawer` for context-preserving detail panes.
+## Checklist
 
-```tsx
-<Dialog open={editing !== null} onOpenChange={(_, data) => { if (!data.open) closeEditor(); }}>
-  <DialogSurface>
-    <DialogBody>
-      <DialogTitle>Edit report</DialogTitle>
-      <DialogContent className={styles.dialogContent}>{/* Field + Input + Select + Textarea */}</DialogContent>
-      <DialogActions>
-        <DialogTrigger disableButtonEnhancement>
-          <Button appearance='secondary'>Cancel</Button>
-        </DialogTrigger>
-        <Button appearance='primary' disabled={!nameIsValid} onClick={save}>Save</Button>
-      </DialogActions>
-    </DialogBody>
-  </DialogSurface>
-</Dialog>
-```
-
-```tsx
-<Drawer type='overlay' position='end' open={isOpen} onOpenChange={(_, { open }) => setIsOpen(open)}>
-  <DrawerHeader>
-    <DrawerHeaderTitle
-      action={<Button appearance='subtle' aria-label='Close details' onClick={() => setIsOpen(false)}>Close</Button>}
-    >
-      Report details
-    </DrawerHeaderTitle>
-  </DrawerHeader>
-  <DrawerBody>{/* the same form component the dialog renders */}</DrawerBody>
-</Drawer>
-```
-
-Keep the form body in a small dedicated component so the same markup can be mounted in either surface. Validate with `Field` (`required`, `validationState`, `validationMessage`) and disable the save `Button` while the form is invalid. Destructive actions get their own dialog with an explicit verb on the button ('Delete', not 'OK').
-
-## 7. Every widget has four states
-
-A dashboard is a data-fetching surface, so design the states up front instead of bolting them on:
-
-1. **Loading** - `Skeleton` + `SkeletonItem` shaped like the real content (circle for avatars, 16px bars for text, matching widths), with an `aria-label` on the `Skeleton`.
-2. **Ready** - the real content, revealed by swapping the branch.
-3. **Empty** - a short explanation plus one primary `Button` ('Create a job'), never just an empty grid.
-4. **Error** - `MessageBar intent='error'` with a `MessageBarTitle`, an explanation, and a `MessageBarActions` retry `Button`.
-
-Use `MessageBar politeness='polite'` for success confirmations such as 'Saved' or 'Deleted' so screen readers hear the result without stealing focus.
-
-## 8. Responsive behavior
-
-Two breakpoints are usually enough: around `900px` collapse the side navigation (hide the inline pane, open an overlay pane instead), and around `600px` drop the global search field to an icon button and allow toolbar groups to wrap. Never fix the height of a card - let text wrap with `Text` sizes and use `Text truncate` for long single-line labels. Test with `dir='rtl'`: because spacing and color come from `shorthands` and `tokens`, the shell mirrors without extra CSS.
-
-## 9. Checklist
-
-- `FluentProvider` (theme + `dir`) wraps the app root.
-- Exactly one `header`, one `main`, and one visible `nav` landmark.
-- Skip link to the canvas; visible on focus.
-- One `h1` per view; breadcrumb last crumb is `current`.
-- Icon-only buttons labelled; tooltips declare `relationship`.
-- Scroll lives on the canvas (`overflowY: auto` + `minHeight: 0`).
-- Every widget handles loading, empty, error, and ready.
-- Destructive actions confirmed in their own dialog.
-- Colors and spacing come from tokens only.
+- Frame: grid `auto minmax(0, 1fr)`, `height: 100vh`.
+- Main column: flex column with `minWidth: 0`.
+- Content region: `flexGrow: 1`, `minHeight: 0`, `overflowY: 'auto'`.
+- Nav: unique values, `defaultOpenCategories` for the section users start in.
+- Header: breadcrumb grows, search is fixed width, account `Menu` is last.
 
 ## Examples
 
-### DashboardShell
+### Persistent inline dashboard shell
 
-Complete shell: app bar with search, alerts and account menu, a Nav sidebar with expandable categories, a breadcrumb + Toolbar page header, a fluid KPI Card grid, and a recent-activity panel that swaps Skeleton rows for real rows.
+A full-width shell with an inline (collapsible) NavDrawer on the left, a breadcrumb/search/toolbar/account top bar, and a content region with a page header, status MessageBar, KPI cards and an activity panel.
 
 ```tsx
 import * as React from 'react';
-import { Avatar, Badge, Breadcrumb, BreadcrumbButton, BreadcrumbDivider, BreadcrumbItem, Button, Card, CardHeader, Divider, Input, Link, Menu, MenuDivider, MenuItem, MenuList, MenuPopover, MenuTrigger, MessageBar, MessageBarBody, Nav, NavCategory, NavCategoryItem, NavItem, NavSubItem, NavSubItemGroup, Skeleton, SkeletonItem, Text, Toolbar, ToolbarButton, ToolbarDivider, Tooltip, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import {
+  Avatar,
+  Badge,
+  Breadcrumb,
+  BreadcrumbButton,
+  BreadcrumbDivider,
+  BreadcrumbItem,
+  Button,
+  Card,
+  CardFooter,
+  CardHeader,
+  FluentProvider,
+  Hamburger,
+  Menu,
+  MenuDivider,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+  MessageBar,
+  MessageBarActions,
+  MessageBarBody,
+  MessageBarTitle,
+  NavCategory,
+  NavCategoryItem,
+  NavDivider,
+  NavDrawer,
+  NavDrawerBody,
+  NavDrawerFooter,
+  NavDrawerHeader,
+  NavItem,
+  NavSectionHeader,
+  NavSubItem,
+  NavSubItemGroup,
+  ProgressBar,
+  SearchBox,
+  Text,
+  Toolbar,
+  ToolbarButton,
+  ToolbarDivider,
+  ToolbarGroup,
+  makeStyles,
+  tokens,
+} from '@fluentui/react-components';
 
-type Trend = 'success' | 'danger' | 'informative';
+/* --------------------------------------------------------------------------
+ * Icons: small inline SVGs so the example is self-contained.
+ * Swap them for your own icon components.
+ * ------------------------------------------------------------------------ */
 
-type Stat = {
-  label: string;
-  value: string;
-  delta: string;
-  trend: Trend;
+const createIcon = (path: string): React.FC => {
+  const Icon: React.FC = () => (
+    <svg viewBox='0 0 20 20' width='20' height='20' aria-hidden='true' focusable='false'>
+      <path d={path} fill='currentColor' />
+    </svg>
+  );
+  return Icon;
 };
 
-const stats: Stat[] = [
-  { label: 'Active users', value: '12,480', delta: '+4.2%', trend: 'success' },
-  { label: 'Reports run', value: '1,024', delta: '+9.8%', trend: 'success' },
-  { label: 'Failed jobs', value: '7', delta: '+3', trend: 'danger' },
-  { label: 'Average run time', value: '42s', delta: '-1.5s', trend: 'informative' },
+const GridIcon = createIcon('M3 3h6v6H3zM11 3h6v6h-6zM3 11h6v6H3zM11 11h6v6h-6z');
+const ActivityIcon = createIcon('M3 11h3v6H3zM8.5 7h3v10h-3zM14 4h3v13h-3z');
+const TrendIcon = createIcon('M10 2l6 6h-4v10H8V8H4z');
+const LayersIcon = createIcon('M10 2l8 4-8 4-8-4 8-4zm6.6 6.2L18 9l-8 4-8-4 1.4-.8L10 11l6.6-2.8z');
+const PeopleIcon = createIcon(
+  'M7 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 1.5c-3.3 0-6 1.6-6 3.5V17h12v-3c0-1.9-2.7-3.5-6-3.5z',
+);
+const SlidersIcon = createIcon('M2 5h10v2H2zM14 5h4v2h-4zM2 13h4v2H2zM8 13h10v2H8zM11 3h2v6h-2zM5 11h2v6H5z');
+const HelpIcon = createIcon(
+  'M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm0 3.25a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5zM11 15H9V9h2z',
+);
+const MenuIcon = createIcon('M2 4h16v2H2zM2 9h16v2H2zM2 14h16v2H2z');
+const DismissIcon = createIcon(
+  'M4.3 5.7 5.7 4.3 10 8.6l4.3-4.3 1.4 1.4L11.4 10l4.3 4.3-1.4 1.4L10 11.4l-4.3 4.3-1.4-1.4L8.6 10z',
+);
+
+/* --------------------------------------------------------------------------
+ * Data
+ * ------------------------------------------------------------------------ */
+
+const navLabels: Record<string, string> = {
+  overview: 'Overview',
+  activity: 'Activity',
+  'reports-traffic': 'Traffic',
+  'reports-revenue': 'Revenue',
+  'reports-retention': 'Retention',
+  environments: 'Environments',
+  members: 'Members',
+  settings: 'Settings',
+  help: 'Help & support',
+};
+
+type Kpi = {
+  title: string;
+  subtitle: string;
+  value: string;
+  delta: string;
+  badgeColor: 'success' | 'warning' | 'informative';
+  progress: number;
+};
+
+const kpis: Kpi[] = [
+  {
+    title: 'Monthly active users',
+    subtitle: 'Last 30 days',
+    value: '48,120',
+    delta: '+12.4%',
+    badgeColor: 'success',
+    progress: 0.78,
+  },
+  {
+    title: 'Error budget remaining',
+    subtitle: 'Production - 30 day window',
+    value: '61%',
+    delta: '-8.1%',
+    badgeColor: 'warning',
+    progress: 0.61,
+  },
+  {
+    title: 'Average response time',
+    subtitle: 'p95 across all regions',
+    value: '212ms',
+    delta: 'stable',
+    badgeColor: 'informative',
+    progress: 0.42,
+  },
 ];
 
 type ActivityItem = {
   id: string;
-  name: string;
-  owner: string;
-  when: string;
+  actor: string;
+  action: string;
   status: string;
-  trend: Trend;
+  badgeColor: 'success' | 'warning' | 'danger';
 };
 
 const activity: ActivityItem[] = [
-  { id: 'run-1', name: 'Quarterly revenue', owner: 'Adele Vance', when: '2 minutes ago', status: 'Succeeded', trend: 'success' },
-  { id: 'run-2', name: 'Churn cohort', owner: 'Alex Wilber', when: '14 minutes ago', status: 'Running', trend: 'informative' },
-  { id: 'run-3', name: 'Daily pipeline', owner: 'Megan Bowen', when: '1 hour ago', status: 'Failed', trend: 'danger' },
+  {
+    id: 'a1',
+    actor: 'Priya N.',
+    action: 'Promoted build 4.18.2 to production',
+    status: 'Succeeded',
+    badgeColor: 'success',
+  },
+  {
+    id: 'a2',
+    actor: 'Marcus L.',
+    action: 'Rotated the staging API credentials',
+    status: 'Succeeded',
+    badgeColor: 'success',
+  },
+  {
+    id: 'a3',
+    actor: 'Scheduler',
+    action: 'Nightly sync exceeded its 15 minute budget',
+    status: 'Degraded',
+    badgeColor: 'warning',
+  },
+  {
+    id: 'a4',
+    actor: 'Deploy bot',
+    action: 'Rollback triggered for release 4.18.1',
+    status: 'Failed',
+    badgeColor: 'danger',
+  },
 ];
 
+/* --------------------------------------------------------------------------
+ * Styles
+ * ------------------------------------------------------------------------ */
+
 const useStyles = makeStyles({
-  shell: {
+  frame: {
     display: 'grid',
-    gridTemplateColumns: '264px 1fr',
-    gridTemplateRows: 'auto 1fr',
-    gridTemplateAreas: '"header header" "nav main"',
+    gridTemplateColumns: 'auto minmax(0, 1fr)',
     height: '100vh',
     backgroundColor: tokens.colorNeutralBackground2,
-    '@media (max-width: 900px)': {
-      gridTemplateColumns: '1fr',
-      gridTemplateAreas: '"header" "main"',
-    },
-  },
-  header: {
-    gridArea: 'header',
-    display: 'flex',
-    alignItems: 'center',
-    columnGap: tokens.spacingHorizontalM,
-    backgroundColor: tokens.colorNeutralBackground1,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalL),
-  },
-  brand: {
-    display: 'flex',
-    alignItems: 'center',
-    columnGap: tokens.spacingHorizontalS,
-    whiteSpace: 'nowrap',
-  },
-  search: {
-    flexGrow: 1,
-    maxWidth: '360px',
-    '@media (max-width: 600px)': { display: 'none' },
-  },
-  spacer: { flexGrow: 1 },
-  nav: {
-    gridArea: 'nav',
-    backgroundColor: tokens.colorNeutralBackground1,
-    borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
-    overflowY: 'auto',
-    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalS),
-    '@media (max-width: 900px)': { display: 'none' },
+    color: tokens.colorNeutralForeground1,
   },
   main: {
-    gridArea: 'main',
     display: 'flex',
     flexDirection: 'column',
-    rowGap: tokens.spacingVerticalL,
-    overflowY: 'auto',
-    // Grid items default to min-height auto; without this the page scrolls as a whole.
+    minWidth: 0,
     minHeight: 0,
-    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
+  },
+  topBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 16px',
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  breadcrumb: {
+    flexGrow: 1,
+    minWidth: 0,
+    marginInlineStart: '8px',
+  },
+  search: {
+    width: '260px',
+    maxWidth: '30vw',
+  },
+  content: {
+    display: 'grid',
+    alignContent: 'start',
+    gap: '16px',
+    padding: '20px',
+    flexGrow: 1,
+    minHeight: 0,
+    overflowY: 'auto',
   },
   pageHeader: {
     display: 'flex',
-    flexWrap: 'wrap',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    rowGap: tokens.spacingVerticalS,
-    columnGap: tokens.spacingHorizontalM,
+    gap: '12px',
+    flexWrap: 'wrap',
   },
-  titleBlock: {
+  heading: {
+    margin: 0,
+    fontSize: 'inherit',
+    lineHeight: 'inherit',
+  },
+  subtle: {
+    color: tokens.colorNeutralForeground3,
+  },
+  spacer: {
+    flexGrow: 1,
+  },
+  kpiGrid: {
+    display: 'grid',
+    gap: '12px',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+  },
+  cardBody: {
     display: 'flex',
     flexDirection: 'column',
-    rowGap: tokens.spacingVerticalXXS,
-  },
-  cardGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-    gap: tokens.spacingHorizontalM,
-  },
-  statValue: {
-    display: 'flex',
-    alignItems: 'baseline',
-    columnGap: tokens.spacingHorizontalS,
+    gap: '10px',
   },
   activityList: {
-    listStyleType: 'none',
-    margin: 0,
-    padding: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalS,
+    display: 'grid',
+    gap: '2px',
+    marginTop: '4px',
   },
   activityRow: {
     display: 'flex',
     alignItems: 'center',
-    columnGap: tokens.spacingHorizontalS,
+    gap: '12px',
+    padding: '8px 0',
+    borderTop: `1px solid ${tokens.colorNeutralStroke3}`,
   },
   activityText: {
     display: 'flex',
     flexDirection: 'column',
+    minWidth: 0,
     flexGrow: 1,
   },
-  skeletonRow: {
+  brand: {
     display: 'flex',
     alignItems: 'center',
-    columnGap: tokens.spacingHorizontalS,
-    ...shorthands.padding(tokens.spacingVerticalXS, 0),
+    gap: '8px',
   },
 });
 
-export const DashboardShell = () => {
-  const styles = useStyles();
-  const [selectedNav, setSelectedNav] = React.useState('overview');
-  const [isLoading, setIsLoading] = React.useState(true);
+/* --------------------------------------------------------------------------
+ * Shell
+ * ------------------------------------------------------------------------ */
 
-  React.useEffect(() => {
-    const timeoutId = window.setTimeout(() => setIsLoading(false), 1500);
-    return () => window.clearTimeout(timeoutId);
-  }, []);
+export const DashboardShell: React.FC = () => {
+  const styles = useStyles();
+  const [isNavOpen, setIsNavOpen] = React.useState(true);
+  const [selectedNav, setSelectedNav] = React.useState('overview');
+  const currentSection = navLabels[selectedNav] ?? 'Overview';
 
   return (
-    <div className={styles.shell}>
-      <header className={styles.header}>
-        <div className={styles.brand}>
-          <Avatar name='Contoso' shape='square' size={32} color='brand' />
-          <Text weight='semibold'>Contoso Analytics</Text>
-        </div>
-        <div className={styles.search}>
-          <Input appearance='filled-darker' placeholder='Search dashboards' />
-        </div>
-        <div className={styles.spacer} />
-        <Tooltip content='3 unread alerts' relationship='description'>
-          <Button appearance='subtle'>
-            Alerts
-            <Badge appearance='filled' color='danger' size='small'>3</Badge>
-          </Button>
-        </Tooltip>
-        <Menu>
-          <MenuTrigger disableButtonEnhancement>
-            <Button appearance='transparent' aria-label='Account and settings'>
-              <Avatar name='Adele Vance' size={28} />
-            </Button>
-          </MenuTrigger>
-          <MenuPopover>
-            <MenuList>
-              <MenuItem>adelev@contoso.com</MenuItem>
-              <MenuDivider />
-              <MenuItem>Profile</MenuItem>
-              <MenuItem>Preferences</MenuItem>
-              <MenuDivider />
-              <MenuItem>Sign out</MenuItem>
-            </MenuList>
-          </MenuPopover>
-        </Menu>
-      </header>
-
-      <aside className={styles.nav}>
-        <Nav
-          selectedValue={selectedNav}
-          onNavItemSelect={(_, data) => setSelectedNav(data.value)}
+    <FluentProvider>
+      <div className={styles.frame}>
+        <NavDrawer
+          open={isNavOpen}
+          type='inline'
+          separator
+          multiple
+          defaultSelectedValue='overview'
           defaultOpenCategories={['reports']}
+          onNavItemSelect={(_, data) => setSelectedNav(data.value as string)}
         >
-          <NavItem value='overview'>Overview</NavItem>
-          <NavItem value='activity'>Activity</NavItem>
-          <NavCategory value='reports'>
-            <NavCategoryItem>Reports</NavCategoryItem>
-            <NavSubItemGroup>
-              <NavSubItem value='reports-daily'>Daily</NavSubItem>
-              <NavSubItem value='reports-monthly'>Monthly</NavSubItem>
-            </NavSubItemGroup>
-          </NavCategory>
-          <NavCategory value='settings'>
-            <NavCategoryItem>Settings</NavCategoryItem>
-            <NavSubItemGroup>
-              <NavSubItem value='settings-team'>Team</NavSubItem>
-              <NavSubItem value='settings-billing'>Billing</NavSubItem>
-            </NavSubItemGroup>
-          </NavCategory>
-        </Nav>
-      </aside>
+          <NavDrawerHeader>
+            <div className={styles.brand}>
+              <Hamburger
+                aria-label={isNavOpen ? 'Collapse navigation' : 'Expand navigation'}
+                onClick={() => setIsNavOpen(value => !value)}
+              />
+              <Text weight='semibold'>Contoso Cloud</Text>
+            </div>
+          </NavDrawerHeader>
 
-      <main className={styles.main}>
-        <MessageBar intent='warning'>
-          <MessageBarBody>
-            Your trial ends in 5 days. <Link inline>Upgrade your plan</Link> to keep scheduled reports running.
-          </MessageBarBody>
-        </MessageBar>
+          <NavDrawerBody>
+            <NavItem value='overview' icon={<GridIcon />}>
+              Overview
+            </NavItem>
+            <NavItem value='activity' icon={<ActivityIcon />}>
+              Activity
+            </NavItem>
+            <NavCategory value='reports'>
+              <NavCategoryItem icon={<TrendIcon />}>Reports</NavCategoryItem>
+              <NavSubItemGroup>
+                <NavSubItem value='reports-traffic'>Traffic</NavSubItem>
+                <NavSubItem value='reports-revenue'>Revenue</NavSubItem>
+                <NavSubItem value='reports-retention'>Retention</NavSubItem>
+              </NavSubItemGroup>
+            </NavCategory>
+            <NavDivider />
+            <NavSectionHeader>Workspace</NavSectionHeader>
+            <NavItem value='environments' icon={<LayersIcon />}>
+              Environments
+            </NavItem>
+            <NavItem value='members' icon={<PeopleIcon />}>
+              Members
+            </NavItem>
+          </NavDrawerBody>
 
-        <div className={styles.pageHeader}>
-          <div className={styles.titleBlock}>
-            <Breadcrumb>
+          <NavDrawerFooter>
+            <NavItem value='settings' icon={<SlidersIcon />}>
+              Settings
+            </NavItem>
+            <NavItem value='help' icon={<HelpIcon />}>
+              Help &amp; support
+            </NavItem>
+          </NavDrawerFooter>
+        </NavDrawer>
+
+        <div className={styles.main}>
+          <header className={styles.topBar}>
+            <Button
+              appearance='subtle'
+              icon={<MenuIcon />}
+              aria-label='Toggle navigation'
+              onClick={() => setIsNavOpen(value => !value)}
+            />
+            <Breadcrumb size='medium' aria-label='Breadcrumb' className={styles.breadcrumb}>
               <BreadcrumbItem>
-                <BreadcrumbButton>Workspace</BreadcrumbButton>
+                <BreadcrumbButton>Contoso Cloud</BreadcrumbButton>
               </BreadcrumbItem>
               <BreadcrumbDivider />
               <BreadcrumbItem>
-                <BreadcrumbButton current>Overview</BreadcrumbButton>
+                <BreadcrumbButton current>{currentSection}</BreadcrumbButton>
               </BreadcrumbItem>
             </Breadcrumb>
-            <Text size={800} weight='semibold'>Overview</Text>
-            <Text size={200}>Updated a few seconds ago</Text>
-          </div>
-          <Toolbar>
-            <ToolbarButton onClick={() => setIsLoading(true)}>Refresh</ToolbarButton>
-            <ToolbarDivider />
-            <ToolbarButton>Export</ToolbarButton>
-            <ToolbarButton appearance='primary'>New report</ToolbarButton>
-          </Toolbar>
-        </div>
+            <SearchBox
+              className={styles.search}
+              placeholder='Search dashboards'
+              aria-label='Search dashboards'
+            />
+            <Toolbar size='small' aria-label='Utility actions'>
+              <ToolbarGroup>
+                <ToolbarButton appearance='subtle' icon={<HelpIcon />} aria-label='Help' />
+                <ToolbarDivider />
+              </ToolbarGroup>
+            </Toolbar>
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>
+                <Button
+                  appearance='transparent'
+                  icon={<Avatar name='Ada Lovelace' size={28} />}
+                  aria-label='Account menu'
+                />
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  <MenuItem>Profile</MenuItem>
+                  <MenuItem>Preferences</MenuItem>
+                  <MenuDivider />
+                  <MenuItem>Sign out</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+          </header>
 
-        <section className={styles.cardGrid} aria-label='Key metrics'>
-          {stats.map(stat => (
-            <Card key={stat.label} appearance='filled-alternative'>
+          <main className={styles.content}>
+            <div className={styles.pageHeader}>
+              <div>
+                <h1 className={styles.heading}>
+                  <Text size={800} weight='semibold'>
+                    {currentSection}
+                  </Text>
+                </h1>
+                <Text size={200} className={styles.subtle}>
+                  Updated 5 minutes ago - Production
+                </Text>
+              </div>
+              <div className={styles.spacer} />
+              <Button appearance='secondary'>Export</Button>
+              <Button appearance='primary'>New report</Button>
+            </div>
+
+            <MessageBar intent='warning'>
+              <MessageBarBody>
+                <MessageBarTitle>Staging is running an outdated runtime</MessageBarTitle>
+                The staging environment has not been updated in 3 days. Update it to avoid drift
+                between environments.
+              </MessageBarBody>
+              <MessageBarActions
+                containerAction={
+                  <Button appearance='transparent' icon={<DismissIcon />} aria-label='Dismiss' />
+                }
+              >
+                <Button appearance='transparent'>Update now</Button>
+              </MessageBarActions>
+            </MessageBar>
+
+            <div className={styles.kpiGrid}>
+              {kpis.map(kpi => (
+                <Card key={kpi.title} appearance='filled-alternative'>
+                  <CardHeader
+                    header={<Text weight='semibold'>{kpi.title}</Text>}
+                    description={<Text size={200}>{kpi.subtitle}</Text>}
+                    action={
+                      <Badge appearance='tint' color={kpi.badgeColor}>
+                        {kpi.delta}
+                      </Badge>
+                    }
+                  />
+                  <div className={styles.cardBody}>
+                    <Text size={900} weight='semibold'>
+                      {kpi.value}
+                    </Text>
+                    <ProgressBar value={kpi.progress} aria-label={`${kpi.title} progress`} />
+                  </div>
+                  <CardFooter>
+                    <Button appearance='transparent' size='small'>
+                      View details
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+
+            <Card appearance='outline'>
               <CardHeader
-                header={<Text weight='semibold'>{stat.label}</Text>}
-                description={<Text size={200}>Last 7 days</Text>}
+                header={<Text weight='semibold'>Recent activity</Text>}
+                description={<Text size={200}>Deployments and incidents in this workspace</Text>}
+                action={
+                  <Button appearance='transparent' size='small'>
+                    View all
+                  </Button>
+                }
               />
-              <div className={styles.statValue}>
-                <Text size={700} weight='semibold'>{stat.value}</Text>
-                <Badge appearance='tint' color={stat.trend}>{stat.delta}</Badge>
+              <div className={styles.activityList}>
+                {activity.map(item => (
+                  <div key={item.id} className={styles.activityRow}>
+                    <Avatar name={item.actor} size={32} />
+                    <div className={styles.activityText}>
+                      <Text weight='medium'>{item.actor}</Text>
+                      <Text size={200} className={styles.subtle}>
+                        {item.action}
+                      </Text>
+                    </div>
+                    <Badge appearance='tint' color={item.badgeColor}>
+                      {item.status}
+                    </Badge>
+                  </div>
+                ))}
               </div>
             </Card>
-          ))}
-        </section>
-
-        <Card appearance='outline'>
-          <CardHeader
-            header={<Text weight='semibold'>Recent activity</Text>}
-            description={<Text size={200}>Latest runs across all workspaces</Text>}
-            action={<Button appearance='subtle'>View all</Button>}
-          />
-          <Divider />
-          {isLoading ? (
-            <Skeleton aria-label='Loading recent activity'>
-              {[0, 1, 2, 3].map(index => (
-                <div key={index} className={styles.skeletonRow}>
-                  <SkeletonItem shape='circle' size={32} />
-                  <SkeletonItem size={16} width='40%' />
-                  <div className={styles.spacer} />
-                  <SkeletonItem size={16} width='80px' />
-                </div>
-              ))}
-            </Skeleton>
-          ) : (
-            <ul className={styles.activityList}>
-              {activity.map(item => (
-                <li key={item.id} className={styles.activityRow}>
-                  <Avatar name={item.owner} size={32} color='colorful' />
-                  <span className={styles.activityText}>
-                    <Text weight='semibold'>{item.name}</Text>
-                    <Text size={200}>{item.owner} - {item.when}</Text>
-                  </span>
-                  <Badge appearance='tint' color={item.trend}>{item.status}</Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </main>
-    </div>
+          </main>
+        </div>
+      </div>
+    </FluentProvider>
   );
 };
 
 export default DashboardShell;
 ```
 
-### DashboardRecordsWithEditAndDeleteDialogs
+### Responsive shell with an overlay drawer and tabbed content
 
-The content canvas of a shell: a Card grid of records where each card opens a controlled Dialog edit form (Field + Input + Select + Textarea + Switch) and a separate confirmation Dialog for deletion, with MessageBar feedback and an empty state.
+A narrow-viewport variant where the nav is rendered as an overlay NavDrawer that floats above the layout, the header holds a compact toggle plus the account avatar, and a TabList switches the content region between an overview grid and the report library.
 
 ```tsx
 import * as React from 'react';
-import { Badge, Button, Card, CardHeader, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Divider, Field, Input, MessageBar, MessageBarBody, Select, Switch, Text, Textarea, makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  CardFooter,
+  CardHeader,
+  FluentProvider,
+  Hamburger,
+  NavDrawer,
+  NavDrawerBody,
+  NavDrawerFooter,
+  NavDrawerHeader,
+  NavItem,
+  ProgressBar,
+  Tab,
+  TabList,
+  Text,
+  makeStyles,
+  tokens,
+} from '@fluentui/react-components';
 
-type ReportStatus = 'Active' | 'Paused' | 'Draft';
+const createIcon = (path: string): React.FC => {
+  const Icon: React.FC = () => (
+    <svg viewBox='0 0 20 20' width='20' height='20' aria-hidden='true' focusable='false'>
+      <path d={path} fill='currentColor' />
+    </svg>
+  );
+  return Icon;
+};
 
-type ReportRecord = {
+const GridIcon = createIcon('M3 3h6v6H3zM11 3h6v6h-6zM3 11h6v6H3zM11 11h6v6h-6z');
+const TrendIcon = createIcon('M10 2l6 6h-4v10H8V8H4z');
+const PeopleIcon = createIcon(
+  'M7 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 1.5c-3.3 0-6 1.6-6 3.5V17h12v-3c0-1.9-2.7-3.5-6-3.5z',
+);
+const SlidersIcon = createIcon('M2 5h10v2H2zM14 5h4v2h-4zM2 13h4v2H2zM8 13h10v2H8zM11 3h2v6h-2zM5 11h2v6H5z');
+const MenuIcon = createIcon('M2 4h16v2H2zM2 9h16v2H2zM2 14h16v2H2z');
+
+type Summary = {
   id: string;
-  name: string;
-  owner: string;
-  status: ReportStatus;
-  notes: string;
+  title: string;
+  description: string;
+  value: string;
+  delta: string;
+  deltaColor: 'success' | 'warning';
+  progress: number;
 };
 
-const statusColor: Record<ReportStatus, 'success' | 'warning' | 'informative'> = {
-  Active: 'success',
-  Paused: 'warning',
-  Draft: 'informative',
-};
-
-const initialRecords: ReportRecord[] = [
-  { id: '1', name: 'Quarterly revenue', owner: 'Adele Vance', status: 'Active', notes: 'Scheduled every Monday at 06:00.' },
-  { id: '2', name: 'Churn cohort', owner: 'Alex Wilber', status: 'Paused', notes: 'Paused while the warehouse migration is in flight.' },
-  { id: '3', name: 'Onboarding funnel', owner: 'Megan Bowen', status: 'Draft', notes: 'Needs a shared definition of activated.' },
+const summaries: Summary[] = [
+  {
+    id: 's1',
+    title: 'Active sessions',
+    description: 'Rolling 5 minute window',
+    value: '3,412',
+    delta: '+4.2%',
+    deltaColor: 'success',
+    progress: 0.68,
+  },
+  {
+    id: 's2',
+    title: 'Queue depth',
+    description: 'Pending background jobs',
+    value: '184',
+    delta: '+22',
+    deltaColor: 'warning',
+    progress: 0.35,
+  },
+  {
+    id: 's3',
+    title: 'Uptime',
+    description: 'Trailing 24 hours',
+    value: '99.98%',
+    delta: 'stable',
+    deltaColor: 'success',
+    progress: 0.99,
+  },
 ];
 
 const useStyles = makeStyles({
-  root: {
+  app: {
     display: 'flex',
     flexDirection: 'column',
-    rowGap: tokens.spacingVerticalL,
-    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-    gap: tokens.spacingHorizontalM,
-  },
-  card: { rowGap: tokens.spacingVerticalS },
-  cardActions: { display: 'flex', columnGap: tokens.spacingHorizontalS },
-  dialogContent: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalM,
-  },
-});
-
-export const DashboardRecords = () => {
-  const styles = useStyles();
-  const [records, setRecords] = React.useState<ReportRecord[]>(initialRecords);
-  const [editing, setEditing] = React.useState<ReportRecord | null>(null);
-  const [draft, setDraft] = React.useState<ReportRecord | null>(null);
-  const [deleting, setDeleting] = React.useState<ReportRecord | null>(null);
-  const [message, setMessage] = React.useState<string | null>(null);
-
-  const openEditor = (record: ReportRecord) => {
-    setMessage(null);
-    setDraft({ ...record });
-    setEditing(record);
-  };
-
-  const closeEditor = () => {
-    setEditing(null);
-    setDraft(null);
-  };
-
-  const nameIsValid = (draft?.name.trim().length ?? 0) > 0;
-
-  const save = () => {
-    if (!draft || !nameIsValid) {
-      return;
-    }
-    const trimmed: ReportRecord = { ...draft, name: draft.name.trim() };
-    setRecords(previous => previous.map(record => (record.id === trimmed.id ? trimmed : record)));
-    setMessage(`Saved ${trimmed.name}.`);
-    closeEditor();
-  };
-
-  const confirmDelete = () => {
-    if (!deleting) {
-      return;
-    }
-    setRecords(previous => previous.filter(record => record.id !== deleting.id));
-    setMessage(`Deleted ${deleting.name}.`);
-    setDeleting(null);
-  };
-
-  return (
-    <div className={styles.root}>
-      {message && (
-        <MessageBar intent='success' politeness='polite'>
-          <MessageBarBody>{message}</MessageBarBody>
-        </MessageBar>
-      )}
-
-      {records.length === 0 ? (
-        <Card appearance='filled-alternative'>
-          <Text weight='semibold'>No reports yet</Text>
-          <Text size={200}>Reports you create will show up here.</Text>
-        </Card>
-      ) : (
-        <div className={styles.grid}>
-          {records.map(record => (
-            <Card key={record.id} appearance='outline' className={styles.card}>
-              <CardHeader
-                header={<Text weight='semibold'>{record.name}</Text>}
-                description={<Text size={200}>Owner: {record.owner}</Text>}
-                action={
-                  <Badge appearance='tint' color={statusColor[record.status]}>
-                    {record.status}
-                  </Badge>
-                }
-              />
-              <Text size={200}>{record.notes}</Text>
-              <Divider />
-              <div className={styles.cardActions}>
-                <Button appearance='secondary' onClick={() => openEditor(record)}>
-                  Edit
-                </Button>
-                <Button
-                  appearance='subtle'
-                  onClick={() => {
-                    setMessage(null);
-                    setDeleting(record);
-                  }}
-                >
-                  Delete
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <Dialog
-        open={editing !== null}
-        onOpenChange={(_, data) => {
-          if (!data.open) {
-            closeEditor();
-          }
-        }}
-      >
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Edit report</DialogTitle>
-            <DialogContent className={styles.dialogContent}>
-              <Field
-                label='Name'
-                required
-                validationState={nameIsValid ? 'none' : 'error'}
-                validationMessage={nameIsValid ? undefined : 'Enter a name for this report.'}
-              >
-                <Input
-                  value={draft?.name ?? ''}
-                  onChange={(_, data) =>
-                    setDraft(current => (current ? { ...current, name: data.value } : current))
-                  }
-                />
-              </Field>
-              <Field label='Status'>
-                <Select
-                  value={draft?.status ?? 'Draft'}
-                  onChange={(_, data) =>
-                    setDraft(current =>
-                      current ? { ...current, status: data.value as ReportStatus } : current,
-                    )
-                  }
-                >
-                  <option value='Active'>Active</option>
-                  <option value='Paused'>Paused</option>
-                  <option value='Draft'>Draft</option>
-                </Select>
-              </Field>
-              <Field label='Notes' hint='Visible to everyone in the workspace.'>
-                <Textarea
-                  value={draft?.notes ?? ''}
-                  resize='vertical'
-                  onChange={(_, data) =>
-                    setDraft(current => (current ? { ...current, notes: data.value } : current))
-                  }
-                />
-              </Field>
-              <Switch label='Notify the owner when this report changes' defaultChecked />
-            </DialogContent>
-            <DialogActions>
-              <DialogTrigger disableButtonEnhancement>
-                <Button appearance='secondary'>Cancel</Button>
-              </DialogTrigger>
-              <Button appearance='primary' disabled={!nameIsValid} onClick={save}>
-                Save
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-
-      <Dialog
-        open={deleting !== null}
-        onOpenChange={(_, data) => {
-          if (!data.open) {
-            setDeleting(null);
-          }
-        }}
-      >
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Delete report?</DialogTitle>
-            <DialogContent>
-              <Text>
-                {deleting?.name} will be removed for everyone in the workspace. This action cannot be undone.
-              </Text>
-            </DialogContent>
-            <DialogActions>
-              <DialogTrigger disableButtonEnhancement>
-                <Button appearance='secondary'>Cancel</Button>
-              </DialogTrigger>
-              <Button appearance='primary' onClick={confirmDelete}>
-                Delete
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-    </div>
-  );
-};
-
-export default DashboardRecords;
-```
-
-### DashboardWidgetStates
-
-A reusable dashboard widget that renders all four content states - loading with Skeleton and Spinner, error with MessageBar and a retry action, empty with a primary call to action, and ready with a metric grid - plus a small demo that switches between them.
-
-```tsx
-import * as React from 'react';
-import { Button, Card, CardHeader, Divider, MessageBar, MessageBarActions, MessageBarBody, MessageBarTitle, Skeleton, SkeletonItem, Spinner, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
-
-type WidgetState = 'loading' | 'ready' | 'empty' | 'error';
-
-type Metric = {
-  label: string;
-  value: string;
-};
-
-type DashboardWidgetProps = {
-  title: string;
-  description?: string;
-  state: WidgetState;
-  metrics?: Metric[];
-  onRetry?: () => void;
-  onCreate?: () => void;
-};
-
-const useStyles = makeStyles({
-  page: {
-    minHeight: '100vh',
+    height: '100vh',
     backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
+    color: tokens.colorNeutralForeground1,
   },
-  switcher: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    columnGap: tokens.spacingHorizontalS,
-    rowGap: tokens.spacingVerticalS,
-    marginBottom: tokens.spacingVerticalL,
-  },
-  widget: { rowGap: tokens.spacingVerticalM },
-  skeleton: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalS,
-  },
-  skeletonRow: {
+  topBar: {
     display: 'flex',
     alignItems: 'center',
-    columnGap: tokens.spacingHorizontalM,
+    gap: '8px',
+    padding: '8px 12px',
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
   },
-  spacer: { flexGrow: 1 },
-  metrics: {
+  tabs: {
+    paddingInline: '12px',
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  content: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-    gap: tokens.spacingHorizontalM,
-    margin: 0,
+    alignContent: 'start',
+    gap: '12px',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+    padding: '16px',
+    flexGrow: 1,
+    minHeight: 0,
+    overflowY: 'auto',
   },
-  metric: { display: 'flex', flexDirection: 'column' },
-  metricValue: { margin: 0 },
-  empty: {
+  fullWidth: {
+    gridColumn: '1 / -1',
+  },
+  cardBody: {
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'flex-start',
-    rowGap: tokens.spacingVerticalS,
-    ...shorthands.padding(tokens.spacingVerticalM, 0),
+    gap: '10px',
+  },
+  brand: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  spacer: {
+    flexGrow: 1,
   },
 });
 
-export const DashboardWidget = ({
-  title,
-  description,
-  state,
-  metrics = [],
-  onRetry,
-  onCreate,
-}: DashboardWidgetProps) => {
+export const ResponsiveDashboardShell: React.FC = () => {
   const styles = useStyles();
+  const [isNavOpen, setIsNavOpen] = React.useState(false);
+  const [tab, setTab] = React.useState<'overview' | 'reports'>('overview');
 
   return (
-    <Card appearance='outline' className={styles.widget}>
-      <CardHeader
-        header={<Text weight='semibold'>{title}</Text>}
-        description={description ? <Text size={200}>{description}</Text> : undefined}
-        action={
-          state === 'loading' ? (
-            <Spinner size='tiny' label='Loading' labelPosition='after' />
-          ) : undefined
-        }
-      />
-      <Divider />
-
-      {state === 'loading' && (
-        <Skeleton aria-label={`Loading ${title}`} className={styles.skeleton}>
-          {[0, 1, 2].map(row => (
-            <div key={row} className={styles.skeletonRow}>
-              <SkeletonItem size={16} width='30%' />
-              <SkeletonItem size={16} width='18%' />
-              <div className={styles.spacer} />
+    <FluentProvider>
+      <div className={styles.app}>
+        {/* An overlay drawer floats above the shell, so it is a sibling of the
+            layout rather than a column inside it. */}
+        <NavDrawer
+          open={isNavOpen}
+          type='overlay'
+          onOpenChange={(_, data) => setIsNavOpen(data.open)}
+          onNavItemSelect={() => setIsNavOpen(false)}
+          defaultSelectedValue='overview'
+        >
+          <NavDrawerHeader>
+            <div className={styles.brand}>
+              <Hamburger aria-label='Close navigation' onClick={() => setIsNavOpen(false)} />
+              <Text weight='semibold'>Contoso Cloud</Text>
             </div>
-          ))}
-        </Skeleton>
-      )}
+          </NavDrawerHeader>
 
-      {state === 'error' && (
-        <MessageBar intent='error'>
-          <MessageBarBody>
-            <MessageBarTitle>Could not load {title}</MessageBarTitle>
-            The reporting service did not respond. Check your connection and try again.
-          </MessageBarBody>
-          <MessageBarActions>
-            <Button appearance='secondary' onClick={onRetry}>
-              Retry
-            </Button>
-          </MessageBarActions>
-        </MessageBar>
-      )}
+          <NavDrawerBody>
+            <NavItem value='overview' icon={<GridIcon />}>
+              Overview
+            </NavItem>
+            <NavItem value='reports' icon={<TrendIcon />}>
+              Reports
+            </NavItem>
+            <NavItem value='members' icon={<PeopleIcon />}>
+              Members
+            </NavItem>
+          </NavDrawerBody>
 
-      {state === 'empty' && (
-        <div className={styles.empty}>
-          <Text weight='semibold'>Nothing to show yet</Text>
-          <Text size={200}>Metrics appear here as soon as your first job runs.</Text>
-          <Button appearance='primary' onClick={onCreate}>
-            Create a job
-          </Button>
-        </div>
-      )}
+          <NavDrawerFooter>
+            <NavItem value='settings' icon={<SlidersIcon />}>
+              Settings
+            </NavItem>
+          </NavDrawerFooter>
+        </NavDrawer>
 
-      {state === 'ready' && (
-        <dl className={styles.metrics}>
-          {metrics.map(metric => (
-            <div key={metric.label} className={styles.metric}>
-              <dt>
-                <Text size={200}>{metric.label}</Text>
-              </dt>
-              <dd className={styles.metricValue}>
-                <Text size={600} weight='semibold'>{metric.value}</Text>
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </Card>
-  );
-};
-
-const metrics: Metric[] = [
-  { label: 'Runs today', value: '148' },
-  { label: 'Success rate', value: '99.2%' },
-  { label: 'Average duration', value: '42s' },
-];
-
-const states: WidgetState[] = ['loading', 'ready', 'empty', 'error'];
-
-export const DashboardWidgetStatesDemo = () => {
-  const styles = useStyles();
-  const [state, setState] = React.useState<WidgetState>('loading');
-  const [attempt, setAttempt] = React.useState(0);
-
-  React.useEffect(() => {
-    if (state !== 'loading') {
-      return;
-    }
-    const timeoutId = window.setTimeout(() => {
-      setState(attempt % 2 === 0 ? 'ready' : 'error');
-    }, 1500);
-    return () => window.clearTimeout(timeoutId);
-  }, [state, attempt]);
-
-  const retry = () => {
-    setAttempt(current => current + 1);
-    setState('loading');
-  };
-
-  return (
-    <div className={styles.page}>
-      <div className={styles.switcher}>
-        {states.map(value => (
+        <header className={styles.topBar}>
           <Button
-            key={value}
-            appearance={value === state ? 'primary' : 'secondary'}
-            onClick={() => setState(value)}
-          >
-            {value}
-          </Button>
-        ))}
+            appearance='subtle'
+            icon={<MenuIcon />}
+            aria-label='Open navigation'
+            onClick={() => setIsNavOpen(true)}
+          />
+          <Text weight='semibold' size={400}>
+            Contoso Cloud
+          </Text>
+          <div className={styles.spacer} />
+          <Avatar name='Ada Lovelace' size={28} />
+        </header>
+
+        <TabList
+          className={styles.tabs}
+          appearance='subtle'
+          size='medium'
+          selectedValue={tab}
+          onTabSelect={(_, data) => setTab(data.value as 'overview' | 'reports')}
+        >
+          <Tab value='overview'>Overview</Tab>
+          <Tab value='reports'>Reports</Tab>
+        </TabList>
+
+        <main className={styles.content}>
+          {tab === 'overview' ? (
+            summaries.map(summary => (
+              <Card key={summary.id} appearance='filled-alternative'>
+                <CardHeader
+                  header={<Text weight='semibold'>{summary.title}</Text>}
+                  description={<Text size={200}>{summary.description}</Text>}
+                  action={
+                    <Badge appearance='tint' color={summary.deltaColor}>
+                      {summary.delta}
+                    </Badge>
+                  }
+                />
+                <div className={styles.cardBody}>
+                  <Text size={800} weight='semibold'>
+                    {summary.value}
+                  </Text>
+                  <ProgressBar value={summary.progress} aria-label={`${summary.title} progress`} />
+                </div>
+                <CardFooter>
+                  <Button appearance='primary' size='small'>
+                    Open
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))
+          ) : (
+            <Card className={styles.fullWidth} appearance='outline'>
+              <CardHeader
+                header={<Text weight='semibold'>Report library</Text>}
+                description={<Text size={200}>Saved reports shared with your workspace</Text>}
+              />
+              <div className={styles.cardBody}>
+                <Text>Traffic by region</Text>
+                <Text>Revenue by plan</Text>
+                <Text>Retention cohorts</Text>
+              </div>
+              <CardFooter>
+                <Button appearance='secondary' size='small'>
+                  Manage reports
+                </Button>
+              </CardFooter>
+            </Card>
+          )}
+        </main>
       </div>
-      <DashboardWidget
-        title='Pipeline health'
-        description='Last 24 hours'
-        state={state}
-        metrics={metrics}
-        onRetry={retry}
-        onCreate={() => setState('ready')}
-      />
-    </div>
+    </FluentProvider>
   );
 };
 
-export default DashboardWidgetStatesDemo;
+export default ResponsiveDashboardShell;
 ```
 
 ## Pitfalls
 
-- Letting the whole document scroll instead of the canvas: grid and flex children default to min-height/min-width auto, so you must set minHeight: 0 (and often minWidth: 0) on the scroll container that has overflowY: auto, otherwise the shell grows past 100vh.
-- Hard-coding colors, gaps, and radii instead of using tokens from @fluentui/react-components - the shell then ignores dark theme, high-contrast, and brand themes, and RTL mirroring breaks.
-- Defining makeStyles inside a component: Griffel must be called at module scope, otherwise you re-create and re-insert styles on every render and lose class-name stability.
-- Mixing controlled and uncontrolled Nav props (selectedValue together with defaultSelectedValue, or selecting navigation without onNavItemSelect) - the Nav renders selection from the initial value and never updates, producing a React warning about switching from uncontrolled to controlled.
-- Shipping icon-only buttons without accessible names and wrapping them in a Tooltip without relationship - the tooltip stays visual and the button is announced as an unlabeled control. Always set aria-label and relationship='description' (or 'label').
-- Rendering both the inline Nav and the overlay Nav at the same time on small screens: you get two navigation landmarks plus duplicated, off-screen tab stops. Hide the inactive pane with display: none rather than relying on z-index or opacity.
-- Stale dialog form state: reuse one dialog and forget to reset the draft when it opens (or keep the surface mounted when closed), so the user sees the previous record's values. Create the draft copy in the open handler and drop it on close.
-- Making an entire Card a clickable target while also placing Buttons inside it - interaction is ambiguous for pointer, keyboard, and assistive tech. Either keep the Card inert with explicit action Buttons, or make the Card the single interactive element and use focusMode and shouldRestrictTriggerAction to control inner triggers.
-- Ignoring loading, empty, and error states: a widget that only renders the happy path leaves the canvas blank on failure. Branch every data region across loading (Skeleton with aria-label), empty (explanation plus one primary action), error (MessageBar with a retry action), and ready.
-- Using Divider as a flex child in a horizontal toolbar without vertical (or vice versa) - it renders the wrong orientation and adds a full-height line that breaks the layout.
-- Long unbroken values (IDs, URLs, wide tables) blowing out the responsive grid: give the grid track minmax(0, 1fr) semantics via minWidth: 0 on the child and use Text truncate or wrap for single-line labels.
+- Using '1fr' instead of 'minmax(0, 1fr)' for the main grid column - wide content (tables, long breadcrumb trails) then forces horizontal overflow. Pair it with minWidth: 0 on the flex column so children are allowed to shrink.
+- Forgetting minHeight: 0 and overflowY: 'auto' on the content region - the flex child refuses to shrink, the document scrolls, and the top bar scrolls away with the content.
+- Mixing controlled and uncontrolled state on the drawer: passing both selectedValue and defaultSelectedValue (or both openCategories and defaultOpenCategories) makes the component controlled and uncontrolled at the same time, which produces React warnings and a nav that never updates.
+- Reusing a value string across two NavItems or NavSubItems - values are the selection keys, so a duplicate highlights the wrong row and makes the selected-value-to-content mapping ambiguous.
+- Placing an overlay NavDrawer inside the same grid as the inline shell. Even though it floats visually, as a grid child it still claims a track; render the overlay drawer as a sibling of the header and content instead.
+- Wrapping an existing Button in MenuTrigger without disableButtonEnhancement - the trigger then nests a button inside a button, breaking keyboard interaction and styling.
+- Using plain NavItem rows for content that actually expands (sub-pages, saved filters) instead of NavCategory + NavCategoryItem + NavSubItemGroup, which leaves users with no expand affordance and no sub-item state.
+- Building the frame with margins, floats or absolute positioning instead of the grid + flex-column pattern - the layout breaks the moment the rail collapses to an icon rail or the overlay drawer opens.
 
 ## Accessibility
 
-Landmarks: render exactly one header, one main, and one exposed nav (Nav renders a nav element). When you add an overlay navigation pane for small screens, hide the inline pane with display: none instead of leaving both mounted, otherwise you ship duplicate landmarks and duplicate tab stops. Add a skip link to the content canvas that becomes visible on focus. Headings: render the page title inside a real h1 and style it with Text size={800} weight='semibold' so the document outline matches the visual hierarchy. Breadcrumb: Breadcrumb already provides the navigation landmark; the last BreadcrumbButton gets current, which emits aria-current='page'. Toolbar: Toolbar renders role='toolbar', so its children must be toolbar-style controls; give icon-only Buttons an aria-label and a Tooltip with relationship='description' (use relationship='label' when the tooltip is the only accessible name). Status: never communicate state with Badge color alone - include the text (Succeeded, Running, Failed). Live regions: use MessageBar politeness='polite' for success confirmations such as Saved or Deleted; leave intent='error' MessageBars with their default assertive politeness for real failures so they interrupt. Loading: give Skeleton an aria-label describing what is loading, and keep SkeletonItem shapes matching the real content so the layout does not jump. Dialogs: Dialog traps focus, closes on Escape, and restores focus to the trigger - always give the surface a DialogTitle, keep the first focusable control meaningful, and label destructive buttons with an explicit verb (Delete) rather than OK. Keyboard: Nav supports roving arrow-key navigation and Enter/Space to activate destinations and toggle categories; verify your card action Buttons are reachable in a logical order. Motion and contrast: use tokens (which are theme-aware and meet contrast in both light and dark themes) and prefer skeleton animation only when the user has not requested reduced motion.
+NavDrawer renders a navigation landmark and its items are real buttons or links, so the rail is traversable with Tab and activatable with Enter/Space; if the page contains more than one navigation region, give each an accessible label. The Hamburger and any toolbar toggle are icon-only, so they need an accurate aria-label that describes the action ('Collapse navigation' / 'Expand navigation' / 'Open navigation'). End the breadcrumb trail with a BreadcrumbButton marked current so assistive technology announces the current page, not just the section name. When an Avatar is used inside a Button as a Menu trigger, the accessible name belongs on the Button (aria-label='Account menu'), because the avatar itself is decorative. MessageBar copy must live inside MessageBarBody/MessageBarTitle and the intent controls how it is announced - reserve politeness='assertive' for blocking errors. Never let color be the only signal: Badges pair a color with a word such as 'Degraded', and ProgressBar needs a programmatic name (aria-label or a Field label) plus the numeric value in text. Use exactly one h1 per screen and let the document structure determine heading levels - Text size/weight are visual only. TabList handles arrow-key navigation between tabs, but the panel it controls must be reachable and labelled. Finally, when the overlay drawer opens, focus moves into it and Escape (or a backdrop click) closes it, so keep the trigger and the drawer's open state in sync to avoid stranding focus.
 
 ## Components used
 
 - [Avatar](../../components/avatar.md)
 - [Badge](../../components/badge.md)
 - [Breadcrumb](../../components/breadcrumb.md)
+- [BreadcrumbButton](../../components/breadcrumb-button.md)
+- [BreadcrumbDivider](../../components/breadcrumb-divider.md)
+- [BreadcrumbItem](../../components/breadcrumb-item.md)
 - [Button](../../components/button.md)
 - [Card](../../components/card.md)
-- [Dialog](../../components/dialog.md)
-- [Divider](../../components/divider.md)
-- [Drawer](../../components/drawer.md)
-- [Field](../../components/field.md)
-- [Input](../../components/input.md)
-- [Link](../../components/link.md)
+- [CardFooter](../../components/card-footer.md)
+- [CardHeader](../../components/card-header.md)
+- [FluentProvider](../../components/fluent-provider.md)
+- [Hamburger](../../components/hamburger.md)
 - [Menu](../../components/menu.md)
+- [MenuDivider](../../components/menu-divider.md)
+- [MenuItem](../../components/menu-item.md)
+- [MenuList](../../components/menu-list.md)
+- [MenuPopover](../../components/menu-popover.md)
+- [MenuTrigger](../../components/menu-trigger.md)
 - [MessageBar](../../components/message-bar.md)
-- [Nav](../../components/nav.md)
-- [Select](../../components/select.md)
-- [Skeleton](../../components/skeleton.md)
-- [Spinner](../../components/spinner.md)
-- [Switch](../../components/switch.md)
+- [MessageBarActions](../../components/message-bar-actions.md)
+- [MessageBarBody](../../components/message-bar-body.md)
+- [MessageBarTitle](../../components/message-bar-title.md)
+- [NavCategory](../../components/nav-category.md)
+- [NavCategoryItem](../../components/nav-category-item.md)
+- [NavDivider](../../components/nav-divider.md)
+- [NavDrawer](../../components/nav-drawer.md)
+- [NavDrawerBody](../../components/nav-drawer-body.md)
+- [NavDrawerFooter](../../components/nav-drawer-footer.md)
+- [NavDrawerHeader](../../components/nav-drawer-header.md)
+- [NavItem](../../components/nav-item.md)
+- [NavSectionHeader](../../components/nav-section-header.md)
+- [NavSubItem](../../components/nav-sub-item.md)
+- [NavSubItemGroup](../../components/nav-sub-item-group.md)
+- [ProgressBar](../../components/progress-bar.md)
+- [SearchBox](../../components/search-box.md)
+- [Tab](../../components/tab.md)
+- [TabList](../../components/tab-list.md)
 - [Text](../../components/text.md)
-- [Textarea](../../components/textarea.md)
 - [Toolbar](../../components/toolbar.md)
-- [Tooltip](../../components/tooltip.md)
+- [ToolbarButton](../../components/toolbar-button.md)
+- [ToolbarDivider](../../components/toolbar-divider.md)
+- [ToolbarGroup](../../components/toolbar-group.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

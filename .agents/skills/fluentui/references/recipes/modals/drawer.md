@@ -4,206 +4,178 @@
 
 ## Goal
 
-Add an edge-anchored Drawer to a Fluent UI v9 app: a controlled overlay drawer that hosts a form with sticky header and footer, an inline (non-modal) drawer that acts as a persistent filter panel, and a nested inline drawer for a master–detail flow.
+Build an accessible edge-anchored Drawer panel in Fluent UI v9 — either a modal overlay drawer or a non-modal inline drawer — with a titled header (and optional header navigation), a scrollable body, and a pinned footer of actions, including a navigation drawer built from NavDrawer.
 
 ## When to Use
 
-Use a Drawer when a task needs focused attention without navigating the user away from the page: create/edit forms opened from a table or list, record details, filter/settings panels, master–detail flows, and navigation rails on narrow screens. Choose `type="overlay"` when the task must be finished or dismissed before the user continues (the page behind is inert), and `type="inline"` when the panel should stay visible beside the content it affects and the page must remain interactive.
+Use this recipe when you need a panel that slides in from the edge of the screen: a modal overlay drawer for focused, interruptive tasks (compose a message, edit a record, review order details, filter a list), or a non-modal inline drawer for persistent side content such as filters or app navigation. Also use it when you want the Drawer/NavDrawer compound anatomy (header + title + header navigation + body + footer) instead of a centered dialog.
 
 ## When Not to Use
 
-Do not use a Drawer for a short confirmation, a success/failure notice, or a small menu of commands — Dialog, MessageBar/Toast, and Menu/Popover are lighter and communicate intent better. Do not use an overlay drawer as route-level or app-level navigation; use page navigation or Nav. Avoid using an inline drawer for anything destructive or blocking, because it does not trap focus and the page stays fully interactive. Avoid stacking two overlay drawers (or an overlay drawer inside a Dialog) — nested focus traps conflict; nest an inline drawer instead.
+Don't use a Drawer for a short blocking confirmation or a form that should be centered and small — use Dialog with DialogSurface/DialogTitle/DialogBody/DialogActions instead. Don't use it for a transient list of commands anchored to a trigger (use Menu/MenuPopover), a lightweight callout anchored to an element (use Popover/TeachingPopover), an inline expand/collapse disclosure (use Accordion), or full-screen task completion flows where a dedicated page is better. Prefer an inline drawer over an overlay drawer whenever the content should stay usable while the panel is open.
 
-A **Drawer** is an edge-anchored surface that holds one focused, secondary task: a create/edit form, a filter panel, record details, or a master–detail list. In Fluent UI v9 the Drawer is a compound component — `Drawer`, `DrawerHeader`, `DrawerHeaderTitle`, `DrawerBody`, `DrawerFooter` — that already handles the slide-in motion, the modal behaviour, the sticky header/footer, and the scrolling body. Compose those parts instead of building your own fixed-position `div`.
+A **Drawer** is an edge-anchored panel that slides in over or beside your page content. In Fluent UI v9, the same header/body/footer anatomy is shared by three components:
+
+- **`Drawer`** — a thin wrapper that renders `InlineDrawer` when `type="inline"` and `OverlayDrawer` when `type="overlay"`.
+- **`InlineDrawer`** — the panel participates in the page layout (it sits *next to* your content), does not trap focus, and can be dismissed with Escape when you control `open`. Use it for persistent filters or navigation.
+- **`OverlayDrawer`** — the panel is rendered above the page with a backdrop, traps focus, closes on Escape and on light dismiss, and is announced as a modal dialog. Use it for focused, interruptive tasks.
+
+All three accept the same compound children: `DrawerHeader` (containing `DrawerHeaderTitle` and optionally `DrawerHeaderNavigation`), `DrawerBody`, and `DrawerFooter`.
 
 ## Anatomy
 
 ```tsx
-<Drawer type="overlay" position="end" size="medium" separator open={isOpen} onOpenChange={handleOpenChange}>
+<Drawer type="overlay" open={open} onOpenChange={handleOpenChange}>
   <DrawerHeader>
+    { /* exactly one title; `action` holds the close button */ }
     <DrawerHeaderTitle action={<Button appearance="subtle" onClick={close}>Close</Button>}>
-      New project
+      New message
     </DrawerHeaderTitle>
+    { /* optional secondary navigation: TabList, Breadcrumb, ... */ }
+    <DrawerHeaderNavigation>{/* ... */}</DrawerHeaderNavigation>
   </DrawerHeader>
-  <DrawerBody>{/* scrolling content */}</DrawerBody>
-  <DrawerFooter>{/* action bar */}</DrawerFooter>
+
+  { /* the scrollable region */ }
+  <DrawerBody>{/* content */}</DrawerBody>
+
+  { /* pinned to the bottom of the panel */ }
+  <DrawerFooter>{/* Buttons */}</DrawerFooter>
 </Drawer>
 ```
 
-- `Drawer` — the root. Owns `type`, `position`, `size`, `separator`, and the open state.
-- `DrawerHeader` + `DrawerHeaderTitle` — the non-scrolling title bar. The title is rendered as a heading; the `action` slot holds the dismiss button.
-- `DrawerBody` — the only scrolling region. Everything that can grow goes here.
-- `DrawerFooter` — a sticky action bar that stays visible while the body scrolls.
+- `DrawerHeaderTitle` renders the `heading` slot and an optional `action` slot. Render **exactly one per header**. The heading is what gives the drawer its accessible name.
+- `DrawerHeaderNavigation` is the strip under the title for tab-style or breadcrumb navigation.
+- `DrawerBody` is the padding + scrolling region — put all long content here.
+- `DrawerFooter` stays visible at the bottom of the panel — put your primary and secondary actions here.
 
-## 1. Choose the type
-
-| Type | Behaviour | Good for |
-| --- | --- | --- |
-| `overlay` (default) | Rendered in a portal above the page; modal — focus is trapped, the backdrop blocks the page, and Escape closes it | Forms, detail views, anything the user should finish or dismiss |
-| `inline` | Rendered in the document flow next to your content and takes up space; non-modal, no backdrop, no focus trap | Filters, settings rails, master–detail, persistent navigation |
-
-Both types accept `position` (`start`, `end`, or `bottom`) and `size` (`small`, `medium`, `large`, `full`, or a CSS length such as `320px`). `start` and `end` flip automatically in RTL. Add `separator` when the drawer sits flush against other content and needs a divider.
-
-## 2. Control the open state
+## Step 1 — Own the open state
 
 ```tsx
-const [isOpen, setIsOpen] = React.useState(false);
+const [open, setOpen] = React.useState(false);
 
-<Drawer type="overlay" open={isOpen} onOpenChange={(_event, data) => setIsOpen(data.open)}>
-  {/* ... */}
-</Drawer>
+<Drawer type="overlay" open={open} onOpenChange={(_event, data) => setOpen(data.open)}>
 ```
 
-`onOpenChange` fires for Escape, backdrop clicks, and programmatic requests, with `data.open` telling you the requested state. The Drawer is controlled: it only closes when you write the new value into state. That is also how you block a close — if a form is dirty, ignore `data.open === false` and show your own confirmation instead.
+`onOpenChange` fires for every dismissal the component handles for you: Escape, light dismiss (clicking the backdrop of an overlay drawer) and your own close button when it is wired to the same state. Always write back `data.open` rather than flipping your own boolean, otherwise your state and the drawer's internal state drift apart after a light dismiss. If the drawer should simply start open and be dismissed only by the user, use `defaultOpen` on `OverlayDrawer` and skip the state entirely.
 
-Inline drawers use the same `open` / `onOpenChange` pair (or `defaultOpen` when you do not need to control them); the drawer animates its width in and out of the layout.
+## Step 2 — Header: title plus actions
 
-## 3. Submitting from the footer
+`DrawerHeaderTitle` is the anchor of the whole composition: it provides the heading that names the drawer. Put a single close affordance in its `action` slot — a `Button appearance="subtle"` is the conventional choice. If you only need a close affordance and no extra chrome, the built-in Escape key and backdrop click of an overlay drawer already close it; the button is for discoverability and touch users.
 
-`DrawerFooter` lives outside `DrawerBody`, so it is outside your `<form>` element. Either
+## Step 3 — Body and footer
 
-1. give the form an `id` and let the footer button submit it from a distance with `type` and `form`, or
-2. keep the form state in React and have the footer button call your submit handler directly.
+Everything that can grow goes into `DrawerBody`; only the concluding actions go into `DrawerFooter` (usually one `Button appearance="primary"` plus a secondary or subtle `Button`). Because `DrawerBody` is the scroll container, keep the number of direct children small — group related fields in a `<div>` when you need a consistent gap.
 
-With option 1 the browser still performs the native submit, so your `onSubmit` runs and can call `event.preventDefault()`.
+## Step 4 — Inline drawers need a layout parent
 
-## 4. Reset before the next open
+An inline drawer is a sibling of your content, so the parent has to be a flex row:
 
-Field values live in React state, so they survive a close. Reset them on the close path, key the form on the record you are editing so it remounts with fresh values, or pass `unmountOnClose` to have the Drawer drop its content every time it closes. Stale values are the most common Drawer bug.
+```tsx
+<div style={{ display: 'flex', height: '100%', minHeight: 0 }}>
+  <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>{/* page content */}</div>
+  <Drawer type="inline" separator open={open} onOpenChange={handleOpenChange} style={{ width: 320 }}>
+    ...
+  </Drawer>
+</div>
+```
 
-## 5. Nesting for master–detail
+Give the drawer an explicit width (`style={{ width: 320 }}`) and add the `separator` prop so the panel gets an edge line against the page. Put `minHeight: 0` on flex ancestors that must scroll, and make sure no ancestor uses `overflow: hidden` in a way that clips the panel.
 
-Render a second, `inline` drawer inside the first drawer's body: the outer overlay drawer keeps its focus trap and the inner panel slides in beside the list. Never nest two overlay drawers — their focus traps fight each other.
+## Step 5 — Navigation drawers
 
-## 6. Compose the body with Fluent components
+`NavDrawer` combines `Nav` and a drawer: it provides the nav context, exposes the drawer's `open`/`onOpenChange`, and accepts nav props such as `selectedValue`, `onNavItemSelect` and `defaultOpenCategories`. Its compound children are `NavDrawerHeader` (usually holding a `Hamburger` toggle), `NavDrawerBody`, and `NavDrawerFooter`.
 
-Everything in the component library works inside `DrawerBody`:
+Inside `NavDrawerBody` use `NavSectionHeader` for group labels, `NavItem` for flat destinations, `NavDivider` for separation, and `NavCategory` + `NavCategoryItem` + `NavSubItemGroup` + `NavSubItem` for expandable groups. Every item takes a `value`; `onNavItemSelect` reports `data.value` so you can drive your route or content state from one string.
 
-- Form: `Field` (label, `required`, `hint`, `validationState`, `validationMessage`) wrapping `Input`, `Select`, or `Textarea`. `Field` already renders the label, so a separate `Label` is rarely needed.
-- Filters: `Checkbox`, `Switch`, `Slider`.
-- Structure: `Text`, `Divider`.
-- Actions and dismissal: `Button` in `DrawerHeaderTitle`'s `action` slot and in `DrawerFooter`.
+## Step 6 — Header navigation with tabs
 
-## 7. Validate before you close
+When one drawer holds several related views, put a `TabList` inside `DrawerHeaderNavigation` and swap the `DrawerBody` content from the selected tab value (`data.value` from `onTabSelect`). Keep the drawer's own heading in `DrawerHeaderTitle` so the drawer still has a single accessible name; the tabs name the sections inside it.
 
-Because the drawer stays mounted, you can validate on submit and keep it open while `Field` shows its error state. Set a `validationState` of `error` together with a `validationMessage` string; the message is text, so it is announced to screen readers as well as shown visually.
+## Sizing and scrolling
+
+- Inline drawer: explicit width, flex parent, `separator`.
+- Overlay drawer: width is set the same way (`style={{ width: 360 }}`); the surface is height-constrained to the viewport, and `DrawerBody` scrolls.
+- Long labels: `Text truncate` inside the body/header keeps rows tidy.
+- Keep the drawer mounted: toggling `open` preserves scroll position and form state, whereas re-mounting the tree resets both.
 
 ## Examples
 
-### Overlay drawer with a validated form
+### Overlay drawer: compose a message
 
-A controlled end-positioned overlay drawer that creates a project. It shows the compound anatomy (header, title with a close action, scrolling body, sticky footer), a form built from Field + Input/Select/Textarea, submit-from-footer via the form `id`, and state reset on close.
+A controlled `<Drawer type="overlay">` used as a modal side panel for a focused task. The header has a title plus a close button in the `action` slot, the body holds Field-wrapped form controls that keep their state while the drawer is open, and the footer holds the primary and secondary actions. Open and close state is driven entirely by `open`/`onOpenChange`.
 
 ```tsx
 import * as React from 'react';
-import { Button, Drawer, DrawerBody, DrawerFooter, DrawerHeader, DrawerHeaderTitle, Field, Input, Select, Textarea } from '@fluentui/react-components';
+import {
+  Button,
+  Drawer,
+  DrawerBody,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerHeaderTitle,
+  Field,
+  Input,
+  Textarea,
+} from '@fluentui/react-components';
 
-export const NewProjectDrawer = () => {
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [name, setName] = React.useState('');
-  const [owner, setOwner] = React.useState('');
-  const [description, setDescription] = React.useState('');
-  const [submitted, setSubmitted] = React.useState(false);
+export const ComposeMessageDrawer: React.FC = () => {
+  const [open, setOpen] = React.useState(false);
+  const [subject, setSubject] = React.useState('');
+  const [message, setMessage] = React.useState('');
 
-  const isNameInvalid = submitted && name.trim().length === 0;
-
-  const resetForm = () => {
-    setName('');
-    setOwner('');
-    setDescription('');
-    setSubmitted(false);
-  };
-
-  const closeDrawer = () => {
-    setIsOpen(false);
-    resetForm();
-  };
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSubmitted(true);
-
-    if (name.trim().length === 0) {
-      // Field renders the validation message; keep the drawer open.
-      return;
-    }
-
-    // ...persist the project here...
-    closeDrawer();
+  const close = () => setOpen(false);
+  const send = () => {
+    // ...send `subject` and `message`
+    close();
   };
 
   return (
     <>
-      <Button appearance="primary" onClick={() => setIsOpen(true)}>
-        New project
+      <Button appearance="primary" onClick={() => setOpen(true)}>
+        Compose message
       </Button>
 
+      {/* The drawer stays mounted; `open` controls visibility. */}
       <Drawer
         type="overlay"
-        position="end"
-        size="medium"
-        separator
-        open={isOpen}
-        onOpenChange={(_event, data) => setIsOpen(data.open)}
+        open={open}
+        onOpenChange={(_event, data) => setOpen(data.open)}
       >
         <DrawerHeader>
           <DrawerHeaderTitle
             action={
-              <Button appearance="subtle" onClick={closeDrawer}>
+              <Button appearance="subtle" onClick={close}>
                 Close
               </Button>
             }
           >
-            New project
+            New message
           </DrawerHeaderTitle>
         </DrawerHeader>
 
         <DrawerBody>
-          <form
-            id="new-project-form"
-            onSubmit={handleSubmit}
-            style={{ display: 'grid', rowGap: '16px' }}
-          >
-            <Field
-              label="Project name"
-              required
-              validationState={isNameInvalid ? 'error' : 'none'}
-              validationMessage={isNameInvalid ? 'Enter a project name.' : undefined}
-              hint="Shown in the workspace switcher."
-            >
-              <Input
-                value={name}
-                onChange={(_event, data) => setName(data.value)}
-                placeholder="Contoso migration"
-              />
-            </Field>
+          <Field label="Subject" required>
+            <Input
+              placeholder="Weekly status"
+              value={subject}
+              onChange={(_event, data) => setSubject(data.value)}
+            />
+          </Field>
 
-            <Field label="Owner" hint="Leave empty to keep the project unassigned.">
-              <Select value={owner} onChange={(_event, data) => setOwner(data.value)}>
-                <option value="">Unassigned</option>
-                <option value="ana">Ana Bowman</option>
-                <option value="liam">Liam Chen</option>
-              </Select>
-            </Field>
-
-            <Field label="Description">
-              <Textarea
-                value={description}
-                onChange={(_event, data) => setDescription(data.value)}
-                resize="vertical"
-                placeholder="What is this project about?"
-              />
-            </Field>
-          </form>
+          <Field label="Message">
+            <Textarea
+              resize="vertical"
+              value={message}
+              onChange={(_event, data) => setMessage(data.value)}
+            />
+          </Field>
         </DrawerBody>
 
         <DrawerFooter>
-          <Button appearance="secondary" onClick={closeDrawer}>
-            Cancel
+          <Button appearance="primary" onClick={send}>
+            Send
           </Button>
-          <Button appearance="primary" type="submit" form="new-project-form">
-            Create project
-          </Button>
+          <Button onClick={close}>Discard</Button>
         </DrawerFooter>
       </Drawer>
     </>
@@ -211,227 +183,261 @@ export const NewProjectDrawer = () => {
 };
 ```
 
-### Inline filter drawer beside the results
+### Inline drawer: persistent filter panel
 
-A non-modal `type="inline"` drawer used as a persistent filter rail. It is controlled with `open` / `onOpenChange`, started at the logical `start` position, and connected to its toggle button with `aria-expanded` / `aria-controls`. The body uses Checkbox, Switch, Slider and Text.
+A non-modal `<Drawer type="inline" separator>` living inside a flex row next to the results list. The page stays interactive, filters update it live, and the panel uses an explicit width plus `separator` for the edge line. Escape also closes it because `open`/`onOpenChange` are controlled.
 
 ```tsx
 import * as React from 'react';
-import { Button, Checkbox, Drawer, DrawerBody, DrawerFooter, DrawerHeader, DrawerHeaderTitle, Slider, Switch, Text } from '@fluentui/react-components';
+import {
+  Button,
+  Divider,
+  Drawer,
+  DrawerBody,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerHeaderTitle,
+  Slider,
+  Switch,
+  Text,
+} from '@fluentui/react-components';
 
-export const InlineFilterDrawer = () => {
-  const [isOpen, setIsOpen] = React.useState(true);
-  const [includeArchived, setIncludeArchived] = React.useState(false);
-  const [sharedWithMe, setSharedWithMe] = React.useState(true);
-  const [radius, setRadius] = React.useState(25);
+type Result = { id: string; title: string; price: number; inStock: boolean };
+
+const results: Result[] = [
+  { id: '1', title: 'Contoso widget', price: 120, inStock: true },
+  { id: '2', title: 'Fabrikam gadget', price: 260, inStock: false },
+  { id: '3', title: 'Northwind gizmo', price: 90, inStock: true },
+];
+
+export const FilterPanelDrawer: React.FC = () => {
+  const [open, setOpen] = React.useState(true);
+  const [inStockOnly, setInStockOnly] = React.useState(false);
+  const [maxPrice, setMaxPrice] = React.useState(300);
+
+  const visibleResults = results.filter(
+    result => (!inStockOnly || result.inStock) && result.price <= maxPrice,
+  );
 
   return (
-    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-      <Button
-        appearance="secondary"
-        aria-expanded={isOpen}
-        aria-controls="filters-drawer"
-        onClick={() => setIsOpen((previous) => !previous)}
-      >
-        {isOpen ? 'Hide filters' : 'Show filters'}
-      </Button>
+    <div style={{ display: 'flex', height: '420px', minHeight: 0 }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+        <Button onClick={() => setOpen(!open)}>
+          {open ? 'Hide filters' : 'Show filters'}
+        </Button>
+
+        <ul>
+          {visibleResults.map(result => (
+            <li key={result.id}>
+              {result.title} — {result.price} USD
+            </li>
+          ))}
+        </ul>
+      </div>
 
       <Drawer
-        id="filters-drawer"
         type="inline"
-        position="start"
-        size="small"
         separator
-        open={isOpen}
-        onOpenChange={(_event, data) => setIsOpen(data.open)}
+        open={open}
+        onOpenChange={(_event, data) => setOpen(data.open)}
+        style={{ width: '320px' }}
       >
         <DrawerHeader>
           <DrawerHeaderTitle>Filters</DrawerHeaderTitle>
         </DrawerHeader>
 
         <DrawerBody>
-          <div style={{ display: 'grid', rowGap: '12px' }}>
-            <Text weight="semibold">Status</Text>
-            <Checkbox
-              label="Include archived"
-              checked={includeArchived}
-              onChange={(_event, data) => setIncludeArchived(data.checked === true)}
-            />
-            <Switch
-              label="Shared with me"
-              checked={sharedWithMe}
-              onChange={(_event, data) => setSharedWithMe(data.checked)}
-            />
+          <Switch
+            label="In stock only"
+            checked={inStockOnly}
+            onChange={(_event, data) => setInStockOnly(data.checked)}
+          />
 
-            <Text weight="semibold">Within distance</Text>
-            <Slider
-              min={0}
-              max={100}
-              value={radius}
-              onChange={(_event, data) => setRadius(data.value)}
-            />
-            <Text size={200}>{`${radius} km`}</Text>
-          </div>
+          <Divider />
+
+          <Text weight="semibold">Maximum price ({maxPrice} USD)</Text>
+          <Slider
+            min={0}
+            max={500}
+            step={10}
+            value={maxPrice}
+            onChange={(_event, data) => setMaxPrice(data.value)}
+          />
         </DrawerBody>
 
         <DrawerFooter>
-          <Button
-            appearance="secondary"
-            onClick={() => {
-              setIncludeArchived(false);
-              setSharedWithMe(true);
-              setRadius(25);
-            }}
-          >
-            Reset
-          </Button>
-          <Button appearance="primary" onClick={() => setIsOpen(false)}>
+          <Button appearance="primary" onClick={() => setOpen(false)}>
             Apply
           </Button>
+          <Button onClick={() => setOpen(false)}>Cancel</Button>
         </DrawerFooter>
       </Drawer>
+    </div>
+  );
+};
+```
 
-      <main style={{ flex: 1, minWidth: 0 }}>
-        <Text block size={500} weight="semibold">
-          Results
+### Navigation drawer with a Hamburger toggle
+
+An inline `NavDrawer` used as app navigation. A `Hamburger` in `NavDrawerHeader` toggles the panel, `NavDrawerBody` mixes section headers, flat `NavItem`s, a `NavDivider`, and an expandable `NavCategory` with a `NavSubItemGroup`. Selection is lifted into `selectedValue`/`onNavItemSelect` and rendered in the page body.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Hamburger,
+  NavCategory,
+  NavCategoryItem,
+  NavDivider,
+  NavDrawer,
+  NavDrawerBody,
+  NavDrawerFooter,
+  NavDrawerHeader,
+  NavItem,
+  NavSectionHeader,
+  NavSubItem,
+  NavSubItemGroup,
+  Text,
+} from '@fluentui/react-components';
+
+export const MailNavDrawer: React.FC = () => {
+  const [open, setOpen] = React.useState(true);
+  const [selectedValue, setSelectedValue] = React.useState('inbox');
+
+  return (
+    <div style={{ display: 'flex', height: '480px', minHeight: 0 }}>
+      <NavDrawer
+        open={open}
+        onOpenChange={(_event, data) => setOpen(data.open)}
+        selectedValue={selectedValue}
+        onNavItemSelect={(_event, data) => setSelectedValue(data.value)}
+        defaultOpenCategories={['workspaces']}
+        style={{ width: '260px' }}
+      >
+        <NavDrawerHeader>
+          <Hamburger aria-label="Toggle navigation" onClick={() => setOpen(!open)} />
+        </NavDrawerHeader>
+
+        <NavDrawerBody>
+          <NavSectionHeader>Mailbox</NavSectionHeader>
+          <NavItem value="inbox">Inbox</NavItem>
+          <NavItem value="drafts">Drafts</NavItem>
+          <NavItem value="sent">Sent</NavItem>
+
+          <NavDivider />
+
+          <NavCategory value="workspaces">
+            <NavCategoryItem value="workspaces">Workspaces</NavCategoryItem>
+            <NavSubItemGroup>
+              <NavSubItem value="engineering">Engineering</NavSubItem>
+              <NavSubItem value="design">Design</NavSubItem>
+            </NavSubItemGroup>
+          </NavCategory>
+        </NavDrawerBody>
+
+        <NavDrawerFooter>
+          <Button appearance="subtle">Sign out</Button>
+        </NavDrawerFooter>
+      </NavDrawer>
+
+      <main style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+        <Text size={500} weight="semibold">
+          {selectedValue}
         </Text>
-        <Text block>{`${radius} km radius`}</Text>
-        <Text block>{includeArchived ? 'Archived included' : 'Active only'}</Text>
-        <Text block>{sharedWithMe ? 'Shared with me' : 'All owners'}</Text>
       </main>
     </div>
   );
 };
 ```
 
-### Nested drawer for a master–detail queue
+### OverlayDrawer with header navigation tabs
 
-An overlay drawer lists tickets; choosing one renders a second, `inline` drawer inside the first drawer's body so the detail slides in beside the list without opening a second focus trap. Shows Text and Divider for structure and resetting the selection when the outer drawer closes.
+Uses `OverlayDrawer` directly (equivalent to `<Drawer type="overlay">`) to build a record-details panel. `DrawerHeaderNavigation` hosts a `TabList`; the selected tab value swaps the `DrawerBody` content, and each panel is wired with `role="tabpanel"` plus `aria-labelledby` pointing at the tab's `id`.
 
 ```tsx
 import * as React from 'react';
-import { Button, Divider, Drawer, DrawerBody, DrawerFooter, DrawerHeader, DrawerHeaderTitle, Text } from '@fluentui/react-components';
+import {
+  Badge,
+  Button,
+  Divider,
+  DrawerBody,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerHeaderNavigation,
+  DrawerHeaderTitle,
+  OverlayDrawer,
+  Tab,
+  TabList,
+  Text,
+} from '@fluentui/react-components';
 
-type Ticket = {
-  id: string;
-  title: string;
-  requester: string;
-  summary: string;
-};
-
-const tickets: Ticket[] = [
-  {
-    id: 'T-1042',
-    title: 'Cannot sign in',
-    requester: 'Ana Bowman',
-    summary: 'SSO redirect loop after a password reset.',
-  },
-  {
-    id: 'T-1043',
-    title: 'Export fails',
-    requester: 'Liam Chen',
-    summary: 'CSV export times out for the quarterly report.',
-  },
-  {
-    id: 'T-1044',
-    title: 'Billing question',
-    requester: 'Priya Nair',
-    summary: 'Duplicate seat charge on the August invoice.',
-  },
-];
-
-export const MasterDetailDrawer = () => {
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [selected, setSelected] = React.useState<Ticket | undefined>(undefined);
-
-  const closeDrawer = () => {
-    setIsOpen(false);
-    setSelected(undefined);
-  };
+export const OrderDetailsDrawer: React.FC = () => {
+  const [open, setOpen] = React.useState(true);
+  const [tab, setTab] = React.useState<string>('details');
 
   return (
     <>
-      <Button appearance="primary" onClick={() => setIsOpen(true)}>
-        Open support queue
-      </Button>
+      <Button onClick={() => setOpen(true)}>Open order details</Button>
 
-      <Drawer
-        type="overlay"
-        position="end"
-        size="large"
-        separator
-        open={isOpen}
-        onOpenChange={(_event, data) => {
-          if (!data.open) {
-            setSelected(undefined);
-          }
-          setIsOpen(data.open);
-        }}
-      >
+      <OverlayDrawer open={open} onOpenChange={(_event, data) => setOpen(data.open)}>
         <DrawerHeader>
           <DrawerHeaderTitle
             action={
-              <Button appearance="subtle" onClick={closeDrawer}>
+              <Button appearance="subtle" onClick={() => setOpen(false)}>
                 Close
               </Button>
             }
           >
-            Support queue
+            Order #10432
           </DrawerHeaderTitle>
+
+          <DrawerHeaderNavigation>
+            <TabList
+              selectedValue={tab}
+              onTabSelect={(_event, data) => setTab(String(data.value))}
+            >
+              <Tab id="tab-details" value="details">
+                Details
+              </Tab>
+              <Tab id="tab-activity" value="activity">
+                Activity
+              </Tab>
+            </TabList>
+          </DrawerHeaderNavigation>
         </DrawerHeader>
 
-        <DrawerBody style={{ display: 'flex', padding: 0 }}>
-          <div
-            style={{
-              display: 'grid',
-              gap: '8px',
-              alignContent: 'start',
-              padding: '16px',
-              minWidth: '220px',
-            }}
-          >
-            {tickets.map((ticket) => (
-              <Button
-                key={ticket.id}
-                appearance={selected?.id === ticket.id ? 'primary' : 'subtle'}
-                style={{ justifyContent: 'flex-start' }}
-                onClick={() => setSelected(ticket)}
-              >
-                {ticket.title}
-              </Button>
-            ))}
-          </div>
-
-          {selected && (
-            <Drawer type="inline" position="end" size="small" separator>
-              <DrawerHeader>
-                <DrawerHeaderTitle>{selected.id}</DrawerHeaderTitle>
-              </DrawerHeader>
-              <DrawerBody>
-                <div style={{ display: 'grid', rowGap: '8px' }}>
-                  <Text size={400} weight="semibold">
-                    {selected.title}
-                  </Text>
-                  <Text size={200}>{`Requested by ${selected.requester}`}</Text>
-                  <Divider />
-                  <Text>{selected.summary}</Text>
-                </div>
-              </DrawerBody>
-              <DrawerFooter>
-                <Button appearance="primary" onClick={() => setSelected(undefined)}>
-                  Assign to me
-                </Button>
-              </DrawerFooter>
-            </Drawer>
+        <DrawerBody>
+          {tab === 'details' ? (
+            <div role="tabpanel" aria-labelledby="tab-details">
+              <Text weight="semibold">Status</Text>
+              <div>
+                <Badge appearance="tint" color="success">
+                  Fulfilled
+                </Badge>
+              </div>
+              <Divider />
+              <Text>
+                Two items shipped from the Rotterdam warehouse on March 4 and were delivered on
+                March 6.
+              </Text>
+            </div>
+          ) : (
+            <div role="tabpanel" aria-labelledby="tab-activity">
+              <Text>Order created — March 2</Text>
+              <Divider />
+              <Text>Payment captured — March 2</Text>
+              <Divider />
+              <Text>Shipped — March 4</Text>
+            </div>
           )}
         </DrawerBody>
 
         <DrawerFooter>
-          <Button appearance="secondary" onClick={closeDrawer}>
-            Close
+          <Button appearance="primary" onClick={() => setOpen(false)}>
+            Done
           </Button>
         </DrawerFooter>
-      </Drawer>
+      </OverlayDrawer>
     </>
   );
 };
@@ -439,32 +445,49 @@ export const MasterDetailDrawer = () => {
 
 ## Pitfalls
 
-- Hand-rolling the surface with a fixed-position div or a bare Portal instead of the Drawer parts. You lose the slide-in motion, the modal focus trap, RTL-aware start/end positioning, and the sticky header/footer that `DrawerHeader`, `DrawerBody`, and `DrawerFooter` provide.
-- Putting growing or scrolling content outside `DrawerBody`. The header and footer will scroll away with it; everything that can grow belongs in the body, which is the drawer's only scrolling region.
-- Expecting a `DrawerFooter` button to submit the form it is not inside. The footer sits outside the `<form>`, so either add `form="new-project-form"` and `type="submit"` to the button, or hoist the submit handler into state and call it from the button directly.
-- Treating `onOpenChange` as cancellable. It reports a requested state; it does not veto it. Because the drawer is controlled, keep `open` unchanged when you want to block the close (for example with unsaved changes) and show your own confirmation UI instead.
-- Forgetting to reset field state when the drawer closes, so reopening shows stale values from the previous record. Reset on the close path, key the form on the record you are editing, or pass `unmountOnClose`.
-- Nesting two overlay drawers, or opening an overlay drawer inside a Dialog. Two focus traps compete and the user can get lost. Render the second level as `type="inline"` inside the first drawer's body.
-- Using an inline drawer for a blocking decision. Inline drawers are non-modal: the page stays interactive, there is no backdrop, and Escape does not close them. Use an overlay drawer or a Dialog when the user must respond.
-- Assuming an inline drawer is always mounted. It animates in and out of the layout, so size the surrounding flex container for the closed state (or conditionally render it) to avoid layout jumps.
-- Setting `validationState="error"` without a `validationMessage`. The error is then only visual, and screen reader users get no indication of what went wrong.
+- Conditionally mounting the drawer (`{open && <Drawer … />}`) instead of using the `open` prop. This unmounts the surface, removes the enter/exit motion, discards form and scroll state, and breaks focus restoration. Keep the drawer mounted and let `open` drive visibility.
+- Toggling your own boolean in the trigger instead of writing back `data.open` from `onOpenChange`. After a light dismiss or Escape, your state and the drawer's internal state disagree and the next toggle appears to do nothing. Always `setOpen(data.open)`.
+- Rendering an inline drawer outside a flex (or relative) layout parent. It will stack above or below the page content, or be clipped by an ancestor with `overflow: hidden`, instead of sliding in beside it. Wrap content and drawer in `display: flex` and give the drawer an explicit width.
+- Expecting `separator` to have an effect on an overlay drawer — it is an inline-drawer prop that draws the edge line between the panel and the page. Use it with `type="inline"` (or `InlineDrawer`); overlay drawers get their separation from the backdrop and surface elevation.
+- Omitting `DrawerHeaderTitle` (or rendering more than one per header). The heading is the drawer's accessible name; without it an overlay drawer is announced namelessly, and multiple titles produce a confusing heading structure.
+- Putting content directly inside `Drawer` and skipping `DrawerBody`/`DrawerFooter`. You lose padding, the scroll container, and the pinned footer, so long content pushes the primary action off screen.
+- Using an overlay drawer for permanent navigation. Modal drawers interrupt the flow, dim the page and trap focus; use an inline `NavDrawer` (with `NavItem`/`NavCategory`/`NavSubItemGroup`) for persistent navigation and reserve overlay drawers for focused, interruptive tasks.
 
 ## Accessibility
 
-An overlay Drawer is a modal dialog: focus moves into the drawer when it opens, is trapped there while it is open, and returns to the element that opened it when it closes. Escape closes it and the page behind is inert, so never put required information only behind the drawer. Always give the drawer an accessible name — `DrawerHeaderTitle` renders a visible heading that names the surface; if you build a title-less drawer (for example a pure filter rail), pass `aria-label` to `Drawer`. Put the dismiss control in `DrawerHeaderTitle`'s `action` slot so it sits in the natural tab order near the top of the panel. Inline drawers are the opposite: no focus trap and no backdrop, the rest of the page stays reachable, and nothing announces that the panel appeared — connect the toggle with `aria-expanded` plus `aria-controls` pointing at the Drawer's `id`, and move focus into the panel only if the user's action explicitly asked for it. Validation feedback must be textual: pair `validationState="error"` with a `validationMessage`, because `Field` exposes that message to assistive technology, and mark genuinely required inputs with `required` on `Field` so the label carries the required indicator. Keep the primary action last in `DrawerFooter` to match reading order, and avoid colour-only status communication.
+Overlay drawers (`type="overlay"` or `OverlayDrawer`) render a modal surface: they take focus when they open, trap it while open, close on Escape and light dismiss, and return focus to the element that was focused before opening. That is exactly why you control them with `open`/`onOpenChange` instead of mounting them conditionally — focus restoration needs the surface to exist. Always render a `DrawerHeaderTitle`: its `heading` slot (an `h2` by default) is what names the drawer for assistive technology, so a drawer whose body is the only content is announced without a name. Give the button in the `action` slot a text label, or an `aria-label` if you render an icon-only button. Inline drawers are non-modal and do not trap focus, so keyboard users can tab between the panel and the page — keep a visible, keyboard-reachable toggle (a `Button` or `Hamburger`) rather than hiding the panel behind hover or drag. Inside the drawer keep a logical DOM order (header → body → footer) because that is the tab order, start body headings below the title's level (the title is an `h2`), and when you build tabbed sections with `TabList`, wire each panel with `role="tabpanel"` and `aria-labelledby` pointing at the corresponding `Tab` `id`, as shown in the example. Drawer open/close motion comes from the built-in surface motion and respects reduced-motion preferences; don't add your own transitions. Finally, make long content scroll inside `DrawerBody` so the footer actions remain reachable without scrolling the whole page.
 
 ## Components used
 
-- [Drawer](../../components/drawer.md)
+- [Badge](../../components/badge.md)
 - [Button](../../components/button.md)
-- [Field](../../components/field.md)
-- [Input](../../components/input.md)
-- [Select](../../components/select.md)
-- [Textarea](../../components/textarea.md)
-- [Checkbox](../../components/checkbox.md)
-- [Switch](../../components/switch.md)
-- [Slider](../../components/slider.md)
-- [Text](../../components/text.md)
 - [Divider](../../components/divider.md)
+- [Drawer](../../components/drawer.md)
+- [DrawerBody](../../components/drawer-body.md)
+- [DrawerFooter](../../components/drawer-footer.md)
+- [DrawerHeader](../../components/drawer-header.md)
+- [DrawerHeaderNavigation](../../components/drawer-header-navigation.md)
+- [DrawerHeaderTitle](../../components/drawer-header-title.md)
+- [Field](../../components/field.md)
+- [Hamburger](../../components/hamburger.md)
+- [Input](../../components/input.md)
+- [NavCategory](../../components/nav-category.md)
+- [NavCategoryItem](../../components/nav-category-item.md)
+- [NavDivider](../../components/nav-divider.md)
+- [NavDrawer](../../components/nav-drawer.md)
+- [NavDrawerBody](../../components/nav-drawer-body.md)
+- [NavDrawerFooter](../../components/nav-drawer-footer.md)
+- [NavDrawerHeader](../../components/nav-drawer-header.md)
+- [NavItem](../../components/nav-item.md)
+- [NavSectionHeader](../../components/nav-section-header.md)
+- [NavSubItem](../../components/nav-sub-item.md)
+- [NavSubItemGroup](../../components/nav-sub-item-group.md)
+- [OverlayDrawer](../../components/overlay-drawer.md)
+- [Slider](../../components/slider.md)
+- [Switch](../../components/switch.md)
+- [Tab](../../components/tab.md)
+- [TabList](../../components/tab-list.md)
+- [Text](../../components/text.md)
+- [Textarea](../../components/textarea.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

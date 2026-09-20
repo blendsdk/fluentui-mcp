@@ -4,453 +4,561 @@
 
 ## Goal
 
-Decide, implement, and switch between controlled and uncontrolled state in Fluent UI React v9 components, including resetting uncontrolled fields, reading their values at submit time, mixing a controlled shell with uncontrolled leaves, and migrating a field from one mode to the other without breaking it.
+Implement Fluent UI v9 component state correctly by choosing between controlled (value/checked/open) and uncontrolled (defaultValue/defaultChecked/defaultOpen) APIs, wiring the matching change callbacks, and resetting state with the right technique for each mode.
 
 ## When to Use
 
-Use this recipe when you are building forms, settings panels, wizards, or overlay/collection state (Dialog open, Accordion open items, Tabs selection) and need to know whether React or the DOM should own the value: when to pass `value`/`checked`/`open`/`openItems` versus `defaultValue`/`defaultChecked`/`defaultOpen`/`defaultOpenItems`, how to read uncontrolled values, how to reset either kind, and how to safely combine both in one component.
+Use this recipe whenever you wire up any stateful Fluent UI v9 component (Input, Textarea, Checkbox, Switch, Slider, Rating, RadioGroup, Accordion, TabList, Dialog, Popover, and peers) and must decide whether your component or the Fluent component owns the state. It is also the fix when a control looks 'frozen' (value prop without an update handler), when a defaultValue change is ignored after mount, or when you need programmatic control such as Expand all / Collapse all, wizard steps, or cross-field validation.
 
 ## When Not to Use
 
-Do not use this recipe as a general guide to validation rules, form layout, or schema handling — that belongs to form/Field recipes. If you are integrating a form library (react-hook-form, Formik, TanStack Form), follow that library's controller pattern instead of hand-writing `value` + `onChange`, since the library already implements the controlled/uncontrolled decision for you. If your state is global/cross-tree, use a store or context rather than threading controlled props through many layers.
+Do not use it when the state is purely internal and nobody else needs it - leaving an Accordion, TabList or Popover uncontrolled avoids extra re-renders. Do not use it as a substitute for a form-state library when you need schema validation, dirty tracking, or submit-lifecycle handling (use a form library on top of the Fluent controls instead). Do not use it to sync a prop into local state with useEffect - prefer deriving during render or lifting state up.
 
-Every interactive Fluent UI React v9 component is **controllable**. It ships two ways to own its
-state:
+Fluent UI v9 (`@fluentui/react-components`) reuses the DOM convention: **the state prop you pass decides who owns the state**.
 
-- **Uncontrolled** – you pass the `default*` prop (or nothing) and the component keeps the value
-  internally (in the DOM for form fields, in React state for overlays and collections).
-- **Controlled** – you pass the plain prop (`value`, `checked`, `open`, `openItems`, ...) and the
-  component renders exactly what you give it. It stops holding state of its own and reports every
-  user interaction through the matching change handler.
+- **Controlled** - you pass `value` / `checked` / `open` / `openItems` / `selectedValue`. The component renders exactly what you give it and never writes internal state. If you do not apply the change in the callback, the control appears frozen.
+- **Uncontrolled** - you pass the `default*` twin (`defaultValue`, `defaultChecked`, `defaultOpen`, `defaultOpenItems`, `defaultSelectedValue`). That value seeds internal state once at mount; later prop changes are ignored and the component owns the state from then on.
+- **Neither** - the component is uncontrolled with its own default (empty string, `false`, `[]`, closed, no selection).
 
-A component decides by looking at the plain prop: when it is `undefined`, internal state is used
-and the `default*` prop seeds it; when the prop has any other value, your value is rendered
-verbatim and the `default*` prop is ignored.
+## The prop pairs you will meet
 
-## The prop pairs
-
-| Component | Controlled prop | Uncontrolled prop | Change handler |
+| Meaning | Controlled prop | Uncontrolled prop | Components |
 | --- | --- | --- | --- |
-| `Input` | `value` | `defaultValue` | `onChange` -> `data.value` |
-| `Textarea` | `value` | `defaultValue` | `onChange` -> `data.value` |
-| `Checkbox` | `checked` | `defaultChecked` | `onChange` -> `data.checked` (`boolean \| 'mixed'`) |
-| `Switch` | `checked` | `defaultChecked` | `onChange` -> `data.checked` |
-| `Slider` | `value` | `defaultValue` | `onChange` -> `data.value` |
-| `Dialog`, `Menu`, `Popover` | `open` | `defaultOpen` | `onOpenChange` |
-| `Accordion` | `openItems` | `defaultOpenItems` | `onToggle` |
-| `Tree` | `openItems` | `defaultOpenItems` | – |
-| `Tabs` | `selectedValue` | `defaultSelectedValue` | `onTabSelect` |
-| `Nav` | `selectedValue` | `defaultSelectedValue` | `onNavItemSelect` |
-| `List` | `selectedItems` | `defaultSelectedItems` | `onSelectionChange` |
-| `Card` | `selected` | `defaultSelected` | `onSelectionChange` |
-| `Carousel` | `activeIndex` | `defaultActiveIndex` | `onActiveIndexChange` |
-| `SwatchPicker` | `selectedValue` | `defaultSelectedValue` | `onSelectionChange` |
+| Text / numeric value | `value` | `defaultValue` | `Input`, `Textarea`, `Slider`, `SpinButton`, `Rating`, `RadioGroup`, `Dropdown` |
+| Toggle state | `checked` | `defaultChecked` | `Checkbox`, `Switch`, `ToggleButton` |
+| Open state | `open` | `defaultOpen` | `Dialog`, `Popover`, `Menu`, `Dropdown` |
+| Expanded items | `openItems` | `defaultOpenItems` | `Accordion`, `Tree` |
+| Single selection | `selectedValue` | `defaultSelectedValue` | `TabList`, `SwatchPicker`, `Nav` |
+| Expanded nav categories | `openCategories` | `defaultOpenCategories` | `Nav` |
+| Multi selection | `selectedItems` / `selectedValues` | `defaultSelectedItems` / `defaultSelectedValues` | `List` / `TagGroup` |
+| Card selection | `selected` | `defaultSelected` | `Card` |
+| Carousel position | `activeIndex` | `defaultActiveIndex` | `Carousel` |
+| Grouped toggles | `checkedValues` | `defaultCheckedValues` | `Toolbar` |
 
-**Rule of thumb:** pass the controlled prop *only* when you also handle the change. A controlled
-prop without its handler is a frozen component: `value` without `onChange` makes a text field
-read-only, and `checked` without `onChange` produces a switch that looks interactive but never
-moves.
+Rule of thumb: **one owner per instance**. Pick `value` *or* `defaultValue` and stay there for the lifetime of that component instance.
+
+## Read the change payload, not the DOM event
+
+Every change callback has the shape `(event, data) => void`. Read state from `data`; the event is a React synthetic event and the component may wrap or reuse the internal input.
+
+| Component | Callback | What to read |
+| --- | --- | --- |
+| `Input`, `Textarea` | `onChange` | `data.value` (string) |
+| `Checkbox` | `onChange` | `data.checked` (`boolean \| 'mixed'`) |
+| `Switch` | `onChange` | `data.checked` (boolean) |
+| `Slider` | `onChange` | `data.value` (number) |
+| `SpinButton` | `onChange` | `data.value` (`number \| null`) |
+| `Rating` | `onChange` | `data.value` (number) |
+| `RadioGroup` | `onChange` | `data.value` (string) |
+| `Accordion` | `onToggle` | `data.value`, `data.openItems` |
+| `TabList` | `onTabSelect` | `data.value` (the `Tab` `value`) |
+| `Dialog`, `Popover`, `Menu` | `onOpenChange` | `data.open` (boolean) |
+| `Toolbar` | `onCheckedValueChange` | `data.name`, `data.checkedValues` |
 
 ## Choosing a mode
 
-Stay **uncontrolled** when:
+**Uncontrolled is the right default for:**
+- Values you only need at submit time (a plain form).
+- High-frequency updates (typing in an `Input`, dragging a `Slider`) where parent re-renders are wasted work.
+- Purely local UI state: which `Accordion` panel is open, which `Tab` is selected, whether a `Popover` is visible.
 
-- The value is only needed at submit time (a classic form).
-- You want zero re-renders while the user types — large forms stay fast because typing only touches
-  the DOM node.
-- You want native behavior for free: autofill, `<form>` reset, `FormData`, browser validation.
-- The component is a leaf you never have to read programmatically.
+**Controlled is required when:**
+- Another part of the UI must react to the value (live preview, character count, dependent fields).
+- The value changes programmatically (Expand all, wizard next/back, server-driven defaults).
+- You need validation, undo, or persistence.
 
-Go **controlled** when:
+## Resetting state
 
-- The value drives other UI: enabling/disabling the submit `Button`, live counters, dependent
-  fields, previews.
-- You must set the value from outside the component: async load, "apply preset", cascading a
-  choice from another field, undo.
-- You want to validate on every keystroke (derive `Field`'s `validationState` from state).
-- The value is part of a larger state object you already own.
-
-## Reading values out of uncontrolled fields
-
-Uncontrolled fields still forward `name`/`value` to their underlying native control, so the fastest
-way to read them is a native `<form>` plus `FormData`:
+- **Controlled:** set the state back to the initial object/primitive. The rendered value follows instantly.
+- **Uncontrolled:** the only reliable reset is to **remount** the subtree by changing its React `key`. Changing `defaultValue` after mount does nothing.
 
 ```tsx
-const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-  event.preventDefault();
-  const data = new FormData(event.currentTarget);
-  const email = String(data.get('email') ?? '');
-};
+// Controlled reset
+<Button onClick={() => setName('')}>Reset</Button>
+
+// Uncontrolled reset - remount with a new key
+const [formKey, setFormKey] = React.useState(0);
+<div key={formKey}>{/* uncontrolled controls */}</div>
+<Button onClick={() => setFormKey(k => k + 1)}>Reset</Button>
 ```
 
-Alternatives: keep a `React.useRef` and read the underlying element on demand, or lift only the
-fields you actually need to observe into state (see the hybrid section). Whatever you choose, do
-not render derived UI from an uncontrolled value — nothing re-renders when the user types.
+Remounting destroys the DOM, so focus and any in-progress IME composition are lost - move focus back to the first field if you use this in a dialog or wizard.
 
-## Resetting
+## Mixing both modes in one tree
 
-**Uncontrolled** has three reset tools, in order of preference:
+Mixing is normal and encouraged: a controlled `Accordion` (so the page can expand/collapse everything) can contain an uncontrolled `TabList` per panel (nobody outside cares which tab is selected). Keep the boundary explicit - the outer component owns only what it must render against.
 
-1. Native reset — `<Button type='reset'>` inside the `<form>` restores the DOM defaults, exactly
-   like a plain HTML form.
-2. Re-key the control or the whole form — `key={revision}` remounts the subtree so computed
-   `defaultValue`s are re-applied. This is the only thing that works when the default is dynamic
-   (a loaded record, a selected mode).
-3. Imperatively assigning `element.value` — avoid; it bypasses React and can desync the DOM from a
-   later controlled render.
+## Supporting both modes in your own components
 
-**Controlled** reset is simply `setState(initialState)`. Keep a frozen `initialState` constant so
-reset never drifts from the first render.
+The Fluent-wide convention for a component that accepts either mode is:
 
-## Hybrid: controlled shell, uncontrolled leaves
+1. Accept `value?: T` and `defaultValue?: T` plus `onChange?: (next: T) => void`.
+2. Treat `value !== undefined` as 'controlled'.
+3. Always call `onChange`, but only write internal state when uncontrolled.
 
-A very common and efficient shape is a controlled "shell" value plus uncontrolled leaves:
+Never copy a controlled prop into state:
 
-- Controlled `Switch` decides a mode (basic vs advanced).
-- Uncontrolled `Input`s hold the free text, and their `key` includes the mode, so flipping the mode
-  remounts them with new defaults while typing stays re-render free.
-- A "Discard edits" `Button` bumps a revision counter to force the same remount on demand.
+```tsx
+// BAD: two sources of truth, and the copy goes stale
+const [value, setValue] = React.useState(props.value);
+React.useEffect(() => setValue(props.value), [props.value]);
+```
 
-Only the shell value lives in React state; everything else is owned by the DOM until submit.
+Derive during render (`const value = isControlled ? props.value : internal`) or lift the state up instead.
 
-## Migrating between modes
+## TypeScript notes
 
-1. Add `value` **and** `onChange` in the same commit — never one without the other.
-2. Initialize state from the same value as the old `defaultValue` so nothing visually changes.
-3. Remove `defaultValue`; passing both is legal but confusing (the default is used for the very
-   first render only and then silently ignored).
-4. Do not let the controlled prop flip between `undefined` and a defined value across renders —
-   coalesce to a string/boolean (`value={text ?? ''}`) so the input never changes identity between
-   uncontrolled and controlled.
-5. Going the other way (controlled -> uncontrolled): move the value into `defaultValue`, delete the
-   handler, and re-key the element if you still want programmatic resets.
+- Keep state types as wide as the payload: `Checkbox` can report `'mixed'`, so `checked={data.checked === true}` for a boolean state, or store `boolean | 'mixed'`.
+- `Tab` accepts `value: unknown` and `TabList.onTabSelect` reports `data.value: unknown` - type your state as `unknown` or narrow it deliberately, and never assume it is a string.
+- `Accordion.onToggle` reports `data.openItems` typed against the accordion's value type; normalize it (`[...data.openItems]`) before storing so you own a fresh array.
+- `SpinButton` reports `number | null` - decide up front what `null` means (usually 'empty') before putting it in a numeric state.
 
 ## Examples
 
-### Fully uncontrolled form with FormData and key-based reset
+### Uncontrolled form seeded with default* props and reset by key
 
-A profile form where every control owns its own value (Input, Textarea, Slider, Switch, Checkbox use defaultValue/defaultChecked). Values are read once, at submit time, with FormData, and the whole form is reset by bumping a key so the default values are re-applied.
+Shows the uncontrolled API: Input/Textarea/Slider/Rating are seeded with defaultValue, Checkbox/Switch with defaultChecked. The component never re-renders while the user edits, and the only way to reset the controls is to remount them with a new key.
 
 ```tsx
 import * as React from 'react';
-import { Button, Checkbox, Divider, Field, Input, Slider, Switch, Text, Textarea } from '@fluentui/react-components';
+import {
+  Button,
+  Checkbox,
+  Field,
+  Input,
+  Rating,
+  Slider,
+  Switch,
+  Text,
+  Textarea,
+} from '@fluentui/react-components';
 
 /**
- * Uncontrolled form: every control owns its own value, so typing never re-renders React.
- * Values are read exactly once, on submit, through the native FormData API.
+ * Every control below is UNCONTROLLED: it is seeded once with defaultValue /
+ * defaultChecked and then owns its own state. Typing, dragging and toggling
+ * never re-render this component.
  */
-export const UncontrolledProfileForm: React.FC = () => {
-  // Changing this key remounts the form and re-applies every defaultValue / defaultChecked.
-  const [revision, setRevision] = React.useState(0);
-  const [submitted, setSubmitted] = React.useState<string[]>([]);
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    setSubmitted(
-      Array.from(data.entries()).map(([name, value]) => `${name}: ${String(value)}`),
-    );
-  };
+export const UncontrolledForm = () => {
+  // Bumping this key remounts the subtree and restores the initial values,
+  // which is the only reliable way to 'reset' uncontrolled state.
+  const [formKey, setFormKey] = React.useState(0);
 
   return (
-    <form
-      key={revision}
-      onSubmit={handleSubmit}
-      style={{ display: 'grid', gap: 12, maxWidth: 420 }}
-    >
-      <Field label="Display name" hint="The DOM owns this value - no React state involved.">
-        <Input name="displayName" defaultValue="Ada Lovelace" />
-      </Field>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 420 }}>
+      <Text size={400} weight='semibold' block>
+        Uncontrolled form
+      </Text>
 
-      <Field label="Bio">
-        <Textarea name="bio" defaultValue="Mathematician and writer." resize="vertical" />
-      </Field>
+      <div key={formKey} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Field label='Display name' hint='defaultValue seeds the Input once, at mount'>
+          <Input defaultValue='Ada Lovelace' />
+        </Field>
 
-      <Field label="Monthly budget">
-        <Slider name="budget" defaultValue={250} min={0} max={1000} step={50} />
-      </Field>
+        <Field label='Bio'>
+          <Textarea defaultValue='Wrote the first published algorithm.' resize='vertical' />
+        </Field>
 
-      <Field label="Notifications" orientation="horizontal">
-        <Switch name="notifications" defaultChecked label="Email me about replies" />
-      </Field>
+        <Checkbox defaultChecked label='Email me product news' />
+        <Switch defaultChecked label='Desktop notifications' />
 
-      <Field label="Newsletter" orientation="horizontal">
-        <Checkbox name="newsletter" value="weekly" defaultChecked label="Weekly digest" />
-      </Field>
+        <Field label='Volume'>
+          <Slider defaultValue={40} min={0} max={100} />
+        </Field>
 
-      <Divider />
-
-      <div style={{ display: 'flex', gap: 8 }}>
-        <Button appearance="primary" type="submit">
-          Read values with FormData
-        </Button>
-        <Button appearance="outline" onClick={() => setRevision((current) => current + 1)}>
-          Reset to defaults
-        </Button>
+        <Field label='Quality'>
+          <Rating defaultValue={4} max={5} />
+        </Field>
       </div>
 
-      {submitted.length > 0 && (
-        <div>
-          {submitted.map((line, index) => (
-            <Text key={`${index}-${line}`} block font="monospace" size={200}>
-              {line}
-            </Text>
-          ))}
-        </div>
-      )}
-    </form>
+      <Button appearance='primary' onClick={() => setFormKey((k) => k + 1)}>
+        Reset to defaults
+      </Button>
+    </div>
   );
 };
 ```
 
-### Fully controlled form with derived validation and state-based reset
+### Controlled form with lifted state and a controlled Dialog
 
-The same form shape, but a single React state object is the source of truth. Every control receives value/checked plus a handler, the Field validationState is derived from state, the submit Button is enabled by derived state, and reset sets the state back to a frozen initial object.
+Shows the controlled API end to end: one state object drives Input, Textarea, RadioGroup, Checkbox, Switch and Slider through value/checked, each callback writes the payload field back into state, validation is derived during render, and a controlled Dialog's open state is owned by the parent so it can also be closed programmatically.
 
 ```tsx
 import * as React from 'react';
-import { Button, Checkbox, Divider, Field, Input, MessageBar, Slider, Switch, Text, Textarea } from '@fluentui/react-components';
+import {
+  Button,
+  Checkbox,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  Field,
+  Input,
+  Radio,
+  RadioGroup,
+  Slider,
+  Switch,
+  Text,
+  Textarea,
+} from '@fluentui/react-components';
 
 type FormState = {
   email: string;
-  bio: string;
-  budget: number;
-  notifications: boolean;
-  acceptedTerms: boolean;
+  notes: string;
+  plan: string;
+  newsletter: boolean;
+  alerts: boolean;
+  seats: number;
 };
 
-const initialState: FormState = {
+const INITIAL_FORM: FormState = {
   email: '',
-  bio: '',
-  budget: 250,
-  notifications: true,
-  acceptedTerms: false,
+  notes: '',
+  plan: 'team',
+  newsletter: false,
+  alerts: true,
+  seats: 3,
 };
 
-const BIO_LIMIT = 120;
+export const ControlledForm = () => {
+  // Single source of truth for the whole form.
+  const [form, setForm] = React.useState<FormState>(INITIAL_FORM);
+  // Controlled Dialog: the parent owns 'open', so the Confirm button can close it.
+  const [reviewOpen, setReviewOpen] = React.useState(false);
 
-/**
- * Controlled form: React owns every value, so the UI can react to typing
- * (validation, counters, enabling the submit button) at the cost of a re-render per keystroke.
- */
-export const ControlledProfileForm: React.FC = () => {
-  const [form, setForm] = React.useState<FormState>(initialState);
-  const [saved, setSaved] = React.useState<FormState | null>(null);
-
-  const emailValid = /^\S+@\S+\.\S+$/.test(form.email);
-  const emailInvalid = form.email !== '' && !emailValid;
-  const bioTooLong = form.bio.length > BIO_LIMIT;
-  const canSubmit = emailValid && !bioTooLong && form.acceptedTerms;
-
-  const reset = () => {
-    setForm(initialState);
-    setSaved(null);
+  // Functional update keeps the handler free of stale closures.
+  const update = (patch: Partial<FormState>) => {
+    setForm((prev) => ({ ...prev, ...patch }));
   };
 
+  const emailValid = /^[^@\s]+@[^@\s]+$/.test(form.email);
+  const showEmailError = form.email.length > 0 && !emailValid;
+
   return (
-    <form
-      style={{ display: 'grid', gap: 12, maxWidth: 420 }}
-      onSubmit={(event) => {
-        event.preventDefault();
-        setSaved(form);
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 420 }}>
+      <Text size={400} weight='semibold' block>
+        Controlled form
+      </Text>
+
       <Field
-        label="Email"
+        label='Work email'
         required
-        validationState={emailInvalid ? 'error' : emailValid ? 'success' : 'none'}
-        validationMessage={emailInvalid ? 'Enter a valid email address.' : undefined}
+        validationState={showEmailError ? 'error' : 'none'}
+        validationMessage={showEmailError ? 'Enter a valid email address' : undefined}
       >
         <Input
-          type="email"
+          type='email'
           value={form.email}
-          onChange={(_, data) => setForm((prev) => ({ ...prev, email: data.value }))}
+          onChange={(_, data) => update({ email: data.value })}
         />
       </Field>
 
-      <Field
-        label="Bio"
-        hint={`${form.bio.length}/${BIO_LIMIT} characters`}
-        validationState={bioTooLong ? 'error' : 'none'}
-        validationMessage={
-          bioTooLong ? `Shorten the bio to ${BIO_LIMIT} characters or fewer.` : undefined
-        }
-      >
+      <Field label='Notes'>
         <Textarea
-          value={form.bio}
-          resize="vertical"
-          onChange={(_, data) => setForm((prev) => ({ ...prev, bio: data.value }))}
+          resize='vertical'
+          value={form.notes}
+          onChange={(_, data) => update({ notes: data.value })}
         />
       </Field>
 
-      <Field label="Monthly budget">
-        <Slider
-          value={form.budget}
-          min={0}
-          max={1000}
-          step={50}
-          onChange={(_, data) => setForm((prev) => ({ ...prev, budget: data.value }))}
-        />
+      <Field label='Plan'>
+        <RadioGroup
+          value={form.plan}
+          onChange={(_, data) => update({ plan: data.value })}
+        >
+          <Radio value='personal' label='Personal' />
+          <Radio value='team' label='Team' />
+          <Radio value='enterprise' label='Enterprise' />
+        </RadioGroup>
       </Field>
 
-      <Field label="Notifications" orientation="horizontal">
-        <Switch
-          checked={form.notifications}
-          label="Email me about replies"
-          onChange={(_, data) => setForm((prev) => ({ ...prev, notifications: data.checked }))}
-        />
-      </Field>
-
+      {/* Checkbox is tri-state capable, so coerce 'mixed' to a boolean for this form. */}
       <Checkbox
-        checked={form.acceptedTerms}
-        label="I accept the terms and conditions"
-        onChange={(_, data) =>
-          setForm((prev) => ({ ...prev, acceptedTerms: data.checked === true }))
-        }
+        label='Email me product news'
+        checked={form.newsletter}
+        onChange={(_, data) => update({ newsletter: data.checked === true })}
       />
 
-      <Divider />
+      <Switch
+        label='Desktop notifications'
+        checked={form.alerts}
+        onChange={(_, data) => update({ alerts: data.checked })}
+      />
+
+      <Field label={`Seats: ${form.seats}`}>
+        <Slider
+          min={1}
+          max={25}
+          value={form.seats}
+          onChange={(_, data) => update({ seats: data.value })}
+        />
+      </Field>
 
       <div style={{ display: 'flex', gap: 8 }}>
-        <Button appearance="primary" type="submit" disabled={!canSubmit}>
-          Save
+        <Button appearance='secondary' onClick={() => setForm(INITIAL_FORM)}>
+          Reset
         </Button>
-        <Button appearance="outline" onClick={reset}>
-          Reset state to initial values
-        </Button>
-      </div>
 
-      {saved && (
-        <MessageBar intent="success">
-          <Text>
-            Saved {saved.email} - budget {saved.budget} - notifications{' '}
-            {saved.notifications ? 'on' : 'off'}
-          </Text>
-        </MessageBar>
-      )}
-    </form>
+        <Dialog open={reviewOpen} onOpenChange={(_, data) => setReviewOpen(data.open)}>
+          <DialogTrigger disableButtonEnhancement>
+            <Button appearance='primary' disabled={!emailValid}>
+              Review and submit
+            </Button>
+          </DialogTrigger>
+          <DialogSurface>
+            <DialogBody>
+              <DialogTitle>Review your request</DialogTitle>
+              <DialogContent>
+                <Text block>Email: {form.email}</Text>
+                <Text block>Plan: {form.plan}</Text>
+                <Text block>Seats: {form.seats}</Text>
+              </DialogContent>
+              <DialogActions>
+                <DialogTrigger disableButtonEnhancement action='close'>
+                  <Button appearance='secondary'>Cancel</Button>
+                </DialogTrigger>
+                <Button appearance='primary' onClick={() => setReviewOpen(false)}>
+                  Confirm
+                </Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
+      </div>
+    </div>
   );
 };
 ```
 
-### Hybrid panel: controlled Switch, uncontrolled keyed Inputs
+### Mixed tree: controlled Accordion and Popover, uncontrolled TabList
 
-A settings panel where only the mode lives in React state (a controlled Switch). The numeric Inputs stay uncontrolled and are re-keyed on mode change or on 'Discard edits' so their defaultValue is re-applied, and the values are still read once on submit with FormData.
+A settings panel where the parent controls which accordion sections are open (so Expand all / Collapse all is possible) and controls a Popover so it can be dismissed from inside, while each AccordionPanel keeps an uncontrolled TabList that owns its own selection.
 
 ```tsx
 import * as React from 'react';
-import { Badge, Button, Divider, Field, Input, MessageBar, Switch, Text } from '@fluentui/react-components';
+import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  Button,
+  Popover,
+  PopoverSurface,
+  PopoverTrigger,
+  Tab,
+  TabList,
+  Text,
+} from '@fluentui/react-components';
 
-type Mode = 'basic' | 'advanced';
+const SECTIONS = [
+  { value: 'profile', header: 'Profile', summary: 'Name, avatar and contact details.' },
+  { value: 'usage', header: 'Usage', summary: 'Requests, storage and seats.' },
+  { value: 'billing', header: 'Billing', summary: 'Invoices and payment method.' },
+] as const;
 
-const defaultsByMode: Record<Mode, { timeout: string; retries: string }> = {
-  basic: { timeout: '5000', retries: '1' },
-  advanced: { timeout: '30000', retries: '5' },
-};
-
-export const HybridSettingsPanel: React.FC = () => {
-  // Controlled shell: React owns the mode and re-renders when it changes.
-  const [mode, setMode] = React.useState<Mode>('basic');
-  // Uncontrolled leaves: bumping this counter remounts the inputs and re-applies defaults.
-  const [revision, setRevision] = React.useState(0);
-  const [result, setResult] = React.useState<string>('');
-
-  const defaults = defaultsByMode[mode];
-  const fieldKey = (name: string) => `${name}-${mode}-${revision}`;
+export const MixedStatePanel = () => {
+  // CONTROLLED: the parent owns which sections are open.
+  const [openItems, setOpenItems] = React.useState<string[]>(['profile']);
+  // CONTROLLED: the parent owns popover visibility so it can close on demand.
+  const [helpOpen, setHelpOpen] = React.useState(false);
 
   return (
-    <form
-      style={{ display: 'grid', gap: 12, maxWidth: 420 }}
-      onSubmit={(event) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        setResult(`mode=${mode} timeout=${data.get('timeout')} retries=${data.get('retries')}`);
-      }}
-    >
-      <Switch
-        checked={mode === 'advanced'}
-        label="Show advanced settings"
-        onChange={(_, data) => setMode(data.checked ? 'advanced' : 'basic')}
-      />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 480 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Text size={400} weight='semibold'>
+          Settings
+        </Text>
 
-      <MessageBar intent={mode === 'advanced' ? 'warning' : 'info'}>
-        {mode === 'advanced'
-          ? 'Advanced mode applies long timeouts and aggressive retries.'
-          : 'Basic mode uses safe defaults for most users.'}
-      </MessageBar>
-
-      <Text>
-        Active mode:{' '}
-        <Badge appearance="tint" color={mode === 'advanced' ? 'warning' : 'success'}>
-          {mode}
-        </Badge>
-      </Text>
-
-      <Field label="Request timeout (ms)" hint={`Default for ${mode} mode: ${defaults.timeout}`}>
-        {/* The key includes the mode, so switching modes remounts the input with a new default. */}
-        <Input
-          key={fieldKey('timeout')}
-          name="timeout"
-          type="number"
-          defaultValue={defaults.timeout}
-        />
-      </Field>
-
-      <Field label="Retries" hint={`Default for ${mode} mode: ${defaults.retries}`}>
-        <Input
-          key={fieldKey('retries')}
-          name="retries"
-          type="number"
-          defaultValue={defaults.retries}
-        />
-      </Field>
-
-      <Divider />
+        <Popover open={helpOpen} onOpenChange={(_, data) => setHelpOpen(data.open)} withArrow>
+          <PopoverTrigger disableButtonEnhancement>
+            <Button size='small' appearance='subtle'>
+              What is this?
+            </Button>
+          </PopoverTrigger>
+          <PopoverSurface>
+            <Text block>Expand a section to see its details.</Text>
+            <Button size='small' appearance='primary' onClick={() => setHelpOpen(false)}>
+              Got it
+            </Button>
+          </PopoverSurface>
+        </Popover>
+      </div>
 
       <div style={{ display: 'flex', gap: 8 }}>
-        <Button appearance="primary" type="submit">
-          Apply
+        <Button size='small' onClick={() => setOpenItems(SECTIONS.map((s) => s.value))}>
+          Expand all
         </Button>
-        <Button appearance="outline" onClick={() => setRevision((current) => current + 1)}>
-          Discard edits
+        <Button size='small' onClick={() => setOpenItems([])}>
+          Collapse all
         </Button>
       </div>
 
-      {result !== '' && (
-        <Text block font="monospace" size={200}>
-          {result}
-        </Text>
+      <Accordion
+        multiple
+        collapsible
+        openItems={openItems}
+        onToggle={(_, data) => setOpenItems([...data.openItems] as string[])}
+      >
+        {SECTIONS.map((section) => (
+          <AccordionItem key={section.value} value={section.value}>
+            <AccordionHeader>{section.header}</AccordionHeader>
+            <AccordionPanel>
+              <Text block>{section.summary}</Text>
+              {/* UNCONTROLLED: each TabList owns its own selection. */}
+              <TabList defaultSelectedValue='summary'>
+                <Tab value='summary'>Summary</Tab>
+                <Tab value='details'>Details</Tab>
+              </TabList>
+            </AccordionPanel>
+          </AccordionItem>
+        ))}
+      </Accordion>
+    </div>
+  );
+};
+```
+
+### Dual-API component with a useControllableState hook
+
+A small reusable hook plus a Disclosure component that accepts either open + onOpenChange (controlled) or defaultOpen (uncontrolled), following the same convention every Fluent component uses. The demo shows the same component used in both modes.
+
+```tsx
+import * as React from 'react';
+import { Button, Checkbox, Switch, Text } from '@fluentui/react-components';
+
+/** Mirrors the Fluent convention: `value` controls, `defaultValue` seeds, `onChange` always fires. */
+function useControllableState<T>(
+  value: T | undefined,
+  defaultValue: T,
+  onChange?: (next: T) => void,
+) {
+  const isControlled = value !== undefined;
+  const [uncontrolled, setUncontrolled] = React.useState<T>(defaultValue);
+  const current = isControlled ? (value as T) : uncontrolled;
+
+  const setValue = React.useCallback(
+    (next: T) => {
+      if (!isControlled) {
+        setUncontrolled(next);
+      }
+      onChange?.(next);
+    },
+    [isControlled, onChange],
+  );
+
+  return [current, setValue] as const;
+}
+
+type DisclosureProps = {
+  title: string;
+  children: React.ReactNode;
+  /** Controlled: pass this together with onOpenChange. */
+  open?: boolean;
+  /** Uncontrolled: the initial value, ignored after mount. */
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+};
+
+export const Disclosure: React.FC<DisclosureProps> = ({
+  title,
+  children,
+  open,
+  defaultOpen = false,
+  onOpenChange,
+}) => {
+  const [isOpen, setIsOpen] = useControllableState(open, defaultOpen, onOpenChange);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <Switch checked={isOpen} onChange={(_, data) => setIsOpen(data.checked)} label={title} />
+      {isOpen && <Text block>{children}</Text>}
+    </div>
+  );
+};
+
+export const OptionalControlledExample = () => {
+  const [parentControlled, setParentControlled] = React.useState(false);
+  const [parentOpen, setParentOpen] = React.useState(false);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 420 }}>
+      <Checkbox
+        checked={parentControlled}
+        onChange={(_, data) => setParentControlled(data.checked === true)}
+        label='Let the parent own the state'
+      />
+
+      <Button disabled={!parentControlled} onClick={() => setParentOpen((o) => !o)}>
+        Toggle from the parent (only works when controlled)
+      </Button>
+
+      {parentControlled ? (
+        <Disclosure title='Details' open={parentOpen} onOpenChange={setParentOpen}>
+          The parent owns this state, so the external button works.
+        </Disclosure>
+      ) : (
+        <Disclosure title='Details' defaultOpen>
+          This instance owns its own state; the external button is ignored.
+        </Disclosure>
       )}
-    </form>
+    </div>
   );
 };
 ```
 
 ## Pitfalls
 
-- Passing a controlled prop without its change handler (or the handler without the prop). `value` without `onChange` renders a silently read-only input, and `onChange` without `value`/`defaultValue` produces a field that looks controlled but is not. Ship the pair together.
-- Letting the controlled prop flip between `undefined` and a defined value across renders (for example `value={user?.email}` while `user` loads asynchronously). React switches the field from uncontrolled to controlled, warns, and the typed value can be lost. Initialize state (`useState('')`) or coalesce (`value={user?.email ?? ''}`), and never pass `value` and `defaultValue` on the same element.
-- Expecting `defaultValue` / `defaultChecked` to update when props change — they are applied on the first render only. When defaults are dynamic (a mode, a loaded record), re-key the control (`key={mode}`) so it remounts. Conversely, do not re-key on every keystroke: each remount drops caret position, selection, scroll, IME composition, and focus.
-- Mutating state inside a controlled handler, e.g. `setForm((prev) => { prev.email = data.value; return prev; })`. Returning the same object makes React bail out of the re-render and the input appears frozen. Always return a new object (`{ ...prev, email: data.value }`).
-- Trying to reset a controlled form with a native `type='reset'` button or `form.reset()`. The DOM clears, but React re-applies the state on the next render and the values snap back. Reset the state object (`setForm(initialState)`) instead, and reserve native reset for uncontrolled forms.
-- Reading an uncontrolled value during render or in an effect that never re-runs. Nothing re-renders while the user types, so derived UI (character counters, enable/disable, previews) stays stale. Read uncontrolled values on submit/interaction, or lift just that one field into state.
-- Assuming `Checkbox`'s payload is a boolean. `data.checked` can be `'mixed'`; normalize it with `data.checked === true` before storing it in a `boolean` state field, and remember `Slider`/`Input`/`Textarea` deliver `data.value` (a number for Slider) rather than the raw event target.
+- Passing a controlled prop without applying the change: `<Input value={name} />` with no state update makes the Input appear read-only (and React warns for controlled-to-uncontrolled switches). Always ship the controlled prop together with its callback, or drop to `defaultValue`.
+- Passing `undefined` to a controlled prop: `value={maybeUndefined}` makes React treat the input as uncontrolled and warns when it flips. Use a sentinel such as `value={name ?? ''}` and keep the prop defined for the lifetime of the instance.
+- Expecting `defaultValue` / `defaultChecked` / `defaultOpen` changes to take effect: they only seed state at mount. To reset uncontrolled state, remount the subtree with a new `key`; to change it later, move to the controlled prop.
+- Mutating state arrays instead of replacing them: `openItems.push(value)` (or writing to the array returned by `data.openItems`) produces the same reference and no re-render. Always create a new array, e.g. `setOpenItems([...data.openItems])`.
+- Assuming `data.checked` is a boolean on Checkbox: it is `boolean | 'mixed'`, so storing it directly in a `boolean` state fails to compile or misrepresents the indeterminate state. Coerce deliberately with `data.checked === true` or widen the state type.
+- Treating `TabList.onTabSelect` values as strings: `Tab.value` is `unknown` by design, so `data.value` is `unknown`. Type the state as `unknown` or narrow it explicitly instead of casting blindly.
+- Controlling a Dialog/Popover/Menu without `onOpenChange`: Escape, backdrop click and close triggers stop working and the surface can only be closed by your code. Controlled surfaces must always propagate `data.open` back into state.
+- Mirroring props into state with `useEffect` (`useState(props.value)` plus a sync effect): this creates two sources of truth and a render-lag. Derive the value during render, or lift the state into the parent instead.
+- Over-controlling high-frequency inputs: keeping a Slider or Input in a top-level state object re-renders the whole tree on every keystroke or drag tick. Keep the state local to the smallest component that needs it, or leave the control uncontrolled.
 
 ## Accessibility
 
-Controlled vs uncontrolled changes who stores the value, not the rendered markup, so ARIA semantics are unchanged — but the behavior around it matters. (1) Always give fields an accessible name through Field (label plus hint/validationMessage) or an explicit label; a controlled input is no more accessible than an uncontrolled one, and a placeholder is never a label. Field also wires validationState/validationMessage into the control's accessible description, so screen reader users hear exactly the error text sighted users see. (2) Keep programmatic changes in the React/DOM render path: when you reset or load a value, re-render it (state or key) instead of assigning element.value directly, otherwise assistive technology may announce a stale value. (3) A key-based remount destroys the focused element, so focus falls back to the document. After a reset, move focus deliberately (to the form or the first field) and announce the reset with a MessageBar using the default politeness='polite'; reserve politeness='assertive' for urgent errors. (4) In hybrid panels, when a controlled Switch hides or disables other fields, keep focus on a control that still exists and communicate the mode change in text — pair Badge color with a text label rather than relying on color alone. (5) Keep submit controls as <Button type='submit'> inside a <form> so Enter submits and native FormData flows keep working; uncontrolled fields also participate in browser autofill, which many users depend on.
+Both modes render identical, equally accessible DOM - the difference is only where the state lives, so accessibility work is about keeping the rendered state truthful:
+
+- Always pair the control with a programmatic label: use Field for Input/Textarea/Slider/Rating or the label slot of Checkbox/Switch/Radio. A controlled control with no label is still unlabeled.
+- Keep change handlers synchronous. If you debounce or defer a controlled update, the rendered value (and therefore the value screen readers announce) can disagree with what the user typed or selected.
+- A controlled Dialog, Popover or Menu MUST implement onOpenChange. Without it Escape, backdrop clicks and close triggers cannot dismiss the surface, which traps keyboard users. The same applies to a controlled Accordion/TabList whose parent never applies data.openItems / data.value.
+- Do not remove focusability to 'lock' a value. Use disabled or disabledFocusable on Button, or simply omit the change handler and let the component stay uncontrolled; hiding interactivity breaks focus order.
+- Preserve the tri-state signal: Checkbox reports data.checked as boolean | 'mixed'. Collapsing 'mixed' into false/true for a boolean state is fine for a simple form, but if the indeterminate state is meaningful to the user, store boolean | 'mixed' so assistive technology keeps announcing 'partially checked'.
+- Remount-based resets (key changes) destroy the DOM: focus is lost and an in-progress IME composition is discarded. After a reset, move focus back to the first field, and never remount while a controlled Dialog is open.
+- Keep controlled numeric values within min/max (Slider, SpinButton, Rating) so the thumb's ARIA value stays valid; clamping belongs in your update handler, not in the render output.
 
 ## Components used
 
-- [Badge](../../components/badge.md)
+- [Accordion](../../components/accordion.md)
+- [AccordionHeader](../../components/accordion-header.md)
+- [AccordionItem](../../components/accordion-item.md)
+- [AccordionPanel](../../components/accordion-panel.md)
 - [Button](../../components/button.md)
 - [Checkbox](../../components/checkbox.md)
-- [Divider](../../components/divider.md)
+- [Dialog](../../components/dialog.md)
+- [DialogActions](../../components/dialog-actions.md)
+- [DialogBody](../../components/dialog-body.md)
+- [DialogContent](../../components/dialog-content.md)
+- [DialogSurface](../../components/dialog-surface.md)
+- [DialogTitle](../../components/dialog-title.md)
+- [DialogTrigger](../../components/dialog-trigger.md)
 - [Field](../../components/field.md)
 - [Input](../../components/input.md)
-- [MessageBar](../../components/message-bar.md)
+- [Popover](../../components/popover.md)
+- [PopoverSurface](../../components/popover-surface.md)
+- [PopoverTrigger](../../components/popover-trigger.md)
+- [Radio](../../components/radio.md)
+- [RadioGroup](../../components/radio-group.md)
+- [Rating](../../components/rating.md)
 - [Slider](../../components/slider.md)
 - [Switch](../../components/switch.md)
+- [Tab](../../components/tab.md)
+- [TabList](../../components/tab-list.md)
 - [Text](../../components/text.md)
 - [Textarea](../../components/textarea.md)
 

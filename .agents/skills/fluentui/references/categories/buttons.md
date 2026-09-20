@@ -2,73 +2,79 @@
 
 ## Overview
 
-Buttons are the action primitives of Fluent UI v9: the user presses them to make something happen in the current context, whether that is submitting a form, saving a draft, deleting a row, or opening a menu of related actions. In this category the Button component carries the full emphasis range through its appearance prop (secondary, primary, outline, subtle, and transparent), adapts its silhouette through shape (rounded, circular, square), its footprint through size, and its icon placement through iconPosition. Every Button exposes exactly two slots, root and icon, so the visible content of a button is its children plus at most one leading or trailing icon. Because a button's meaning is carried by its label, its emphasis, and its position relative to other actions, button design is mostly a hierarchy decision rather than a styling decision. Use Button when an interaction performs work; reach for the navigation components such as Link when the interaction moves the user somewhere.
+The buttons category covers the five controls used to trigger an action: Button (the default single-action control), CompoundButton (an action carrying a short explanatory second line), ToggleButton (an action holding a persistent on/off state), MenuButton (a trigger that reveals a menu of commands), and SplitButton (a dominant action paired with a menu of related alternatives). They are deliberately aligned: each accepts appearance, size, shape, iconPosition, disabled, and disabledFocusable, so any button can be swapped for another in the same surface without breaking visual rhythm or density. Choosing correctly is mostly a question of intent — does the click change state, open a menu, toggle a setting, or stand in for a link — and of emphasis, which is expressed through appearance rather than through color or custom styling.
 
 ## When to Use
 
-Reach for Button whenever a click performs an action or changes state in place: confirming, saving, cancelling, deleting, retrying, or revealing a menu of follow-up actions. Choose the appearance by emphasis rather than by taste: primary for the single most important action in a view or surface, secondary as the everyday default for most actions, and outline, subtle, or transparent for actions that must stay available but must not compete with the surrounding content, such as inside a dense toolbar. Choose shape circular together with an icon only when the glyph is universally understood and the button is a peer among other controls; keep rounded or square when a text label is present. Choose size to match the density of the container, and use Toolbar when a set of buttons shares a size or orientation so the grouping stays consistent. Use disabledFocusable instead of disabled when the action should stay discoverable and the user should still be able to reach it and learn why it is unavailable. Use Link instead of Button when activating the control navigates to another location, and use Menu together with a Button when one control must reveal a set of actions rather than perform a single one. Use Tooltip alongside icon-only or disabledFocusable buttons so their meaning or their reason for being unavailable is never carried by the icon or the visual state alone.
+Reach for Button whenever a single, immediate action is the whole story, and pick its appearance to express hierarchy: primary for the one most important action on a surface, secondary as the everyday default, and outline, subtle, or transparent as emphasis drops for dense regions such as toolbars, card headers, and dialogs. Move to CompoundButton when the action label alone is ambiguous and a short supporting sentence will help the user commit — keep the verb in the primary content and the explanation in the secondary content. Use ToggleButton for a persistent on/off state that belongs to the application rather than a form (filters, pins, mute), and use MenuButton when the click should not perform an action at all but open a set of commands, since the menu itself holds the real MenuItems. Choose SplitButton only when one action is used most of the time and a small set of closely related alternatives exists; the primary action region runs the default and the menu region shows the rest. Because all five share size, shape, and iconPosition, you can change the control type as requirements evolve without re-tuning the layout, and when buttons live inside a persistent command bar, use the Toolbar family (Toolbar, ToolbarButton, ToolbarToggleButton, ToolbarRadioButton) so they inherit shared size, vertical orientation, and group-level checked values.
 
 ## Best Practices
 
 ### Do's
 
-- Pick appearance by emphasis: reserve primary for the single most important action in the surface, use secondary as the default for ordinary actions, and use outline, subtle, or transparent when a button must recede against busy content such as a toolbar or a card with its own primary action.
-- Control a button's visual weight with the supported props instead of custom CSS: size for the footprint, shape for the silhouette (rounded, circular, square), and iconPosition (before or after) for where the icon sits relative to the label.
-- Write labels as short verb phrases that name the outcome, such as Save draft, Delete file, or Retry upload, and keep the label stable before, during, and after activation so the target does not move or change meaning under the pointer.
-- Keep one icon per button through the icon slot and apply iconPosition consistently across a group, so scanning a row of buttons does not require re-reading each one.
-- Keep a group of buttons uniform in size and appearance within a Toolbar, using the Toolbar size or vertical props so the grouping stays visually and structurally consistent.
-- Use disabledFocusable rather than disabled when users still need to discover the action, and pair it with a Tooltip that explains why the action is currently unavailable.
-- Give icon-only circular buttons an accessible name and a Tooltip, and choose the Tooltip relationship value deliberately: label when the tooltip is the button's only visible name, description when it adds explanation to an already-labeled button.
-- When an action is in progress, keep the button in place and let it communicate progress, pairing it with Spinner, whose size and appearance props can be matched to the surrounding button and surface.
+- Choose appearance by hierarchy rather than taste: primary for the single most important action on the surface, secondary as the default, and outline, subtle, or transparent as the button recedes into toolbars, card actions, and dialog footers.
+- Keep appearance, size, shape, and iconPosition consistent for every button in the same surface so a row of actions reads as a set; swapping a plain Button for a ToggleButton, MenuButton, or SplitButton keeps that parity because the props are shared.
+- Use disabledFocusable instead of disabled when the user must still be able to reach the control with the keyboard to discover it; reserve disabled for cases where the control should be fully out of the interaction flow.
+- Reach for CompoundButton when a short second line of explanation materially improves the decision, putting the action verb in the primary content and the supporting sentence in the secondary content.
+- Use ToggleButton, with checked or defaultChecked, for a durable on/off state outside a form, and set isAccessible when the state should be announced as a toggle rather than a plain button.
+- Use MenuButton when the trigger should reveal choices instead of acting, and put the real commands in MenuItem, MenuItemCheckbox, MenuItemRadio, and MenuItemLink so keyboard and dismissal behavior come from the menu system.
+- Use SplitButton when one action dominates and a few related alternatives exist, letting the primary action region run the default and the menu region expose the alternatives with its own clearly separated label.
+- Give icon-only buttons, especially circular and square shapes, an accessible name and a Tooltip, because the icon slot contributes no text to the button's name.
+- Place grouped buttons inside Toolbar with ToolbarButton, ToolbarToggleButton, and ToolbarRadioButton so checked values and grouping are managed for you instead of by hand.
 
 ### Don'ts
 
-- Do not use Button to navigate to another page or view; that breaks expected link behavior and semantics. Use Link instead, with its appearance and inline props for low-emphasis or in-text link styling.
-- Do not place more than one primary button in the same surface, and do not promote an action to primary merely because it is frequently used; competing primaries flatten the visual hierarchy and slow decision making.
-- Do not rely on the disabled prop as a substitute for validation or messaging. A disabled button that gives no reason for being disabled is a dead end; prefer keeping the action available with a clear validation message, or use disabledFocusable with an explanatory Tooltip.
-- Do not nest interactive content inside a Button or overload the icon slot with non-icon content; the component exposes only root and icon, and any additional behavior belongs in a separate control such as a Menu composed with the button.
-- Do not resize, recolor, or relabel buttons through custom styling, and do not apply subtle or transparent appearances on top of busy, patterned, or low-contrast backgrounds where the control stops being legible.
-- Do not convey state, severity, or disabled-ness through color alone; pair the button with text, an icon, or a surrounding component such as Badge or MessageBar that states the condition explicitly.
-- Do not reorder buttons visually with CSS away from their DOM order, and do not move the most destructive action next to the most common one; both make keyboard traversal and muscle memory unreliable.
+- Don't place more than one primary button on the same surface; competing primary emphasis makes the most likely action impossible to find.
+- Don't use a Button to navigate to a URL; use Link for navigation, MenuItemLink for link items inside a menu, and the navigation components for structural navigation, and keep buttons for actions that change application state.
+- Don't use ToggleButton to capture form data or to represent a set of mutually exclusive choices; its checked state is not submitted like a form control, and independent toggles will not coordinate with each other.
+- Don't disable a button as the only explanation for why an action is unavailable; users cannot focus a disabled button to learn why, so surface the reason in adjacent text, a Field validationState of error, or a MessageBar.
+- Don't cram long sentences or interactive content into a button label, and don't place links or other controls inside CompoundButton's secondary content; keep labels to a visible verb and short object.
+- Don't hand-roll icon buttons by passing raw glyphs through the icon slot without sizing through the component, and don't rely on iconPosition or shape alone to communicate meaning.
+- Don't add your own tab stops or roving focus to a row of buttons; use Toolbar and its button variants so arrow-key navigation and grouping stay correct.
+- Don't wrap a plain Button in an extra clickable container to fake a split or menu affordance; use SplitButton or MenuButton, which already expose the two regions and the menu semantics.
 
 ## Anti-Patterns
 
-### Using Button for navigation
+### Multiple primary buttons competing on one surface
 
-❌ A button that navigates looks like an action but behaves like a link, so users cannot open it in a new tab or copy its destination, and assistive technology announces the wrong role for what the control does.
+❌ Primary exists to mark the single most important action. When a dialog, form, or card shows several primary buttons, users can no longer tell which action is the expected one and scan time increases sharply.
 
-✅ Use Link for anything that moves the user to another location, using its appearance prop for default or subtle emphasis and its inline prop when the link sits inside a sentence. Reserve Button for work performed in the current context.
+✅ Give each surface exactly one primary button and demote the rest to secondary, outline, subtle, or transparent according to their weight. If one action dominates but related alternatives exist, express that with SplitButton instead of adding a second primary.
 
-### Primary button inflation
+### Using a button for navigation
 
-❌ When several buttons in one surface use the primary appearance, the single most important action no longer stands out, and the difference between secondary and primary stops communicating anything about risk or priority.
+❌ A button for a URL breaks expected browser behavior such as opening in a new tab, copying the link address, and correct semantics for assistive technology, and it makes the action region indistinguishable from state-changing commands.
 
-✅ Allow one primary button per surface and demote everything else to secondary, outline, subtle, or transparent so the emphasis ordering matches the actual priority of the actions.
+✅ Use Link for URL navigation, MenuItemLink for link entries inside menus, and the navigation components for structural navigation. Keep Button, CompoundButton, ToggleButton, MenuButton, and SplitButton for actions that change application state.
 
-### Disabled buttons with no explanation
+### Forcing selection semantics into ToggleButton
 
-❌ A button left in the disabled state disappears from the keyboard tab order and gives no feedback about what the user must do to enable it, so it reads as broken rather than as gated.
+❌ ToggleButton holds a checked state but is not a form control and does not coordinate with other toggles. Building a group of them for mutually exclusive or multi-select choices produces states that never submit, never announce as a set, and drift out of sync.
 
-✅ Prefer keeping the action available and surfacing validation through a Field or MessageBar. When the action must be blocked, use disabledFocusable so it stays reachable and pair it with a Tooltip that states the reason, with the relationship value chosen to match whether the tooltip names or describes the button.
+✅ Use Checkbox or Switch when the value belongs to a form, RadioGroup for mutually exclusive choices, and Toolbar with ToolbarToggleButton or ToolbarRadioButton and its checked value handling when the choices are grouped commands in a bar.
 
-### Icon-only buttons with no name or tooltip
+### Disabled buttons as the only explanation for unavailability
 
-❌ An unlabeled glyph depends entirely on visual interpretation, is announced without meaning by screen readers, and fails for users who do not share the icon's assumed convention.
+❌ A disabled button is removed from the tab order, so keyboard and screen reader users cannot focus it, cannot reach its Tooltip, and cannot learn why the action is unavailable. Focus can also be lost when a control becomes disabled while it was focused.
 
-✅ Give the button an accessible name and add a Tooltip with the label relationship, then choose shape circular and a size that keeps a comfortably large target. If the icon's meaning is not universally clear, use a text label instead.
+✅ Prefer disabledFocusable when the control should stay discoverable, and pair it with a visible reason such as Field with validationState set to error, a hint, or a MessageBar. Keep the action enabled and validate on activation when the reason needs to be explained in context.
 
-### Restyling buttons instead of using the emphasis and shape props
+### SplitButton or MenuButton where a single action would do
 
-❌ Hand-tuned sizes, colors, and radii drift from the theme, break contrast in the alternative theme or in right-to-left layout, and silently diverge from every other button in the product.
+❌ A split button with one real option, or a menu button that opens a menu containing a single command, adds a click, implies alternatives that do not exist, and teaches users that carets are meaningless.
 
-✅ Express intent through appearance, shape, size, and iconPosition, keep groups consistent with Toolbar's size and vertical props, and let the Provider theme and direction settings drive the resolved values.
+✅ Use a plain Button when there is exactly one action. Use MenuButton when every choice lives in the menu, and reserve SplitButton for cases with a genuinely dominant default action plus several related alternatives. Keep appearance, size, and shape identical across the swap so the layout does not shift.
 
 ## Accessibility
 
-Buttons are natively focusable and activate with Enter and Space, so do not reimplement that behavior or attach click handling to non-button elements, and keep visual order aligned with DOM order so the tab sequence matches what users see. Every button needs a programmatic name: text labels normally supply it, and icon-only circular buttons must be given an accessible name in addition to their visual glyph. Tooltips are not a substitute for a name on icon-only buttons; set the tooltip relationship prop correctly so assistive technology either treats it as the label (when it is the only visible name) or as additional description, and never mark it inaccessible when it carries unique information. When you use disabledFocusable, the control remains reachable by keyboard and reports an unavailable state, which is why it should be paired with a Tooltip describing the reason; a plain disabled button is removed from the tab order entirely, so use it only when the action is genuinely irrelevant to the current task. Rely on the theme system rather than hard-coded colors so appearances keep sufficient contrast, and validate the layout in both text directions through the Provider dir prop so leading and trailing icons and labels mirror correctly. Icon-only buttons still need an adequate target size, which the size prop is the supported way to achieve, and focus styling must remain visible in every appearance, including subtle and transparent buttons placed on top of colored surfaces.
+Every component in this category renders a focusable button, so each one needs an accessible name: use visible label text wherever possible and an aria-label only for icon-only buttons in rounded, circular, or square shapes, since icons and slots contribute no name on their own. Keyboard behavior is expected to match the native button: Enter and Space activate, and MenuButton and SplitButton open their menu with the standard menu keys while the menu itself owns arrow-key traversal and dismissal. SplitButton exposes two separate focusable regions, so give the primary action and the menu trigger distinct names that say what each does rather than relying on the caret alone. ToggleButton carries state, so it must expose checked rather than only a color change; never encode on/off or destructive intent in color alone, and pair state with a stable label so the announcement does not contradict the visible text. Use disabledFocusable when a control must remain discoverable by keyboard users and screen readers, because disabled buttons are removed from the tab order and their Tooltip or explanation can never be reached. Provide Tooltip with an appropriate relationship value when a label is visually hidden, and mirror that text into the accessible name so the description and the name agree. Focus management, grouping, and roving tabindex inside command bars belong to Toolbar and its button variants; do not add tabIndex or key handlers on top of them.
 
 ## Components in this category
 
 - [Button](../components/button.md)
+- [CompoundButton](../components/compound-button.md)
+- [MenuButton](../components/menu-button.md)
+- [SplitButton](../components/split-button.md)
+- [ToggleButton](../components/toggle-button.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

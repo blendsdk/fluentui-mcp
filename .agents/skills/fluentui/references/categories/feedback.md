@@ -2,79 +2,97 @@
 
 ## Overview
 
-The feedback category groups the Fluent UI React v9 components that tell users what is happening: Dialog, MessageBar, Progress, Spinner, Toast, and Tooltip. Together they span the full range of attention — blocking decisions the user must resolve (Dialog), page- or section-scoped status and results that should persist (MessageBar), measurable activity (Progress), short indeterminate waits (Spinner), brief confirmations that pass on their own (Toast), and supplementary inline explanation (Tooltip). Choosing among them is mostly a question of how much attention the message deserves, how long it must stay visible, and whether the user has to act before continuing. Getting that mapping right matters more than any individual prop, because these surfaces compete for the same scarce resource: the user's focus.
+Feedback components tell the user what just happened, what is happening right now, and what needs their attention before they continue. In this category the Dialog family (Dialog, DialogSurface, DialogContent, DialogTitle, DialogBody, DialogActions and DialogTrigger) provides composable surfaces for content and decisions that temporarily take over the interface; MessageBar with MessageBarGroup, MessageBarTitle, MessageBarBody and MessageBarActions delivers persistent inline status at page, form or section level; Toast with Toaster, ToastTitle, ToastBody, ToastFooter and ToastTrigger delivers lightweight transient notices about completed work; ProgressBar and Spinner communicate measurable and unmeasured waiting; and Tooltip supplies a short label or description for an existing control. All of these share one visual language of intent, appearance and presence motion, so the decision is less about which component looks right and more about how long the message must live, how urgent it is, and whether the user has to act on it.
 
 ## When to Use
 
-Reach for Dialog when the user must make a decision or complete a step before they can continue, and the rest of the interface should be suspended while they do it. Reach for MessageBar when the status belongs to a page, form, or section and must remain visible after the triggering moment has passed — validation summaries, permission or connectivity warnings, results of a save. Reach for Progress when the work has a known, meaningful extent that you can express with value and max, and for Spinner when the wait is short and its duration is unknown; prefer Spinner with a delay over showing a spinner instantly. Reach for Toast for lightweight, non-blocking confirmation of an action the user just took, where the message is self-contained and losing it is not harmful. Reach for Tooltip only for supplemental information — a short definition, a keyboard hint, an expanded name — that the user can proceed without. If the message requires action, cannot be missed, or must survive a re-render or a page change, choose Dialog or MessageBar rather than Toast or Tooltip.
+Reach for Dialog when the user must acknowledge, confirm or complete something before continuing, and choose the modalType that matches how blocking that interaction should be. Reach for MessageBar when the message belongs to a page, form or section and should stay visible until the underlying condition changes; its intent and politeness give the message both a semantic color and a decision about whether it interrupts a screen reader. Reach for Toast together with a mounted Toaster when an operation finishes in the background and the user only needs a brief confirmation or an optional follow-up action. Reach for ProgressBar when progress can be expressed as a value against a max, and for Spinner when the wait is short and the amount of work is unknown. Reach for Tooltip only to add a short label or a short description to a control that is already present and interactive; it is never the only carrier of information the user needs.
 
 ## Best Practices
 
 ### Do's
 
-- Choose the surface by the attention the message deserves: Dialog when the user must resolve something first, MessageBar when the status belongs to a region and must persist, Toast for a passing confirmation, Tooltip when the extra text is helpful but optional.
-- Always set Tooltip's required relationship prop to match the content precisely — 'label' when the tooltip supplies the trigger's name, 'description' when it explains a control that is already named, and 'inaccessible' when the content merely echoes visible text and should not be announced.
-- Keep Progress truthful by supplying both value and max together and updating them as the work advances; let the bar's color reflect meaning (success, warning, error, brand) rather than decoration, and use shape and thickness to match the surrounding layout's visual weight.
-- Use Spinner's delay so the indicator appears only after a wait long enough to be worth showing, and pair any non-trivial spinner with label content and a labelPosition that fits the surrounding layout.
-- Pick MessageBar politeness deliberately: keep the default polite behavior for status and results, and reserve assertive for messages the user genuinely cannot wait to hear.
-- Use Dialog's unmountOnClose and inertTrapFocus to control whether the surface stays mounted and how focus is contained, so a modal flow behaves consistently across repeat openings.
-- Set Toast's appearance to match the tone of the confirmation, and make each toast's message self-contained since it appears detached from the control that produced it.
-- Keep the number of simultaneous feedback surfaces low: allow one modal Dialog at a time, and avoid restating the same event in both a Toast and a MessageBar.
+- Compose each pattern from its intended parts: DialogSurface with DialogTitle, DialogBody and DialogActions; MessageBar with MessageBarTitle, MessageBarBody and MessageBarActions; Toast with ToastTitle, ToastBody and ToastFooter rendered inside a mounted Toaster.
+- Let DialogTrigger, ToastTrigger and the Tooltip content slot own the relationship between a trigger and the surface it opens, so focus handling, ARIA wiring and positioning stay consistent.
+- Choose Dialog modalType deliberately: use the blocking modal form for destructive or irreversible decisions, and keep non-modal dialogs for content the user can safely ignore.
+- Set MessageBar intent to match meaning rather than decoration, and use politeness to decide whether a message interrupts an active announcement or waits its turn.
+- Render stacked or animated messages through MessageBarGroup, and use its animate option to choose whether items animate out only or both in and out.
+- Use ProgressBar value and max to show measurable work, or omit value to render an indeterminate bar, and pick color, thickness and shape to match the surrounding surface.
+- Give Spinner a meaningful visible label, position it with labelPosition, and use delay so fast operations do not flash a spinner on screen.
+- Set Tooltip relationship to label when the tooltip provides the accessible name for an icon-only control, and to description when it explains an already named control; tune showDelay and hideDelay so the tooltip feels deliberate rather than twitchy.
+- Use DialogActions position and fluid to align or stretch the action row, and keep destructive choices visually distinct from the primary action.
+- Give MessageBarActions a containerAction when the message needs a single container-level action, and keep other actions inside the actions area rather than the body.
+- Always provide a visible way to dismiss or resolve Dialog and MessageBar content, and decide per toast whether its title and body should be announced.
 
 ### Don'ts
 
-- Don't use Tooltip for information the user needs in order to finish the task — its content only appears on hover or focus, cannot be selected or interacted with, and is a poor home for anything essential.
-- Don't open a Dialog for non-blocking announcements or for content that does not require a decision; modal interruptions should be rare enough that users still read them.
-- Don't substitute Spinner for Progress when the work has a measurable extent, and don't invent a Progress value when the duration is genuinely unknown.
-- Don't let a Toast be the only signal for a failure the user must act on, and don't rely on it for anything that needs to survive navigating away or refreshing.
-- Don't stack modal Dialogs, and don't open a new Dialog while a previous overlay is still closing and holding focus.
-- Don't set MessageBar politeness to assertive across the board, or every status update will interrupt whatever the user is reading or typing.
-- Don't put both a Spinner and a Progress indicator on screen for the same task, and don't place one inside the other.
-- Don't rely on MessageBar intent or Progress color alone to carry meaning; text and the icon slot should make the message understandable without color.
+- Do not use Toast for information that requires a decision, blocks progress or must remain on screen; transient notices are easy to miss and offer no place to think.
+- Do not stack multiple modal dialogs or open a dialog from inside another dialog, because nested blocking surfaces break focus expectations and leave users unsure which layer they are in.
+- Do not attach Tooltip to elements that cannot receive hover or keyboard focus, and do not hide essential instructions inside it when they belong in visible text.
+- Do not force Tooltip visible or otherwise drive its visibility manually when the built-in hover and focus behavior already covers the interaction.
+- Do not wrap a single message in MessageBarGroup; render one MessageBar directly so the layout does not reserve group behavior for one item.
+- Do not show a Spinner for long measurable work where ProgressBar would tell the user how much is left, and do not use ProgressBar for waits with no known duration.
+- Do not communicate state through ProgressBar color or Spinner motion alone; pair either with text that names the operation.
+- Do not mix controlled and uncontrolled state, such as passing open alongside defaultOpen on Dialog, because the visible state and your application state will drift apart.
 
 ## Anti-Patterns
 
-### Using a transient surface for a durable problem
+### Using toasts as the primary error channel
 
-❌ A failure that requires the user to fix something is delivered as a Toast that disappears on its own, so a user who looked away, was reading with a screen reader, or arrived after a navigation never learns what went wrong.
+❌ Toast notices are transient and non-blocking, so an error that requires reading, correcting input or making a decision disappears before the user can act on it.
 
-✅ Route consequential outcomes to MessageBar so they persist in the page region they belong to, and reserve Toast for confirmations whose loss is harmless. If the user must decide or correct something, use Dialog so the flow cannot continue until the issue is resolved.
+✅ Keep errors that need a decision in a Dialog, and keep errors tied to a page or form in a MessageBar with the matching intent so they persist until resolved; reserve Toast for confirming that background work finished.
 
-### Using Tooltip as the only label
+### Rebuilding trigger and surface wiring by hand
 
-❌ An icon-only control whose only explanation lives in a Tooltip is effectively unlabeled for anyone who is not hovering with a pointer; the tooltip's content is not a reliable substitute for the control's own accessible name, and the required relationship prop is often left at a value that misrepresents the content.
+❌ Managing visibility and dismissal manually instead of using DialogTrigger, ToastTrigger and the Tooltip content slot discards the focus, ARIA and positioning behavior those parts provide, and produces inconsistent dismissal.
 
-✅ Give the trigger its own accessible name first, then keep the Tooltip as a supplement and set relationship to describe what the tooltip actually contributes — 'label' only when it truly supplies the name, 'description' when it adds context, 'inaccessible' when it adds nothing.
+✅ Use the trigger parts and the documented surface composition, and only take over with Dialog open or defaultOpen plus onOpenChange when application logic genuinely must own the state.
 
-### Competing progress indicators for one task
+### Treating Spinner, ProgressBar and MessageBar as interchangeable
 
-❌ Showing a Spinner and a Progress bar together, or swapping between them mid-operation, splits the user's attention between two answers to the same question and makes the interface look unstable.
+❌ The waiting and progress components make different promises about how much is known and how long the wait will be, so swapping them by habit leaves users unable to judge whether anything is happening or how much remains.
 
-✅ Decide up front whether the task is indeterminate or measurable and commit to one indicator. Use Spinner with an appropriate delay for unknown-duration waits and Progress with value and max when you can estimate completion, and never nest one inside the other.
+✅ Use Spinner with a visible label for short unmeasured waits, ProgressBar with value and max when progress is measurable, and MessageBar when long-running work needs persistent context and a place for actions.
 
-### Treating every message as an interruption
+### Flattening composed parts into one node
 
-❌ Combining a modal Dialog, an assertive MessageBar, and a Toast for a single routine event makes common actions feel like incidents, and users quickly learn to dismiss everything without reading it.
+❌ Replacing the title, body and action parts with ad hoc text loses consistent typography and spacing, and can strip the accessible name from a dialog or the semantic structure from a message.
 
-✅ Match each event to exactly one surface at the intensity it deserves: silent for expected outcomes, Toast for ordinary confirmations, MessageBar for persistent status, and Dialog plus assertive announcements only for events that genuinely require the user to stop and respond.
+✅ Compose the provided parts at their intended level: a DialogTitle inside every dialog surface, and MessageBar title, body and actions as siblings inside the MessageBar rather than nested inside one another.
 
-### Fabricating determinate progress
+### Feedback that never ends or never leaves
 
-❌ A Progress bar is driven by a guessed or hard-coded value, or its value and max drift out of sync, so the bar stalls, jumps backward, or reports a completion percentage that contradicts what the user sees — eroding trust in every progress indicator in the product.
+❌ Toasts that vanish while carrying an action, or message bars that remain on screen after the condition is resolved, both erode trust in the messaging system and train users to ignore it.
 
-✅ Only use Progress when value and max reflect real, advancing work. When the extent is unknown, switch to Spinner with a delay instead of animating a bar that carries no information.
+✅ Keep toasts with actions or undo affordances alive long enough to be used, and remove or update a MessageBar as soon as the underlying condition clears.
 
 ## Accessibility
 
-Every component in this category exists to communicate something, so the shared accessibility requirement is that the message reaches users who are not looking at the screen at the right moment. Tooltip carries the strongest contract: its relationship prop is required, and the value you pass determines whether assistive technology treats the content as the trigger's label, as a supplementary description, or as not worth announcing at all — set it accurately rather than defaulting it, and never make Tooltip the sole source of a control's accessible name. MessageBar's politeness prop governs how the message is announced: polite waits its turn, assertive interrupts, so reserve assertive for urgent, actionable information. Spinner and Progress must expose their state in text — give spinners a label, and keep value and max consistent so completion is reported correctly. Dialog owns focus while open, so nothing behind it should remain tabbable or interactive, and focus should return to the element that opened it. Toast is the weakest surface for assistive technology because it is transient and may be missed entirely; its text must be meaningful in isolation, and any message with consequences needs a persistent companion. Across the whole category, never encode severity in color alone, and make sure the same information is available to keyboard and screen reader users as to pointer users.
+These components share one accessibility contract. Dialog manages focus for you, keeps focus inside the modal surface while it is open and returns it to the trigger on close, and DialogTitle supplies the accessible name, so render a title even when the design hides it visually; inertTrapFocus changes how focus is constrained for modal dialogs, and unmountOnClose helps reset transient content between openings. MessageBar politeness decides whether a message is announced immediately or queued, so reserve the interrupting value for errors and urgent warnings, and remember that MessageBarGroup animates items whose announcements should still be meaningful in order. Toaster accepts an announce prop so you can supply the announcement mechanism, and ToastTitle and ToastBody each accept an announce flag that controls whether their text is announced at all, so decide per toast whether it is worth interrupting the user, and never move focus into a toast. Tooltip requires the relationship prop precisely because assistive technology must know whether the tooltip is the control's label or its description, and tooltips must be reachable through keyboard focus rather than hover alone. ProgressBar and Spinner need visible text that names the operation, because a moving indicator alone says nothing; when progress updates must be spoken, announce them through a live region such as AriaLiveAnnouncer instead of relying on the bar. Keep the built-in presence motion slots, such as the backdrop motion on DialogSurface and the indeterminate motion on ProgressBar, so the library's reduced-motion behavior stays intact.
 
 ## Components in this category
 
 - [Dialog](../components/dialog.md)
+- [DialogActions](../components/dialog-actions.md)
+- [DialogBody](../components/dialog-body.md)
+- [DialogContent](../components/dialog-content.md)
+- [DialogSurface](../components/dialog-surface.md)
+- [DialogTitle](../components/dialog-title.md)
+- [DialogTrigger](../components/dialog-trigger.md)
 - [MessageBar](../components/message-bar.md)
-- [Progress](../components/progress.md)
+- [MessageBarActions](../components/message-bar-actions.md)
+- [MessageBarBody](../components/message-bar-body.md)
+- [MessageBarGroup](../components/message-bar-group.md)
+- [MessageBarTitle](../components/message-bar-title.md)
+- [ProgressBar](../components/progress-bar.md)
 - [Spinner](../components/spinner.md)
 - [Toast](../components/toast.md)
+- [ToastBody](../components/toast-body.md)
+- [ToastFooter](../components/toast-footer.md)
+- [ToastTitle](../components/toast-title.md)
+- [ToastTrigger](../components/toast-trigger.md)
+- [Toaster](../components/toaster.md)
 - [Tooltip](../components/tooltip.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

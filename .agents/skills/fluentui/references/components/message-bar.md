@@ -7,9 +7,9 @@
 
 ## Overview
 
-MessageBar is a feedback component that displays a persistent, page- or component-level message to the user, such as an informational notice, a success confirmation, a warning, or an error. It renders as a horizontal bar whose content is composed from subcomponents: MessageBarBody holds the message text, MessageBarTitle supplies a short descriptive heading, and MessageBarActions holds the response actions, including an optional container action (typically a dismiss button placed in the bar's corner). The intent prop picks a preset design and the matching live-region announcement, politeness lets an app override how urgently the message is announced to assistive technology, and shape switches between rounded corners for in-component placement and square corners for full-width page banners. MessageBar reflows automatically when body content wraps to a second line, and multiple bars can be placed inside MessageBarGroup to gain enter and exit animations as messages are added to and removed from a list.
+MessageBar is a feedback component that displays a persistent, inline message related to the state of the surrounding page, section, or task — for example a validation failure, a successful save, a warning about destructive behavior, or a general informational note. It is composed of a root MessageBar element plus the companion parts MessageBarBody (the message content area), MessageBarTitle (an optional bold headline), and MessageBarActions (the action/dismiss area). Each MessageBar renders an icon slot (a decorative intent icon), an intent-driven color treatment, and an ARIA live region so that the message is announced to assistive technology when it appears. Three props shape the default appearance and behavior: intent (info by default, with presets that also determine the live announcement), politeness (override the live region behavior with assertive or polite), and shape (rounded by default for component-level messages, square for page/app-level messages). Multiple MessageBars can be stacked inside a MessageBarGroup, which supplies enter and exit animations for dynamically added and dismissed messages.
 
-**When to use**: Use MessageBar when a message must stay visible until the user reads, acts on, or dismisses it — for example a service degradation notice, a form-level validation summary, a permission or license warning, or a success confirmation for an operation the user just completed. Use MessageBar with shape square for page- or app-level banners that span a layout region, and shape rounded for messages scoped to an individual component or card. Prefer Toast for transient, self-dismissing feedback, Dialog for messages that must block interaction, and Field validation text for per-input errors. When several MessageBars are created and destroyed at runtime — such as a queue of notifications — place them inside MessageBarGroup so exit animations run automatically when a bar is unmounted.
+**When to use**: Use MessageBar for contextual, in-place feedback that should stay visible while the user reads or acts on it: failed form submissions, permission or quota warnings, persistent status of a saved artifact, or guidance about a destructive action. It is a good fit when the message belongs to a specific region of the page rather than to the whole application, and when you want to offer inline recovery actions such as Retry, Undo, or a hyperlink to more detail. Prefer Toast when the feedback is transient and not tied to a location the user is currently looking at, and prefer a Dialog when the user must acknowledge or resolve the issue before continuing. For validation errors attached to a specific form control, use Field (with its validation message) and reserve MessageBar for the section- or form-level summary. When you render several messages that appear and disappear as a result of user actions, wrap them in MessageBarGroup so dismissal animates instead of popping out of the layout.
 
 ## Props Reference
 
@@ -21,14 +21,10 @@ MessageBar is a feedback component that displays a persistent, page- or componen
 
 ### Prop Guidance
 
-- **intent**: Selects the preset design and the default live-region announcement for the bar. Match it to the meaning of the message rather than to a preferred color, and let it drive both visuals and announcement urgency. Defaults to info. `success`
-- **politeness**: Overrides the politeness of the live-region announcement independently of the visual intent. Use polite for the majority of messages and reserve assertive for critical, time-sensitive information that should interrupt the screen reader. `assertive`
-- **shape**: Controls the corner treatment to signal message scope: rounded (the default) for component-level messages placed inside a surface, square for page- or app-level banners that span a layout region. `square`
-- **layout**: Opts out of automatic reflow by pinning the bar to a singleline or multiline arrangement. Use it when the application already owns responsive behavior for the region; otherwise leave it unset and let the bar reflow when the body wraps. `multiline`
-- **containerAction**: Prop of MessageBarActions that renders a control in the bar's action container, conventionally a transparent Button with a DismissRegular icon. Always supply an aria-label because the button has no visible text. `dismiss button with aria-label`
-- **animate**: Prop of MessageBarGroup that controls which transitions play for child bars: both for enter and exit, or exit-only. Prefer exit-only for bars that exist on initial render and reserve enter animations for bars mounted later in the app lifecycle. `exit-only`
-- **icon**: Optional root slot for the leading indicator icon. Leave it to the preset design unless you have a specific need; any icon you inject should stay decorative and not repeat the message text. `leading severity icon`
-- **bottomReflowSpacer**: Optional slot rendered only in multiline layout to guarantee correct bottom spacing when no actions are rendered. Needing it is a signal that the bar has no actions, which is not recommended for accessibility — prefer adding real actions instead. `multiline spacing element`
+- **intent**: Selects the visual preset (icon, background, border, and foreground colors) and the default ARIA live announcement for the message. Defaults to info. Choose the intent that matches the semantic meaning rather than the color you like: error for failures, warning for risks, success for confirmations, info for neutral guidance. `error`
+- **politeness**: Overrides the live region behavior of the intent preset with either assertive or polite. Leave it unset to inherit the intent's preset announcement; use assertive sparingly for urgent, time-sensitive incidents that must interrupt, and polite for messages that can wait for a pause in speech. `polite`
+- **shape**: Controls the corner treatment. Defaults to rounded, which is intended for message bars embedded at the component level; use square for page- or app-level banners where the message is flush with the layout edges. `square`
+- **layout**: Opts out of the automatic reflow behavior by pinning the message bar to singleline or multiline. Use it only when your application already has its own responsive mechanism; otherwise let the component reflow when the body wraps to a second line. `multiline`
 
 ### Slots
 
@@ -183,96 +179,96 @@ Animation.parameters = {
 
 ### Do's
 
-- Always give the bar at least one response path: a MessageBarActions region with actions and/or a containerAction dismiss button, since a MessageBar with no actions is discouraged from an accessibility standpoint.
-- Use MessageBarTitle to give every bar a short descriptive heading so users can identify the message at a glance before reading the body text.
-- Pick the intent that matches the meaning of the message (info for neutral information, success for completed operations, warning for issues that still allow progress, error for failures), because intent drives both the visual preset and the default screen reader announcement.
-- Place dynamically added and dismissed MessageBars inside MessageBarGroup so exit animations trigger automatically on unmount, and key each bar by a stable identifier.
-- Provide an accessible name on every icon-only button, for example aria-label on the transparent Button used as the containerAction dismiss control.
-- Use shape rounded for component-level messages and shape square for page/app-level banners so the bar visually communicates its scope.
-- Let the bar reflow automatically, or opt out with the layout prop when the surrounding application already has its own responsive mechanism for the region.
-- Override politeness only when the app genuinely needs a different announcement urgency than the one the chosen intent provides.
+- Match the intent prop to the meaning of the message: use error for blocking failures, warning for risky or degraded states, success for completed operations, and info (the default) for neutral guidance.
+- Always give the user a way forward — include a MessageBarActions region with at least one MessageBar action, or a dismiss control via the containerAction slot, so the message is actionable rather than purely decorative.
+- Provide a short, descriptive heading with MessageBarTitle and keep the supporting sentence in MessageBarBody to one or two lines of actionable text.
+- Give every icon-only control you place in MessageBarActions (including the containerAction dismiss button) an accessible name such as an aria-label of "dismiss".
+- Use shape="rounded" (the default) for message bars embedded in a component or card, and shape="square" for page- or app-level banners that span the viewport edge.
+- Render dynamically appearing and disappearing messages inside a MessageBarGroup so the enter and exit animations are handled automatically.
+- Rely on the preset intent values for the live-region announcement, and only pass politeness when the default announcement behavior of the intent is not appropriate for your scenario.
 
 ### Don'ts
 
-- Don't use MessageBar for short-lived, self-dismissing confirmations — Toast is the right component for feedback that should disappear on its own.
-- Don't wrap MessageBar inside another element when it is a child of MessageBarGroup; animation only functions when the direct children of the group are MessageBar components.
-- Don't use entry animations for MessageBars that are present on page load — reserve enter animations for bars mounted during the lifecycle of the app after the user has interacted.
-- Don't render an icon-only containerAction or action button without an aria-label; icon-only buttons have no visible text for assistive technology to read.
-- Don't force politeness to assertive for routine or low-priority messages, since assertive announcements interrupt whatever the screen reader is currently reading.
-- Don't stack many MessageBars directly in the page without a MessageBarGroup and a dismissal path, because users can end up with an ever-growing, unmanageable wall of notices.
-- Don't use shape square for an inline, component-scoped message or shape rounded for a full-width page banner; the shapes carry opposite spatial meanings.
-- Don't rely on the bottomReflowSpacer slot as a substitute for real actions — it exists only to keep spacing correct in multiline layouts without actions.
+- Do not render a MessageBar with no actions at all — the component itself notes that using it without actions is not recommended from an accessibility point of view; add an action, a link, or a dismiss button.
+- Do not arbitrarily override politeness with assertive on every message; excessive assertive announcements interrupt screen reader users and should be reserved for genuinely urgent, time-sensitive information.
+- Do not wrap a MessageBar in another element when it is a child of MessageBarGroup — animation only functions when MessageBar components are the only children, and wrapping them is a known limitation.
+- Do not use enter animations for MessageBar components that are present on initial page load; reserve enter animations for messages mounted during the lifecycle of the app.
+- Do not use shape="square" for a message bar nested inside a component or card, or shape="rounded" for a full-width page banner; the shape choice communicates the message's scope.
+- Do not put long, scrolling walls of text or rich multi-paragraph content in MessageBarBody — it is designed for a concise title plus a short supporting line.
+- Do not rely on color alone to convey severity; always include text (and the descriptive title) so the meaning survives for users who cannot perceive the intent colors.
 
 ## Anti-Patterns
 
-### MessageBar used as a transient toast
+### Rendering a message with no actions
 
-❌ MessageBar is persistent by design and stays in the layout until the user dismisses it or the app removes it, so using it for short confirmations leaves stale notices stacked on the page.
+❌ A MessageBar that offers neither an action nor a dismiss control leaves the user with information they cannot act on or clear, and the component's own slot documentation flags this as not recommended from an accessibility point of view. The bottomReflowSpacer slot exists specifically to keep multiline spacing correct when no actions are rendered, which is a signal that this configuration should be rare.
 
-✅ Use Toast for feedback that should disappear on its own, and reserve MessageBar for messages that require reading, an action, or an explicit dismissal.
+✅ Add a MessageBarActions region with at least one relevant action, a Link to more detail, or a dismiss containerAction button so the message is always resolvable.
 
-### Action-less message bar
+### Wrapping MessageBar children inside MessageBarGroup
 
-❌ Rendering MessageBar without MessageBarActions or a containerAction gives the user no way to respond, and the presence of the bottomReflowSpacer slot in a bar is an explicit signal that the bar has no actions, which the component authors call out as not recommended for accessibility.
+❌ MessageBarGroup animations only function when MessageBar components are its only children. Wrapping each MessageBar in an extra div or another component silently disables the enter and exit animations — a documented known limitation.
 
-✅ Add at least one action — a dismiss containerAction, a link in the body, or a real action button — so the message always offers a next step.
+✅ Pass MessageBar elements directly as children of MessageBarGroup and apply any per-message styling through the MessageBar className or a stable key instead of an extra wrapper element.
 
-### Wrapping MessageBar inside another element in a MessageBarGroup
+### Animating messages that exist on first paint
 
-❌ Enter and exit animations only function when the direct children of MessageBarGroup are MessageBar components; wrapping a bar in a div or other component silently breaks the animation.
+❌ Enter animations on components present at page load are distracting and can delay the reading of important status information that was already part of the page.
 
-✅ Render MessageBar as the immediate child of MessageBarGroup and move any layout styling onto the MessageBar className instead of an intermediate wrapper.
+✅ Reserve enter animations for MessageBar components mounted during the lifecycle of the app (for example in response to an action). Wrap them in MessageBarGroup and let the default exit animation handle dismissal.
 
-### Enter animations on page load
+### Overriding politeness to assertive on every message
 
-❌ Animating bars that are present on initial render draws attention to messages the user has not caused and can be disorienting, and the guidance explicitly says to avoid entry animations for MessageBars on page load.
+❌ Assertive announcements interrupt whatever a screen reader is currently speaking. Using it broadly means routine success or info messages cut off other content, which is a WCAG-relevant usability failure.
 
-✅ Use exit-only animation for bars rendered on load and reserve both-direction animation for bars mounted during the app lifecycle in response to user interaction.
+✅ Keep the intent's preset announcement for most messages and only set politeness to assertive for genuinely urgent incidents that require immediate attention.
 
-### Unlabeled icon-only dismiss control
+### Using the wrong shape for the message scope
 
-❌ The conventional containerAction is a transparent button containing only a DismissRegular icon, which has no accessible name for screen reader users to hear.
+❌ Rounded corners on a full-width page banner or square corners on a message nested inside a card breaks the visual language that tells users whether the message applies to the page or to a local component.
 
-✅ Always pass an aria-label such as "dismiss" (or a localized equivalent) to the icon-only button.
+✅ Use the default rounded shape for component-level messages and shape set to square for page- or app-level messages that span the layout.
 
 ## Accessibility
 
-**Requirements**: MessageBar is announced through a live region, so its content must make sense when read out of context: include a MessageBarTitle and concise body text. Because the component exposes a live region, avoid placing interactive-only affordances inside it without an accessible name — the icon-only transparent Button used as containerAction must carry an aria-label such as "dismiss". Ensure color is never the only signal of severity by pairing intent with the title text. Interactive elements inside MessageBarActions must be reachable and operable by keyboard and must meet contrast requirements against the intent background, which the preset intents handle when you do not override colors.
+**Requirements**: MessageBar renders as an ARIA live region, so incidents that appear after user interaction are announced automatically; the preset intent values determine the design and the default live announcement. Messages must meet WCAG 1.4.3 contrast requirements, which the intent tokens are designed to satisfy — if you override colors, verify contrast between the message text and the intent background. Every interactive control placed inside MessageBarActions must be keyboard reachable and have an accessible name; icon-only buttons need an aria-label. The component documentation explicitly warns that rendering a MessageBar without actions is not recommended from an accessibility point of view, because a message the user cannot act on or dismiss leaves them stuck. Avoid content that updates frequently in a live region, as repeated announcements become disruptive.
 
 | Key | Action |
 | --- | --- |
-| `Tab` | Moves focus from the page into the first focusable element inside the bar, such as a Link in the body, an action button, or the containerAction dismiss button. |
-| `Shift+Tab` | Moves focus back out of the bar to the previous focusable element in document order. |
-| `Enter` | Activates the focused action or dismiss button, triggering its click behavior (for example dismissing the message). |
-| `Space` | Activates the focused action or dismiss button, matching the standard Button activation behavior. |
+| `Tab` | Moves focus into and through the interactive children rendered in MessageBarActions (actions and the containerAction dismiss button); MessageBar itself does not trap or handle focus. |
+| `Shift+Tab` | Moves focus backward out of the MessageBarActions region to the preceding focusable element on the page. |
+| `Enter` | Activates a focused action Button, dismiss containerAction button, or Link inside the message bar. |
+| `Space` | Activates a focused action Button or dismiss containerAction button inside the message bar. |
 
-**ARIA**: aria-live (polite or assertive, derived from the intent preset or overridden with the politeness prop), aria-label (required on icon-only buttons such as the containerAction dismiss control), aria-hidden considerations for the leading icon slot, which is decorative and should not duplicate the message text
+**ARIA**: aria-live (derived from the politeness prop: assertive or polite; preset by intent when politeness is not provided), aria-label on icon-only controls such as the containerAction dismiss button, aria-labelledby for associating the message region with its MessageBarTitle text
 
-**Screen Reader**: MessageBar content is placed inside a live region, so text rendered by MessageBarBody and MessageBarTitle is announced to screen readers when the bar appears rather than only when focus lands on it. The politeness prop controls whether that announcement is polite (queued after the current utterance, the safer default for informational messages) or assertive (interrupts the current utterance immediately) — the chosen intent supplies a sensible default, and overriding it changes only the announcement behavior, not the visual design. Focusable items inside the bar are not part of the live announcement; users reach them with Tab and activate them with Enter or Space, and icon-only controls are read using their aria-label.
+**Screen Reader**: Because the root is a live region, a MessageBar that appears as the result of an interaction is announced without moving focus. The intent presets choose an appropriate politeness level for the announcement, and the politeness prop lets you switch between assertive (interrupts current speech) and polite (queued until the user is idle). The decorative intent icon is not conveyed as meaningful content. When focus moves into MessageBarActions, the visual message is not re-announced; a screen reader user navigating the page encounters the message text in document order and then the action buttons with their accessible names.
 
 ## Styling
 
-Style MessageBar through its subcomponents rather than the root when possible: apply className to MessageBar for container-level tweaks and to MessageBarBody or MessageBarActions for layout changes inside the bar. The intent presets already bind the right theme tokens, so avoid hardcoding colors — if you must adjust them, use tokens such as tokens.colorNeutralBackground1 and tokens.colorNeutralForeground1 for the info look, tokens.colorPaletteGreenBackground1 / tokens.colorPaletteGreenForeground1 for success, tokens.colorPaletteYellowBackground1 / tokens.colorPaletteYellowForeground1 for warning, and tokens.colorPaletteRedBackground1 / tokens.colorPaletteRedForeground1 for error. Corner treatment follows shape, and you can override the radius with tokens.borderRadiusMedium for rounded bars or tokens.borderRadiusNone to flatten corners. Use tokens.spacingHorizontalL, tokens.spacingHorizontalMNudge, and tokens.spacingVerticalS for padding and gaps between the icon, body, and actions, tokens.borderRadiusCircular for icon sizing, tokens.colorNeutralStroke1 if you add a border, and tokens.fontWeightSemibold for MessageBarTitle emphasis.
+MessageBar is styled with Griffel, so use makeStyles and mergeClasses with a className on any part. The root is a CSS grid with dedicated areas for the icon, body, and actions; the icon slot accepts your own glyph if the default intent icon is insufficient. The shape prop switches the corner treatment between tokens.borderRadiusMedium (rounded) and tokens.borderRadiusNone (square), so override the border radius only if you need a bespoke value. Internal padding and the gap between the icon, body, and actions come from tokens such as tokens.spacingHorizontalMNudge, tokens.spacingVerticalMNudge, tokens.spacingHorizontalS, tokens.spacingVerticalS, tokens.spacingHorizontalXS, and tokens.spacingVerticalXS; if you restyle the container, keep these token-based gaps so reflow stays consistent. Type sizes come from tokens.fontSizeBase300 and tokens.lineHeightBase300, and the intent background, border, and foreground are the intent color tokens (for example tokens.colorInfoBackground1, tokens.colorInfoBorder1, tokens.colorInfoForeground1). Because the layout reflows automatically when body content wraps to a second line, avoid hard-coding widths or absolute positioning inside the message; put width constraints on the wrapper instead, as the Reflow story does with a resizable container. When customizing MessageBarActions, remember the containerAction element is rendered on its own edge of the actions grid, so styling it as a transparent Button keeps it visually separate from the primary actions.
 
 ## Performance
 
-MessageBar measures its content to decide when to reflow from singleline to multiline, so very wide or frequently re-rendered bars add layout work; pinning the layout prop with singleline or multiline skips that automatic reflow when the app already controls responsiveness. When rendering lists of bars, keep them inside a single MessageBarGroup and give each MessageBar a stable key so that mounting and unmounting animates correctly instead of re-creating DOM nodes. Avoid mounting many live-region bars at once, since each one triggers an announcement and can flood the accessibility queue.
+MessageBar is a lightweight, stateless grid-based component with no internal timers, so rendering cost is dominated by the content you place inside it. The main performance consideration is volume: each MessageBar is an independent live region, and stacking many of them (especially inside a MessageBarGroup) mounts and unmounts nodes as messages arrive and are dismissed. Keep the number of simultaneously visible bars small, give each one a stable key when rendering a list of messages so React does not remount them on every update (which would re-trigger animations and re-announce the live region), and avoid heavy or expensive child content in MessageBarBody. Reflow is handled by the component's layout rather than by JavaScript measurement of your content, so you do not need to debounce resize handling yourself. When messages are dismissed, MessageBarGroup keeps the exiting node in the DOM for the duration of the exit animation, so plan for a short-lived overlap rather than an immediate removal.
 
 ## Theming & Tokens
 
-MessageBar is fully token-driven. Each intent preset binds background and foreground tokens such as tokens.colorNeutralBackground1 with tokens.colorNeutralForeground1 for info, tokens.colorPaletteGreenBackground1 with tokens.colorPaletteGreenForeground1 for success, tokens.colorPaletteYellowBackground1 with tokens.colorPaletteYellowForeground1 for warning, and tokens.colorPaletteRedBackground1 with tokens.colorPaletteRedForeground1 for error. Corner geometry follows shape and resolves to values like tokens.borderRadiusMedium (rounded) or flat corners (square), spacing uses tokens.spacingHorizontalL, tokens.spacingHorizontalMNudge, and tokens.spacingVerticalS, separators and outlines can use tokens.colorNeutralStroke1, and MessageBarTitle text uses tokens.fontWeightSemibold with tokens.fontSizeBase300. Switching the surrounding Provider theme or a custom theme therefore restyles every bar without any per-bar overrides.
+MessageBar consumes Fluent theme tokens, so all intents adapt automatically to light, dark, and high-contrast themes. Each intent maps to a background, border, and foreground triple: tokens.colorInfoBackground1, tokens.colorInfoBorder1, and tokens.colorInfoForeground1 for info; the corresponding success, warning, and error token families for the other intents. Body text inherits the neutral foreground tokens (tokens.colorNeutralForeground1 and its secondary variants) for intents that use a neutral surface. Corner geometry comes from tokens.borderRadiusMedium for the rounded shape and tokens.borderRadiusNone for the square shape. Internal rhythm uses tokens.spacingHorizontalMNudge, tokens.spacingVerticalMNudge, tokens.spacingHorizontalS, tokens.spacingVerticalS, tokens.spacingHorizontalXS, and tokens.spacingVerticalXS, and typography uses tokens.fontFamilyBase, tokens.fontSizeBase300, tokens.lineHeightBase300, and tokens.fontWeightSemibold for MessageBarTitle. Because the colors are intent tokens instead of hard-coded values, redefining a theme on a FluentProvider restyles every MessageBar beneath it without per-component overrides.
 
 ## Migration Notes
 
-MessageBar in v9 is a composition-based component rather than a single flat API: instead of passing message text and action props, you compose MessageBar with MessageBarBody, MessageBarTitle, and MessageBarActions children, and you wrap collections of bars in MessageBarGroup. Intent presets now determine both the design and the aria-live announcement, which can then be overridden with the politeness prop, and layout reflow from singleline to multiline is handled automatically unless you opt out with the layout prop.
+The v9 component is composition-based rather than prop-driven. The v8 messageBarType prop is replaced by intent (info, success, warning, error), the v8 isMultiline prop is replaced by automatic reflow with the layout prop available to opt into singleline or multiline explicitly, and v8's truncated/overflow handling and onDismiss/dismiss-button props are replaced by composing content and controls yourself: put content in MessageBarBody and MessageBarTitle, and put buttons and a dismiss containerAction into MessageBarActions. Styling no longer uses the v8 styles prop or MessageBar scss styling; use Griffel class names with theme tokens. To get the v8-style dismissal animation, render the message inside a MessageBarGroup rather than animating it manually.
 
 ## Edge Cases
 
-- Animation only works when the only children of MessageBarGroup are MessageBar components — wrapping a bar in another element silently disables enter and exit transitions.
-- The bottomReflowSpacer slot is rendered only in multiline layout, and needing it usually means the bar has no actions, which the component authors flag as not recommended from an accessibility point of view.
-- Overriding politeness with assertive changes only the announcement behavior, not the visual intent, so a visually calm info bar can still interrupt the screen reader if politeness is set to assertive.
-- Automatic reflow is based on body content wrapping to a second line; if the application already has its own responsive mechanism, opt out with layout set to singleline or multiline to avoid the bar fighting the container.
-- Bars mounted on first render should not use enter animations; only bars added later during the app lifecycle benefit visually from the both animation setting.
+- MessageBar reflows automatically once the body content wraps to a second line, which moves the actions into a different grid area; if your application has its own responsive strategy, pin the layout prop to singleline or multiline to opt out.
+- The bottomReflowSpacer slot only renders in multiline layout and guarantees correct bottom spacing when no actions are present — the actions grid area overlays it when actions are rendered, and relying on it implies you are shipping a message with no actions, which is discouraged.
+- MessageBarGroup animations require MessageBar components to be the group's only children; interpolating any other component between the group and the bars disables the animation without an error.
+- Dismissal inside a MessageBarGroup is driven by unmounting the message from your own state; the exit animation runs while the node is being removed, so filtering the array is enough — no manual animation bookkeeping is needed.
+- The politeness prop overrides the announcement chosen by the intent preset, so setting it to assertive on a success message changes how intrusive the announcement is without changing its appearance — the two concerns are independent.
+- Very long body content can wrap to many lines and push the action area to a new row; keep the body concise or truncate it upstream, since MessageBar has no built-in truncation or overflow menu.
+- Because the message is a live region, re-rendering a visible MessageBar with new text announces that text again; change the message only when there is genuinely new information for the user.
 
 ## See Also
 

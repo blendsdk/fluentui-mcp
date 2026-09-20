@@ -4,187 +4,168 @@
 
 ## Goal
 
-Build an accessible, reusable confirm dialog in Fluent UI React v9 that asks a single binary question, defaults focus to the safe (cancel) action, keeps itself open while async work runs, and supports extra friction (acknowledgement checkbox, type-to-confirm) for destructive actions.
+Build an accessible, reusable confirm dialog with Fluent UI v9's Dialog family: a controlled modal that asks a single proceed/go-back question, with variants for routine confirmation, irreversible (alert) confirmation with typed confirmation, and async confirmation with pending and error states, while focus is trapped inside the modal and returned to the trigger on close.
 
 ## When to Use
 
-Use it when the user must explicitly approve or acknowledge one high-consequence decision before it happens: deleting or archiving a resource, discarding unsaved changes, publishing/sending something, leaving a flow with unsaved data, or approving an irreversible bulk action. Also use it when you want an imperative `const ok = await confirm({...})` API backed by a real, accessible dialog instead of `window.confirm`.
+Use this recipe whenever an action needs explicit acknowledgement before it runs: deleting or overwriting data, discarding unsaved changes, leaving a page with unsaved work, publishing to end users, or any server call the user should confirm. It also covers the three common strengths: a plain two-button confirmation, a destructive confirmation guarded by modalType='alert' and a typed confirmation input, and an async confirmation that stays open while the work is in flight.
 
 ## When Not to Use
 
-Do not use it for multi-field or multi-step tasks (use a regular Dialog with DialogBody/Field/Input, or a Drawer); for non-blocking status or success messages (use MessageBar or Toast); for cheap, easily undone actions (just do it and offer Undo in a Toast instead of asking first); for inline form validation (use Field `validationState`); or for informational content that requires no decision (use a plain Dialog, Popover, or Tooltip). Avoid stacking a confirm dialog on top of another modal - close the first one or use an inline confirmation inside it.
+Avoid a confirm dialog when the action is cheap and reversible - just do it and offer a Toast with an undo action instead. Do not use it for multi-field or multi-step input; use a Dialog composed with form controls or a Drawer for a full editing experience. Do not use it for non-blocking information or passive errors; use MessageBar or Toast. Do not use it to host content anchored to a trigger (help text, extra options); use Popover or Menu. And do not use window.confirm or a hand-rolled portal: you lose the dialog role, focus trap, focus restore, Escape handling and theming that Dialog already provides.
 
-A confirm dialog is a small, blocking decision point: one question, at most a couple of sentences of explanation, and two buttons - cancel and confirm. Everything in this recipe exists to make that decision **safe**: the least destructive action is focused first, in-flight work keeps the dialog open, and truly destructive confirmations require deliberate friction (an acknowledgement checkbox and/or a type-to-confirm field).
+A confirm dialog interrupts a task with exactly one decision: **proceed** or **go back**. With Fluent UI v9 you compose it from the `Dialog` family rather than `window.confirm` or a hand-rolled overlay, so you inherit the dialog role, focus trap, focus restore, Escape/backdrop handling and theming.
 
-## Anatomy of the composition
+## 1. Anatomy
 
-`Dialog` is a compound component. Wire it up like this:
+`Dialog` is the behavior root; `DialogTrigger` and `DialogSurface` are its two children. Inside the surface, `DialogBody` lays out three regions:
 
-| Piece | Role in the recipe |
+| Element | Responsibility |
 | --- | --- |
-| `Dialog` | Owns `open`, `onOpenChange`, `modalType`, the focus trap, Escape/backdrop handling, and focus restoration. |
-| `DialogSurface` > `DialogBody` | The visual surface plus the standard title/content/actions layout. |
-| `DialogTitle` | The question itself. It also supplies the surface's accessible name. |
-| `DialogContent` | Consequences, guardrails (`Checkbox`, `Field` + `Input`), and inline errors (`MessageBar`). |
-| `DialogActions` | Exactly two `Button`s: `appearance="secondary"` to cancel, `appearance="primary"` to confirm. |
-
-## 1. Control `open` - never mount the dialog conditionally
-
-```tsx
-const [open, setOpen] = React.useState(false);
-
-<Button appearance="primary" onClick={() => setOpen(true)}>Delete file</Button>
-
-<Dialog
-  open={open}
-  modalType="alert"
-  inertTrapFocus
-  onOpenChange={(_event, data) => {
-    if (data.open) return;
-    if (pending) return; // veto Escape / backdrop while an action is running
-    setOpen(false);      // every close path funnels through here
-  }}
->
-```
-
-* `modalType="alert"` puts `role="alertdialog"` on the surface - the right role for a confirmation that expects an immediate answer. Use the default `"modal"` for dialogs that contain a form, and `"non-modal"` only when the dialog must not block the page (`inertTrapFocus` is not supported for non-modal dialogs).
-* `data.open === false` is emitted for Escape, backdrop clicks and trigger clicks; branch on `data.type` (`'escapeKeyDown'`, `'backdropClick'`) only if you need per-interaction behavior.
-* Because `open` is controlled, simply *not* calling `setOpen` is how you veto a dismissal. That is the whole mechanism behind "don't close while saving".
-* Do not render `{open && <Dialog ... />}` - unmounting the component skips the Fluent enter/exit motion, the surface's `unmountOnClose` semantics, and focus restoration to the element that opened the dialog.
-
-## 2. Order and style the actions
-
-* Render **cancel first, confirm last**. The first focusable element inside the surface receives focus, so cancel becomes the default and accidental Enter presses are non-destructive. Add `autoFocus` to the cancel button when you want to be explicit.
-* Cancel is `appearance="secondary"`; confirm is `appearance="primary"`.
-* For destructive confirmations keep the primary button but tint it with the theme token, e.g. `style={{ backgroundColor: 'var(--colorPaletteRedBackground3)' }}`. Don't invent new `appearance` values.
-* Label the action, not the answer: "Delete workspace" / "Discard draft" beats "OK" / "Yes".
-* Two buttons maximum. If you need a third, you probably need a form dialog instead.
-
-## 3. Async work: stay open, go busy
-
-* Keep the dialog open until the operation settles, then close it from your own state. Closing first and toasting the result hides progress and blocks retries.
-* While `pending`: disable **both** buttons, render a `Spinner` in the confirm button, and set `preventDismiss` so Escape and backdrop clicks are ignored.
-* Keep the confirm button's label unchanged while pending so its accessible name stays stable; the disabled state plus the spinner communicate the busy state.
-* On failure keep the dialog open and show the error inline with `MessageBar` inside `DialogContent` so the user can retry or cancel.
-
-## 4. Guardrails for destructive actions
-
-Add friction proportional to the damage:
-
-1. **Acknowledgement**: `<Checkbox>I understand that this action can't be undone</Checkbox>`.
-2. **Type-to-confirm**: a `Field` labelled `Type "<resource name>" to confirm` wrapping an `Input`, comparing the typed value to the resource name and showing `validationState="error"` on mismatch.
-
-Derive a single `canConfirm` boolean from the guardrails (plus `!pending`) and drive the confirm button's `disabled` prop from it, so the rules live in one place.
-
-## 5. A promise-based `useConfirm()` API
-
-For many call sites, an imperative API reads better than a mounted component per button:
+| `Dialog` | Open state, `modalType`, focus trap and restore, portal rendering. |
+| `DialogTrigger` | The control that opens (or closes) the dialog. Wrap the initiating `Button`. |
+| `DialogSurface` | Backdrop plus the element that carries `role="dialog"`. |
+| `DialogTitle` | The question. Provides the dialog's accessible name. |
+| `DialogContent` | Consequence text, typed-confirmation inputs and in-dialog error UI. |
+| `DialogActions` | The buttons; `position` and `fluid` adapt the row for narrow screens. |
 
 ```tsx
-const confirm = useConfirm();
-const ok = await confirm({
-  title: 'Discard draft?',
-  description: 'Your unsaved changes will be lost.',
-  confirmLabel: 'Discard',
-  intent: 'destructive',
-});
-if (ok) { /* proceed */ }
+<Dialog open={open} onOpenChange={handleOpenChange}>
+  <DialogTrigger disableButtonEnhancement>
+    <Button>Delete repository</Button>
+  </DialogTrigger>
+  <DialogSurface>
+    <DialogBody>
+      <DialogTitle>Delete this repository?</DialogTitle>
+      <DialogContent>All branches and history will be removed.</DialogContent>
+      <DialogActions>
+        <Button appearance="secondary" onClick={close}>
+          Cancel
+        </Button>
+        <Button appearance="primary" onClick={confirm}>
+          Delete
+        </Button>
+      </DialogActions>
+    </DialogBody>
+  </DialogSurface>
+</Dialog>
 ```
 
-Implement it with a provider that renders **one** `Dialog` and resolves a stored promise. The critical rule: *every* exit path - confirm, cancel, Escape, backdrop - must settle the promise, otherwise the awaiting code hangs forever. Resolve with `false` for cancel/Escape/backdrop and `true` for confirm.
+## 2. Own the open state
 
-## 6. Reset state on reopen
+Pass `open` with `onOpenChange` (controlled). `onOpenChange` fires for **every** dismissal path - trigger click, Escape, backdrop click - so it is the single place to close the dialog and reset per-decision state (typed text, error message, touched flags).
 
-Any state you hold inside the dialog (checkbox, typed name, error message, pending flag) must be re-armed each time it opens, or a stale acknowledgement lets the next deletion through. Reset in an effect keyed on `open` and the resource id, or let the surface unmount via the `unmountOnClose` prop of `Dialog`.
+Use the uncontrolled `defaultOpen` only for static demos; a real confirm dialog almost always needs to reset or to guard against dismissal.
 
-## 7. Composition notes
+## 3. Pick the confirmation strength
 
-* Keep the state that drives `open` in the component that owns the action (the row, the settings page, the editor), and pass `open`/`onConfirm`/`onCancel` into the reusable `ConfirmDialog`.
-* Dialog surfaces are portaled to the document body automatically, so it is safe to render them deep inside lists or cards - no extra `Portal` needed.
-* Theme comes from the surrounding `FluentProvider`; the surface, buttons and message bars pick up brand colors, RTL and high-contrast styles automatically. Avoid hard-coded pixel widths - `DialogSurface` already caps its width for readability.
+| Strength | When to use | What to add |
+| --- | --- | --- |
+| Two buttons, default `modalType="modal"` | Reversible, low-cost actions. Escape and backdrop click mean cancel. | `DialogTitle` plus one sentence of `DialogContent`. |
+| `modalType="alert"` | Destructive or irreversible actions. Escape and backdrop click no longer dismiss. | Same layout, with an explicit verb on the confirm button. |
+| Typed confirmation | Hard-to-reverse data loss (delete a project, drop a database). | `Field` + `Input` and a match check in the confirm handler. |
+| Async confirmation | The decision triggers a server call. | `Spinner` in the confirm button, `disabledFocusable` on both buttons, `MessageBar` for failures. |
+
+## 4. Wire the decision
+
+**Synchronous action:** close the dialog first, then run the action. The trigger regains focus immediately and the action never competes with the exit animation.
+
+**Async action:** keep the dialog open. Set a pending flag, make both buttons `disabledFocusable` (the button stays focusable, so focus is not dropped mid-flight), and close only after the promise resolves. On rejection, keep the dialog open and render the failure inside `DialogContent`, usually with `MessageBar intent="error"`. While the request is in flight, ignore close requests in `onOpenChange` so the user always sees the outcome.
+
+## 5. Make the dialog reusable
+
+Keep the decision in the parent (`onConfirm` prop) and the presentation in a small component that takes `title`, `body`, `confirmText` and `confirmAppearance`. The same `ConfirmDialog` then serves discard, publish and leave-page flows with only copy changes.
+
+State that lives inside the dialog (typed confirmation, error text) is lost when the dialog unmounts on close: either reset it deliberately in your close handler, or pass `unmountOnClose={false}` when stateful children must survive.
+
+## 6. Accessibility checklist
+
+- `DialogSurface` renders `role="dialog"` (or `role="alertdialog"` with `modalType="alert"`) and `aria-modal="true"`; `DialogTitle` supplies the accessible name, so always render one.
+- Focus moves into the dialog on open, is trapped while open, and returns to the trigger on close. Add `inertTrapFocus` so the rest of the page is `inert` and assistive technology cannot navigate out of the modal.
+- Put the non-destructive action first in the DOM: the first focusable element receives initial focus.
+- Label buttons with the verb ('Delete permanently', 'Discard draft'), never 'OK' or 'Yes'.
+- Report failures with `MessageBar intent="error"` inside the dialog (use `politeness="assertive"` when the message must interrupt); a Toast can be hidden behind the modal.
 
 ## Examples
 
-### Reusable controlled ConfirmDialog
+### Reusable ConfirmDialog with trigger, Cancel and Confirm
 
-A small, fully typed confirm dialog component with title/description, cancel-first focus order, pending state with a Spinner, an optional destructive button tint, and a demo of an async confirm that keeps the dialog open until publishing finishes.
+A controlled two-button confirm dialog component plus a usage example. The trigger opens it, Escape and backdrop click cancel, the confirm handler closes the dialog before running the action so focus returns to the trigger.
 
 ```tsx
 import * as React from 'react';
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Spinner, Text } from '@fluentui/react-components';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+} from '@fluentui/react-components';
 
-/** Replace with your real API call. */
-const publishArticle = async (): Promise<void> => {
-  await new Promise((resolve) => setTimeout(resolve, 800));
-};
+type ConfirmAppearance = 'primary' | 'secondary' | 'outline' | 'subtle' | 'transparent';
 
 export interface ConfirmDialogProps {
-  /** Always drive this from state - never conditionally render <Dialog />. */
-  open: boolean;
+  /** Label of the button that opens the dialog. */
+  triggerText: string;
+  /** The question, e.g. 'Discard this draft?'. Becomes the accessible name. */
   title: string;
-  description?: React.ReactNode;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  intent?: 'default' | 'destructive';
-  /** Disables both actions and shows a spinner inside the confirm button. */
-  pending?: boolean;
-  /** Ignore Escape / backdrop requests, e.g. while an async action is running. */
-  preventDismiss?: boolean;
-  /** Extra content (guardrails, fields, ...) between the text and the actions. */
-  children?: React.ReactNode;
+  /** One or two sentences: what happens, and whether it can be undone. */
+  body: React.ReactNode;
+  /** A verb, not 'OK'. e.g. 'Discard', 'Delete', 'Publish'. */
+  confirmText?: string;
+  cancelText?: string;
+  /** Visual weight of the confirm button. */
+  confirmAppearance?: ConfirmAppearance;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
-  onCancel: () => void;
 }
 
-const destructiveButtonStyle: React.CSSProperties = {
-  backgroundColor: 'var(--colorPaletteRedBackground3)',
-};
-
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
-  open,
+  triggerText,
   title,
-  description,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
-  intent = 'default',
-  pending = false,
-  preventDismiss = false,
-  children,
+  body,
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  confirmAppearance = 'primary',
+  confirmDisabled = false,
   onConfirm,
-  onCancel,
 }) => {
-  const handleOpenChange: React.ComponentProps<typeof Dialog>['onOpenChange'] = (_event, data) => {
-    if (data.open) {
-      return;
-    }
-    if (preventDismiss || pending) {
-      // `open` is controlled: not updating state keeps the dialog on screen.
-      return;
-    }
-    onCancel();
-  };
+  const [open, setOpen] = React.useState(false);
+
+  // Fires for trigger click, Escape and backdrop click.
+  const handleOpenChange = React.useCallback((_event: unknown, data: { open: boolean }) => {
+    setOpen(data.open);
+  }, []);
+
+  const handleConfirm = React.useCallback(() => {
+    // Close first so focus returns to the trigger before the action runs.
+    setOpen(false);
+    onConfirm();
+  }, [onConfirm]);
 
   return (
-    <Dialog open={open} modalType="alert" inertTrapFocus onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange} inertTrapFocus>
+      <DialogTrigger disableButtonEnhancement>
+        <Button>{triggerText}</Button>
+      </DialogTrigger>
       <DialogSurface>
         <DialogBody>
           <DialogTitle>{title}</DialogTitle>
-          <DialogContent>
-            {description ? <Text block>{description}</Text> : null}
-            {children}
-          </DialogContent>
+          <DialogContent>{body}</DialogContent>
           <DialogActions>
-            <Button appearance="secondary" autoFocus disabled={pending} onClick={onCancel}>
-              {cancelLabel}
+            {/* Cancel first: the first focusable element receives initial focus. */}
+            <Button appearance="secondary" onClick={() => setOpen(false)}>
+              {cancelText}
             </Button>
             <Button
-              appearance="primary"
-              disabled={pending}
-              icon={pending ? <Spinner size="tiny" appearance="inverted" /> : undefined}
-              style={intent === 'destructive' ? destructiveButtonStyle : undefined}
-              onClick={onConfirm}
+              appearance={confirmAppearance}
+              disabled={confirmDisabled}
+              onClick={handleConfirm}
             >
-              {confirmLabel}
+              {confirmText}
             </Button>
           </DialogActions>
         </DialogBody>
@@ -193,171 +174,243 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   );
 };
 
-export const PublishArticleExample: React.FC = () => {
-  const [open, setOpen] = React.useState(false);
-  const [pending, setPending] = React.useState(false);
+/** Usage: the decision itself lives in the calling component. */
+export const DiscardDraftExample: React.FC = () => (
+  <ConfirmDialog
+    triggerText="Discard draft"
+    title="Discard this draft?"
+    body="Your unsaved changes will be lost. This can't be undone."
+    confirmText="Discard"
+    cancelText="Keep editing"
+    onConfirm={() => {
+      // e.g. clear the editor state and navigate away
+    }}
+  />
+);
+```
 
-  const handleConfirm = async () => {
-    setPending(true);
-    try {
-      await publishArticle();
-      setOpen(false);
-    } finally {
-      setPending(false);
+### Destructive confirmation with typed name (alert dialog)
+
+An irreversible delete uses modalType='alert' so Escape and backdrop cannot dismiss it, requires the user to type the resource name into a Field + Input, and validates on submit with an inline Field error instead of silently closing.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  Field,
+  Input,
+  Text,
+} from '@fluentui/react-components';
+
+export interface DeleteRepositoryDialogProps {
+  repositoryName: string;
+  onDelete: (repositoryName: string) => void;
+}
+
+export const DeleteRepositoryDialog: React.FC<DeleteRepositoryDialogProps> = ({
+  repositoryName,
+  onDelete,
+}) => {
+  const [open, setOpen] = React.useState(false);
+  const [typedName, setTypedName] = React.useState('');
+  const [touched, setTouched] = React.useState(false);
+
+  const isMatch = typedName.trim() === repositoryName;
+  const showError = touched && !isMatch;
+
+  const close = React.useCallback(() => {
+    setOpen(false);
+    // Reset per-decision state so the dialog is reusable.
+    setTypedName('');
+    setTouched(false);
+  }, []);
+
+  const handleOpenChange = React.useCallback(
+    (_event: unknown, data: { open: boolean }) => {
+      if (data.open) {
+        setOpen(true);
+      } else {
+        close();
+      }
+    },
+    [close],
+  );
+
+  const handleDelete = React.useCallback(() => {
+    if (!isMatch) {
+      // Keep the dialog open and explain what is missing.
+      setTouched(true);
+      return;
     }
-  };
+    close();
+    onDelete(repositoryName);
+  }, [close, isMatch, onDelete, repositoryName]);
 
   return (
-    <>
-      <Button appearance="primary" onClick={() => setOpen(true)}>
-        Publish article
-      </Button>
-
-      <ConfirmDialog
-        open={open}
-        title="Publish this article?"
-        description="Publishing makes this article visible to everyone on the internet. You can still edit it afterwards."
-        confirmLabel="Publish"
-        pending={pending}
-        preventDismiss
-        onConfirm={handleConfirm}
-        onCancel={() => setOpen(false)}
-      />
-    </>
+    // alert: Escape and backdrop click do not dismiss, the user must decide.
+    <Dialog open={open} onOpenChange={handleOpenChange} modalType="alert" inertTrapFocus>
+      <DialogTrigger disableButtonEnhancement>
+        <Button>Delete repository</Button>
+      </DialogTrigger>
+      <DialogSurface>
+        <DialogBody>
+          <DialogTitle>Delete '{repositoryName}'?</DialogTitle>
+          <DialogContent>
+            <Text block>
+              All branches, tags and history will be permanently removed. This action cannot be
+              undone.
+            </Text>
+            <Field
+              label={`Type '${repositoryName}' to confirm`}
+              required
+              validationState={showError ? 'error' : 'none'}
+              validationMessage={showError ? 'The name you typed does not match.' : undefined}
+            >
+              <Input
+                value={typedName}
+                placeholder={repositoryName}
+                onChange={(_ev, data) => {
+                  setTypedName(data.value);
+                  setTouched(true);
+                }}
+              />
+            </Field>
+          </DialogContent>
+          <DialogActions>
+            <Button appearance="secondary" onClick={close}>
+              Cancel
+            </Button>
+            <Button appearance="primary" onClick={handleDelete}>
+              Delete permanently
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   );
 };
 ```
 
-### Destructive delete with type-to-confirm and inline errors
+### Async confirm with pending and error states
 
-A high-friction confirmation: an acknowledgement Checkbox plus a Field/Input type-to-confirm guardrail, a destructively tinted primary button that stays disabled until both guardrails pass, an async delete that keeps the dialog open with a Spinner, and a MessageBar for API failures.
+Publishing keeps the dialog open while the request is in flight: close requests are ignored, both buttons become disabledFocusable so focus is not lost, a Spinner replaces the button icon, and failures render in a MessageBar inside the dialog.
 
 ```tsx
 import * as React from 'react';
-import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, MessageBar, MessageBarBody, Spinner, Text } from '@fluentui/react-components';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Spinner,
+} from '@fluentui/react-components';
 
-export interface Workspace {
-  id: string;
-  name: string;
-}
+type Status = 'idle' | 'pending' | 'error';
 
-export interface DeleteWorkspaceDialogProps {
-  /** The workspace to delete, or null when the dialog should be closed. */
-  workspace: Workspace | null;
-  /** Perform the deletion. Reject to keep the dialog open and show the error. */
-  onDelete: (id: string) => Promise<void>;
-  onDeleted: (workspace: Workspace) => void;
-  onDismiss: () => void;
-}
-
-const destructiveButtonStyle: React.CSSProperties = {
-  backgroundColor: 'var(--colorPaletteRedBackground3)',
+/** Replace with the real API call. */
+const publishRelease = async (): Promise<void> => {
+  await new Promise<void>((resolve, reject) => {
+    setTimeout(() => {
+      if (Math.random() > 0.5) {
+        resolve();
+      } else {
+        reject(new Error('The release service is unavailable. Please try again.'));
+      }
+    }, 1200);
+  });
 };
 
-export const DeleteWorkspaceDialog: React.FC<DeleteWorkspaceDialogProps> = ({
-  workspace,
-  onDelete,
-  onDeleted,
-  onDismiss,
-}) => {
-  const open = workspace !== null;
-  const [acknowledged, setAcknowledged] = React.useState(false);
-  const [typedName, setTypedName] = React.useState('');
-  const [pending, setPending] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+export const PublishReleaseDialog: React.FC = () => {
+  const [open, setOpen] = React.useState(false);
+  const [status, setStatus] = React.useState<Status>('idle');
+  const [errorMessage, setErrorMessage] = React.useState<string | undefined>(undefined);
+  const isPending = status === 'pending';
 
-  // Re-arm the guardrails every time a (different) workspace is targeted.
-  React.useEffect(() => {
-    if (open) {
-      setAcknowledged(false);
-      setTypedName('');
-      setPending(false);
-      setError(null);
-    }
-  }, [open, workspace?.id]);
+  const reset = React.useCallback(() => {
+    setStatus('idle');
+    setErrorMessage(undefined);
+  }, []);
 
-  const nameMatches = workspace !== null && typedName.trim() === workspace.name;
-  const showMismatch = typedName.length > 0 && !nameMatches;
-  const canDelete = acknowledged && nameMatches && !pending;
+  const handleOpenChange = React.useCallback(
+    (_event: unknown, data: { open: boolean }) => {
+      // Ignore close requests (Escape, backdrop) while the request is in flight
+      // so the user always sees the outcome.
+      if (!data.open && isPending) {
+        return;
+      }
+      setOpen(data.open);
+      if (!data.open) {
+        reset();
+      }
+    },
+    [isPending, reset],
+  );
 
-  const handleDelete = async () => {
-    if (!workspace || !canDelete) {
-      return;
-    }
-    setPending(true);
-    setError(null);
+  const handleConfirm = React.useCallback(async () => {
+    setStatus('pending');
+    setErrorMessage(undefined);
     try {
-      await onDelete(workspace.id);
-      onDeleted(workspace);
-      onDismiss();
-    } catch (err) {
-      // Keep the dialog open so the user can retry or cancel.
-      setError(err instanceof Error ? err.message : 'The workspace could not be deleted.');
-    } finally {
-      setPending(false);
+      await publishRelease();
+      setOpen(false);
+      reset();
+    } catch (error) {
+      // Keep the dialog open so the failure is impossible to miss.
+      setStatus('error');
+      setErrorMessage(error instanceof Error ? error.message : 'Something went wrong.');
     }
-  };
+  }, [reset]);
+
+  const closeAndReset = React.useCallback(() => {
+    setOpen(false);
+    reset();
+  }, [reset]);
 
   return (
-    <Dialog
-      open={open}
-      modalType="alert"
-      inertTrapFocus
-      onOpenChange={(_event, data) => {
-        // Escape and backdrop clicks cancel, but never while the delete is in flight.
-        if (!data.open && !pending) {
-          onDismiss();
-        }
-      }}
-    >
+    // unmountOnClose={false} keeps the dialog subtree (and any stateful children) alive.
+    <Dialog open={open} onOpenChange={handleOpenChange} unmountOnClose={false} inertTrapFocus>
+      <DialogTrigger disableButtonEnhancement>
+        <Button appearance="primary">Publish release</Button>
+      </DialogTrigger>
       <DialogSurface>
         <DialogBody>
-          <DialogTitle>Delete {workspace?.name}?</DialogTitle>
+          <DialogTitle>Publish version 2.4.0?</DialogTitle>
           <DialogContent>
-            <Text block>
-              This permanently deletes the workspace, its files and its members. This action cannot
-              be undone.
-            </Text>
-
-            <Checkbox
-              checked={acknowledged}
-              onChange={(_event, data) => setAcknowledged(data.checked === true)}
-            >
-              I understand that this action cannot be undone
-            </Checkbox>
-
-            <Field
-              label={`Type "${workspace?.name ?? ''}" to confirm`}
-              required
-              validationState={showMismatch ? 'error' : 'none'}
-              validationMessage={showMismatch ? 'The name does not match.' : undefined}
-            >
-              <Input
-                value={typedName}
-                placeholder={workspace?.name}
-                disabled={pending}
-                onChange={(_event, data) => setTypedName(data.value)}
-              />
-            </Field>
-
-            {error ? (
-              <MessageBar intent="error">
-                <MessageBarBody>{error}</MessageBarBody>
+            Publishing makes this version available to every customer immediately.{' '}
+            {status === 'error' && (
+              <MessageBar intent="error" politeness="assertive">
+                <MessageBarBody>
+                  <MessageBarTitle>Publish failed</MessageBarTitle>
+                  {errorMessage}
+                </MessageBarBody>
               </MessageBar>
-            ) : null}
+            )}
           </DialogContent>
           <DialogActions>
-            <Button appearance="secondary" autoFocus disabled={pending} onClick={onDismiss}>
+            {/* disabledFocusable keeps the buttons focusable while unusable. */}
+            <Button appearance="secondary" disabledFocusable={isPending} onClick={closeAndReset}>
               Cancel
             </Button>
             <Button
               appearance="primary"
-              style={destructiveButtonStyle}
-              disabled={!canDelete}
-              icon={pending ? <Spinner size="tiny" appearance="inverted" /> : undefined}
-              onClick={handleDelete}
+              disabledFocusable={isPending}
+              icon={isPending ? <Spinner size="tiny" /> : undefined}
+              onClick={() => void handleConfirm()}
             >
-              Delete workspace
+              {isPending ? 'Publishing...' : 'Publish'}
             </Button>
           </DialogActions>
         </DialogBody>
@@ -365,199 +418,38 @@ export const DeleteWorkspaceDialog: React.FC<DeleteWorkspaceDialogProps> = ({
     </Dialog>
   );
 };
-
-/** Host component: owns the selection state and the (fake) API call. */
-export const WorkspaceDangerZoneExample: React.FC = () => {
-  const workspace: Workspace = { id: 'ws-1', name: 'Contoso Reports' };
-  const [target, setTarget] = React.useState<Workspace | null>(null);
-  const [status, setStatus] = React.useState('Workspace still exists.');
-
-  const deleteWorkspace = React.useCallback(async (_id: string): Promise<void> => {
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    // throw new Error('Network error - please try again.'); // simulate a failure
-  }, []);
-
-  return (
-    <div style={{ display: 'grid', gap: 12, justifyItems: 'start' }}>
-      <Button appearance="primary" onClick={() => setTarget(workspace)}>
-        Delete workspace
-      </Button>
-      <Text>{status}</Text>
-
-      <DeleteWorkspaceDialog
-        workspace={target}
-        onDelete={deleteWorkspace}
-        onDeleted={(deleted) => setStatus(`Deleted "${deleted.name}".`)}
-        onDismiss={() => setTarget(null)}
-      />
-    </div>
-  );
-};
-```
-
-### Promise-based useConfirm() provider
-
-A ConfirmProvider that renders one Dialog and a useConfirm() hook returning a promise. Shows how to settle the promise from confirm, cancel, Escape and backdrop so awaiting callers never hang, and how consumers read like `const ok = await confirm({...})`.
-
-```tsx
-import * as React from 'react';
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Text } from '@fluentui/react-components';
-
-export interface ConfirmOptions {
-  title: string;
-  description?: React.ReactNode;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  intent?: 'default' | 'destructive';
-}
-
-export type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>;
-
-const ConfirmContext = React.createContext<ConfirmFn | null>(null);
-
-export const useConfirm = (): ConfirmFn => {
-  const confirm = React.useContext(ConfirmContext);
-  if (!confirm) {
-    throw new Error('useConfirm() must be called inside <ConfirmProvider />.');
-  }
-  return confirm;
-};
-
-const destructiveButtonStyle: React.CSSProperties = {
-  backgroundColor: 'var(--colorPaletteRedBackground3)',
-};
-
-export const ConfirmProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  const [options, setOptions] = React.useState<ConfirmOptions | null>(null);
-  const resolverRef = React.useRef<((confirmed: boolean) => void) | null>(null);
-
-  const confirm = React.useCallback<ConfirmFn>((nextOptions) => {
-    // Only one confirmation can be pending at a time.
-    resolverRef.current?.(false);
-    setOptions(nextOptions);
-    return new Promise<boolean>((resolve) => {
-      resolverRef.current = resolve;
-    });
-  }, []);
-
-  const settle = React.useCallback((confirmed: boolean) => {
-    resolverRef.current?.(confirmed);
-    resolverRef.current = null;
-    setOptions(null);
-  }, []);
-
-  return (
-    <ConfirmContext.Provider value={confirm}>
-      {children}
-      <Dialog
-        open={options !== null}
-        modalType="alert"
-        inertTrapFocus
-        onOpenChange={(_event, data) => {
-          // Escape and backdrop clicks must resolve the promise too, otherwise `await` hangs.
-          if (!data.open) {
-            settle(false);
-          }
-        }}
-      >
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>{options?.title}</DialogTitle>
-            <DialogContent>
-              {options?.description ? (
-                typeof options.description === 'string' ? (
-                  <Text block>{options.description}</Text>
-                ) : (
-                  options.description
-                )
-              ) : null}
-            </DialogContent>
-            <DialogActions>
-              <Button appearance="secondary" autoFocus onClick={() => settle(false)}>
-                {options?.cancelLabel ?? 'Cancel'}
-              </Button>
-              <Button
-                appearance="primary"
-                style={options?.intent === 'destructive' ? destructiveButtonStyle : undefined}
-                onClick={() => settle(true)}
-              >
-                {options?.confirmLabel ?? 'OK'}
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-    </ConfirmContext.Provider>
-  );
-};
-
-/** Consumer: reads like a synchronous question. */
-export const DraftEditor: React.FC = () => {
-  const confirm = useConfirm();
-  const [status, setStatus] = React.useState('Draft has unsaved changes.');
-
-  const handleDiscard = async () => {
-    const confirmed = await confirm({
-      title: 'Discard draft?',
-      description: 'Your unsaved changes will be lost. This cannot be undone.',
-      confirmLabel: 'Discard',
-      intent: 'destructive',
-    });
-    if (confirmed) {
-      setStatus('Draft discarded.');
-    }
-  };
-
-  return (
-    <div style={{ display: 'grid', gap: 12, justifyItems: 'start' }}>
-      <Button onClick={handleDiscard}>Discard draft</Button>
-      <Text>{status}</Text>
-    </div>
-  );
-};
-
-/** Mount one provider near the app root. */
-export const App: React.FC = () => (
-  <ConfirmProvider>
-    <DraftEditor />
-  </ConfirmProvider>
-);
 ```
 
 ## Pitfalls
 
-- Rendering the dialog conditionally (`{open && <Dialog />}`) instead of controlling `open`: this skips the surface's exit motion, its `unmountOnClose` behavior, and focus restoration to the invoking element. Always pass `open` and manage it with state.
-- Auto-focusing the destructive button, or forgetting `autoFocus` on cancel: the first focusable element receives focus, so if you render confirm first (or auto-focus it) a stray Enter press destroys data. Render cancel first and mark it `autoFocus`.
-- Not resetting guardrail state between openings: a stale `acknowledged` checkbox or previously typed name lets the next destructive action through with zero friction. Reset internal state in an effect keyed on `open` (and the resource id), or let the surface unmount via `unmountOnClose`.
-- Treating `onOpenChange` as fire-and-forget: with a controlled dialog, ignoring the callback keeps the dialog open forever, so you must both handle every close path (`data.open === false` for Escape, backdrop and trigger) and update your own state. In a promise-based API, any unhandled path means the awaiting code never resolves.
-- Closing the dialog before async work completes: you lose the ability to show progress or an error, and the user can submit twice. Keep the dialog open, set `pending`, disable both buttons, ignore Escape/backdrop while pending, and close only on success.
-- Using generic or ambiguous action labels ("OK", "Yes") or swapping the button order: users skim dialogs. Label the action ("Delete workspace", "Discard draft") and keep cancel on the left, confirm on the right, consistently across the app.
-- Reaching for `window.confirm`: it is unthemed, untranslatable, blocks the main thread, cannot show details or progress, and gives you no control over roles or focus. Build the same flow with `Dialog`, `DialogTitle`, `DialogContent` and `DialogActions`.
-- Using `React.useId` for label wiring on React 17 (it was added in React 18) - pass your own stable id, or rely on the automatic title/description association that `DialogTitle` and `DialogContent` provide.
+- Running the action before closing the dialog (or closing before an async action resolves). A synchronous action should close the dialog first so focus returns to the trigger before layout changes; an async action should keep the dialog open, disable the actions with disabledFocusable, and close only on success. Closing early hides failures and invites double submits.
+- Using window.confirm, a Popover, or a hand-rolled Portal for confirmation. You lose role="dialog", aria-modal, the focus trap, focus restore, Escape handling, and Fluent theming. Compose Dialog + DialogTrigger + DialogSurface instead.
+- Defaulting everything to modalType="alert". Blocking Escape and backdrop dismissal is correct for irreversible actions but frustrating for routine confirmations, where Escape and backdrop click should mean cancel (the default modalType="modal").
+- Vague button labels such as 'OK', 'Yes' or 'Submit'. Name the action with its verb ('Delete permanently', 'Discard draft') so the consequence is clear from the button alone, especially for screen reader users navigating by control.
+- Wrapping a Button in DialogTrigger without disableButtonEnhancement, which nests an extra interactive element and produces confusing focus and click behavior. Pass disableButtonEnhancement whenever the child is already a Button.
+- Losing in-dialog state (typed confirmation, error text) on close. Dialog content unmounts by default when it closes - reset that state deliberately in onOpenChange, or pass unmountOnClose={false} when stateful children must survive.
+- Validating a typed confirmation by merely disabling the primary button. The user gets a dead button with no explanation; keep the button enabled, validate in the confirm handler, and surface the mismatch through Field validationState/validationMessage while keeping the dialog open.
 
 ## Accessibility
 
-Role and labelling: `modalType="alert"` renders the surface with `role="alertdialog"`, which is announced immediately when it opens; reserve it for genuine confirmations and use `modalType="modal"` for dialogs that merely contain a form. `DialogTitle` supplies the surface's accessible name automatically - phrase it as a specific question ("Delete Contoso Reports?") rather than "Are you sure?", and put the consequence in `DialogContent`. If you need explicit wiring, pass `aria-labelledby`/`aria-describedby` on `DialogSurface` with matching `id`s on the title and content.
-
-Focus: Fluent moves focus into the surface on open and returns it to the element that opened the dialog on close (this is skipped if you render the dialog conditionally instead of controlling `open`). Default focus must land on the least destructive action - `autoFocus` on the cancel `Button` - and never on the destructive button. Keep the DOM order cancel-then-confirm so Tab order matches the visual order.
-
-Keyboard: Escape requests a close and must map to "cancel"; in the promise-based API, resolve `false` for Escape and backdrop or the awaiting code hangs. Confirm/cancel are real `Button`s, so Enter and Space activate the focused one - never attach a global keydown handler that confirms.
-
-Guardrails: the type-to-confirm `Input` is labelled by `Field` (label text is part of the accessible name) and reports mismatches through `validationState="error"` plus `validationMessage`, which assistive technology announces. The `Checkbox` label is read as part of the checkbox, so keep it self-describing ("I understand that this action cannot be undone").
-
-Async states: keep the dialog open while pending, disable both actions, and leave the confirm button's text unchanged so its accessible name stays stable. Announce failures inside the dialog with `MessageBar` (`politeness="assertive"` for critical failures) rather than a transient toast the user may miss.
-
-`inertTrapFocus` marks the rest of the page inert instead of only trapping Tab, which is friendlier for screen reader and pointer users; it is not supported together with `modalType="non-modal"`. Make sure custom destructive button colors keep sufficient contrast against the button text in both light and dark themes.
+DialogSurface renders role="dialog" (role="alertdialog" when modalType="alert") with aria-modal="true", and DialogTitle supplies the dialog's accessible name, so always render a DialogTitle with a real question. Focus is moved into the dialog when it opens, trapped while it is open, and returned to the trigger when it closes; add inertTrapFocus so the rest of the page becomes inert and screen readers cannot escape the modal. Because the first focusable element receives initial focus, place the cancel/least-destructive action first in the DOM and keep the destructive action last. Use modalType="alert" only for destructive or irreversible decisions: it removes Escape and backdrop dismissal so the user must make an explicit choice, which is expected for alerts but hostile for routine confirmations. Label buttons with the verb ('Delete permanently', 'Discard draft') rather than 'OK'/'Yes', so the consequence is unambiguous when a screen reader announces only the button text. For typed confirmation, Field wires the label, required state, and validation message to the Input (including aria-invalid) - do not reimplement it with a bare label. For async work, expose the pending state both visually (Spinner, changed label) and programmatically by using disabledFocusable on the actions, and announce failures with MessageBar intent="error" (politeness="assertive" if it must interrupt) inside the dialog, since a Toast may be obscured by the modal.
 
 ## Components used
 
 - [Dialog](../../components/dialog.md)
+- [DialogTrigger](../../components/dialog-trigger.md)
+- [DialogSurface](../../components/dialog-surface.md)
+- [DialogBody](../../components/dialog-body.md)
+- [DialogTitle](../../components/dialog-title.md)
+- [DialogContent](../../components/dialog-content.md)
+- [DialogActions](../../components/dialog-actions.md)
 - [Button](../../components/button.md)
-- [Text](../../components/text.md)
-- [Spinner](../../components/spinner.md)
-- [Checkbox](../../components/checkbox.md)
 - [Field](../../components/field.md)
 - [Input](../../components/input.md)
+- [Text](../../components/text.md)
 - [MessageBar](../../components/message-bar.md)
+- [MessageBarBody](../../components/message-bar-body.md)
+- [MessageBarTitle](../../components/message-bar-title.md)
+- [Spinner](../../components/spinner.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

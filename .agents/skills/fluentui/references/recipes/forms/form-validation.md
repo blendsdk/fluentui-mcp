@@ -4,320 +4,350 @@
 
 ## Goal
 
-Build validated FluentUI React v9 forms where every control renders its own label, hint, error/warning/success message and ARIA wiring through Field, errors are derived from values (never duplicated in state), errors are revealed only after interaction or submit, cross-field and async rules are supported, and form-level failures are announced through a MessageBar summary.
+Collect user input in a Fluent UI React v9 form with accessible, Field-based validation: derived error messages, sensible blur/submit timing, form-level MessageBar summaries, focus management after a failed submit, plus cross-field and async (availability) rule support.
 
 ## When to Use
 
-Use this recipe whenever a form must tell the user what is wrong: required-field checks, format rules (email, length, pattern), cross-field rules such as password confirmation, server-owned uniqueness/availability checks, and success/failure feedback after submit. It is the default approach for any multi-control form built with Fluent v9 controls (Input, Textarea, Select, Checkbox, Radio, Switch, Spinbutton).
+Use this recipe for any Fluent UI React v9 form that needs inline, accessible validation: sign-up, profile and settings forms, checkout steps, admin panels, or any screen where per-field messages must be associated with their control for assistive technology and where the form must summarize what is wrong before submitting. It is also the right starting point for cross-field rules (confirm password, date ranges) and asynchronous rules (username or coupon availability).
 
 ## When Not to Use
 
-Do not use this pattern when there is no validation to perform (a single search box: use Search or Input with a clear button). Avoid hand-rolling validation markup with Label + custom error spans when a Field-compatible control exists, since you would lose the automatic aria-describedby/aria-labelledby wiring. For very large, schema-driven forms consider a form library (react-hook-form, Formik) and register Fluent controls through Field as described here rather than replacing the Fluent field layout; for field-level help content that is not validation, use the Field hint slot or an Infolabel instead of a validation message.
+Skip the full recipe for a single isolated field with no rules - render Field plus the control directly. If you already use a schema or form-state library (react-hook-form, Formik, a validation schema), keep it for state and submission and use Field/MessageBar only as the presentation layer described here instead of building a second message system. Do not use Field's validationMessage for page-wide or server-wide failures; use MessageBar (or a Toast surface) for those, and keep field messages for field-scoped problems.
 
-## What you get
+## What this recipe builds
 
-A form in which each control renders its own label, hint, error icon and message, in which a user only sees a problem after interacting with a field or pressing submit, and in which the form as a whole announces how many fields still need attention.
+A form whose validity lives in one place, whose messages appear at the right moment, and whose errors are wired to the controls for assistive technology. It uses `Field` as the validation shell, `Input` / `Textarea` / `Select` / `Checkbox` as controls, `MessageBar` for form-level feedback and `Button` to submit.
 
-## Why Field is the backbone
+## Step 1 - Wrap every validated control in `Field`
 
-`Field` renders the label, an optional hint, and an optional validation message, and it connects all of them to the control it wraps through context. Supported controls receive the generated `aria-labelledby` and `aria-describedby` values automatically, and the label gets a required indicator when `required` is set. You never hand-write ids or `role="alert"` spans:
+`Field` is the only Fluent UI React v9 component that models validation. It renders the label, the hint, the validation message and the message icon, and injects the ARIA wiring into the control through context:
+
+- `label` - renders the `<label>` element and gives the control its accessible name.
+- `required` - renders the required indicator and marks the control as required. Native enforcement stays off because the `<form>` is `noValidate`.
+- `hint` - always-visible help text (format rules, ranges, character counts). It becomes part of the control's `aria-describedby`.
+- `validationState` - `'none' | 'error' | 'warning' | 'success'`. `'error'` sets `aria-invalid="true"` on the control and switches the message to the error style with an icon.
+- `validationMessage` - the dynamic message. It renders nothing when `undefined` and is added to `aria-describedby`.
+- `orientation` - `'vertical'` (default) or `'horizontal'` when the label should sit beside the control in dense layouts.
+- `size` - `'small' | 'medium' | 'large'` for compact layouts.
+
+The controls `Input`, `Textarea`, `Select`, `Checkbox`, `RadioGroup`, `Dropdown`, `Combobox`, `Switch`, `Slider` and `SpinButton` read that context, so you never hand-write `htmlFor`, `id`, `aria-describedby` or `aria-invalid`.
+
+## Step 2 - Model values, derive errors
+
+Keep exactly one copy of the data. Errors are computed, never stored:
+
+```tsx
+type FormValues = { email: string; acceptTerms: boolean };
+type FormErrors = Partial<Record<keyof FormValues, string>>;
+
+const errors = React.useMemo(() => validate(values), [values]);
+const isInvalid = Object.keys(errors).length > 0;
+```
+
+Because `errors` is derived, a field stops being invalid the moment its value becomes valid - there is no stale message to clear by hand.
+
+## Step 3 - Decide when a message becomes visible
+
+Store only two extra pieces of UI state: which fields the user has visited, and whether the form has been submitted.
+
+```tsx
+const [touched, setTouched] = React.useState<Partial<Record<keyof FormValues, boolean>>>({});
+const [submitCount, setSubmitCount] = React.useState(0);
+const submitAttempted = submitCount > 0;
+
+const visibleError = (field: keyof FormValues) =>
+  touched[field] || submitAttempted ? errors[field] : undefined;
+
+const validationStateFor = (field: keyof FormValues) =>
+  visibleError(field) ? 'error' : 'none';
+```
+
+Recommended timing:
+
+- First render: no messages, `validationState="none"`.
+- `onBlur` of a field: mark it touched so its rule is evaluated and shown.
+- `onChange` after a failed submit: `submitAttempted` stays `true`, so errors clear live while the user fixes them.
+- `Select`, `RadioGroup`, `Checkbox`: mark touched inside the change handler - a picked value is a committed answer.
+
+## Step 4 - Render hint and message on the field
 
 ```tsx
 <Field
-  label="Email"
+  label="Work email"
   required
-  validationState={error ? "error" : "none"}
-  validationMessage={error}
-  hint="We only use this address for receipts."
+  hint="We only use this address for account notifications."
+  validationState={validationStateFor('email')}
+  validationMessage={visibleError('email')}
 >
-  <Input value={value} onChange={(ev, data) => setValue(data.value)} />
+  <Input
+    value={values.email}
+    onChange={(_, data) => updateValue('email', data.value)}
+    onBlur={markTouched('email')}
+  />
 </Field>
 ```
 
-`validationState` accepts `"error" | "warning" | "success" | "none"` and drives both the icon and the message styling. `validationMessage` is a slot, so a plain string covers the common case and a custom element covers rich content; the `validationMessageIcon` slot lets you replace the built-in icon. Keep the two in step: a message with `validationState="none"` renders without error styling, and `validationState="error"` with no message renders an icon with nothing to explain it.
+Change-event data shapes: `InputOnChangeData.value`, `TextareaOnChangeData.value` and `SelectOnChangeData.value` are strings, while `CheckboxOnChangeData.checked` is `boolean | 'mixed'`, so compare with `data.checked === true`.
 
-## The three rules that keep validated forms pleasant
+Use `validationState="warning"` for soft advice (a background check that could not run, a recommended-but-optional rule) and `"success"` to confirm a rule that only passes after work (a strong password, an available username). Keep one message per field: put the single next action in `validationMessage` and persistent rules in `hint`.
 
-1. **One source of truth.** Keep `values` in state and *derive* errors from them on every render (`const errors = validate(values)`). Storing errors in a second state variable is how forms end up showing a stale message next to a value the user already fixed.
-2. **State and message come from the same value.** Compute `validationState` and `validationMessage` from the same `errors[name]` expression so they can never disagree.
-3. **Reveal errors progressively.** Show an error only after the field has been touched (set in `onBlur`) or after the user pressed submit. Showing every required error on first paint makes an empty form look broken.
+## Step 5 - Summarize at the form level and move focus
 
-## Step by step
-
-1. Type the form values and write one pure `validate(values)` function returning a partial map of messages, for example `{ email: "Enter an address like name@example.com." }`.
-2. Create state: `values`, `touched`, `submitAttempted`, `isSubmitting`.
-3. Derive `errors` and `errorCount` during render. Do not put them in state.
-4. Resolve one `error` per field: `touched[name] || submitAttempted ? errors[name] : undefined`, then pass that single value to both `validationState` and `validationMessage`.
-5. Mark fields touched in `onBlur`; set `submitAttempted` at the top of the submit handler, before checking `errorCount > 0`.
-6. When submit fails, render a `MessageBar` summary with `politeness="assertive"` so assistive technology announces the failure, and move focus to the first invalid control.
-7. On success, reset `values`, `touched` and `submitAttempted`, and render an `intent="success"` `MessageBar`.
-
-## Patterns
-
-### Synchronous per-field rules
-
-See **Validated sign-up form**: required fields, a pattern rule for email, a length rule for bio, and a checkbox that must be checked. Every rule lives in one `validate` function and every message is rendered by a `Field`.
-
-### Cross-field rules
-
-Rules that compare two fields belong in the same `validate` function: `values.confirm !== values.next` produces `errors.confirm`. Because errors are derived on every render, editing `next` immediately re-validates `confirm` with no extra wiring. See **Change password form**.
-
-### Async rules (uniqueness, availability)
-
-Keep an explicit status machine (`idle | checking | available | taken | unknown`) and debounce the request, cancelling stale responses:
+Field-level messages only help if the user can reach them. After a failed submit, render a `MessageBar` summary and focus the first invalid control:
 
 ```tsx
+const formRef = React.useRef<HTMLFormElement>(null);
+
 React.useEffect(() => {
-  const username = value.trim();
-  if (username.length < 3) {
-    setStatus("idle");
-    return;
-  }
-  let cancelled = false;
-  setStatus("checking");
-  const timer = window.setTimeout(() => {
-    checkAvailability(username)
-      .then(available => { if (!cancelled) setStatus(available ? "available" : "taken"); })
-      .catch(() => { if (!cancelled) setStatus("unknown"); });
-  }, 300);
-  return () => { cancelled = true; window.clearTimeout(timer); };
-}, [value]);
+  if (submitCount === 0) return;
+  formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+}, [submitCount]);
 ```
 
-Map the status onto `validationState`: `taken -> "error"`, `unknown -> "warning"`, `available -> "success"`, otherwise `"none"`. Report progress inside the control with the input's `contentAfter` slot (`<Spinner size="extra-tiny" />`) so the layout does not jump while the request is in flight. See **Async username availability field**.
+The lookup leans on the `aria-invalid` that `Field` puts on the control when `validationState` is `'error'`, so it always lands on the focusable element itself (the `<input>`, `<select>` or `<textarea>`). Custom focus logic per field is then unnecessary.
 
-### Reusable validated controls
+The submit handler stays tiny:
 
-Wrap `Field` plus a control once and let call sites pass only a message: `<ValidatedTextField label="Email" value={email} error={errors.email} onChange={...} onBlur={...} />`. The wrapper owns the `validationState` / `validationMessage` mapping, so the same visual and ARIA contract is repeated everywhere. The full component is in **Change password form**.
+```tsx
+const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  event.preventDefault();
+  setSubmitCount(count => count + 1);
+  if (!isInvalid) setSaved(true);
+};
+```
 
-## Accessibility checklist
+Keep the submit `Button` enabled. A disabled button cannot explain what is wrong, and a user who cannot see the screen never learns why it does nothing. Only disable it for transient reasons such as an in-flight async check, and say so with a `Spinner`.
 
-- Let `Field` wire `aria-labelledby` and `aria-describedby`; add your own only when composing something `Field` does not support.
-- Put `noValidate` on the `<form>` so native browser bubbles do not compete with the Fluent messages and block your handler.
-- Announce the summary: `MessageBar` with `politeness="assertive"` for errors, `politeness="polite"` for success.
-- Never signal with colour alone: the message text and the built-in icon carry the meaning.
-- Move focus to the first invalid field after a failed submit so keyboard users are not left hunting for the problem.
-- Write specific, actionable messages; `Enter an address like name@example.com.` beats `Invalid input.`
+## Step 6 - Cross-field and asynchronous rules
 
-## Pitfalls
+- Cross-field: compute both sides from the same `values` object (password vs. confirmation, start vs. end date) and give each control its own `validationState` and `validationMessage`, so a mismatch can mark the second field while the first stays `success`.
+- Async (username availability, coupon codes): keep a status string such as `'idle' | 'checking' | 'available' | 'taken' | 'unknown'`, debounce with `setTimeout` inside `useEffect`, and clean up with a `cancelled` flag so an out-of-order response cannot overwrite a newer one. Show progress in the `Input`'s `contentAfter` slot with `Spinner size="extra-tiny"`, then map the outcome onto `validationState`: `'taken'` becomes `error`, `'unknown'` becomes `warning` (submitting is still allowed and the server re-checks), `'available'` becomes `success`.
+- Server-side errors: reuse the same `FormErrors` shape. Set the returned per-field errors into state and render them through the identical `validationMessage` props; put whole-form errors in the `MessageBar`.
 
-See the structured list. The two that bite most often are rendering a message without a matching state (error text that looks like a hint) and keeping a second `errors` state variable that drifts away from `values`.
+## Step 7 - Pre-ship check list
+
+- The `<form>` has `noValidate`, so browser bubbles never pre-empt your messages.
+- Every control sits inside a `Field` with a real `label` (never a placeholder used as a label).
+- Errors are derived from values with `useMemo`; the only extra state is `touched`, `submitAttempted` and async status.
+- `validationState` and `validationMessage` are always set together.
+- Focus moves to the first invalid control after a failed submit.
+- Async validation cancels stale responses and never blocks submit on an unknown result.
+- The submit button is enabled and the form explains itself through messages.
 
 ## Examples
 
-### Validated sign-up form with per-field errors and an error summary
+### Profile form with derived validation, field messages and a form-level summary
 
-A complete form (Input, Select, Textarea, Checkbox) where a single validate function produces all messages, errors are revealed after onBlur or submit, an assertive MessageBar summarises failures, and the form resets on success.
+A complete form using Field + Input + Select + Textarea + Checkbox, with errors derived from a single values object, messages revealed only after blur or submit, an error MessageBar summarizing the failure, a success MessageBar after saving, and focus moved to the first control that Field marked aria-invalid.
 
 ```tsx
-import * as React from "react";
-import { Button, Checkbox, Field, Input, MessageBar, Select, Text, Textarea } from "@fluentui/react-components";
+import * as React from 'react';
+import {
+  Button,
+  Checkbox,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Select,
+  Textarea,
+} from '@fluentui/react-components';
 
 type FormValues = {
   fullName: string;
   email: string;
-  plan: string;
+  role: string;
   bio: string;
   acceptTerms: boolean;
 };
 
-type FieldName = keyof FormValues;
-type FormErrors = Partial<Record<FieldName, string>>;
-
-const initialValues: FormValues = {
-  fullName: "",
-  email: "",
-  plan: "",
-  bio: "",
-  acceptTerms: false,
-};
+type FormErrors = Partial<Record<keyof FormValues, string>>;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const INITIAL_VALUES: FormValues = {
+  fullName: '',
+  email: '',
+  role: '',
+  bio: '',
+  acceptTerms: false,
+};
 
 function validate(values: FormValues): FormErrors {
   const errors: FormErrors = {};
 
   if (values.fullName.trim().length === 0) {
-    errors.fullName = "Enter your full name.";
-  } else if (values.fullName.trim().length < 2) {
-    errors.fullName = "Use at least 2 characters.";
+    errors.fullName = 'Enter your full name.';
   }
 
   if (values.email.trim().length === 0) {
-    errors.email = "Enter your email address.";
+    errors.email = 'Enter your email address.';
   } else if (!EMAIL_PATTERN.test(values.email.trim())) {
-    errors.email = "Enter an address like name@example.com.";
+    errors.email = 'Enter an email address in the format name@example.com.';
   }
 
-  if (values.plan.length === 0) {
-    errors.plan = "Choose a plan to continue.";
+  if (values.role.length === 0) {
+    errors.role = 'Select the role that best fits your work.';
   }
 
   if (values.bio.length > 200) {
-    errors.bio = `Shorten your bio by ${values.bio.length - 200} characters.`;
+    errors.bio = 'Keep your bio to 200 characters or fewer.';
   }
 
   if (!values.acceptTerms) {
-    errors.acceptTerms = "Accept the terms to create your account.";
+    errors.acceptTerms = 'You must accept the terms of service to create a profile.';
   }
 
   return errors;
 }
 
-export const SignUpForm: React.FC = () => {
-  const [values, setValues] = React.useState<FormValues>(initialValues);
-  const [touched, setTouched] = React.useState<Partial<Record<FieldName, boolean>>>({});
-  const [submitAttempted, setSubmitAttempted] = React.useState(false);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+export const ProfileForm: React.FC = () => {
+  const formRef = React.useRef<HTMLFormElement>(null);
 
-  // Errors are derived from values on every render, so they can never drift out of sync.
-  const errors = validate(values);
-  const errorCount = Object.keys(errors).length;
+  const [values, setValues] = React.useState<FormValues>(INITIAL_VALUES);
+  const [touched, setTouched] = React.useState<Partial<Record<keyof FormValues, boolean>>>({});
+  const [submitCount, setSubmitCount] = React.useState(0);
+  const [saved, setSaved] = React.useState(false);
 
-  const visibleError = (name: FieldName): string | undefined =>
-    touched[name] || submitAttempted ? errors[name] : undefined;
+  const errors = React.useMemo(() => validate(values), [values]);
+  const errorFields = Object.keys(errors) as (keyof FormValues)[];
+  const isInvalid = errorFields.length > 0;
+  const submitAttempted = submitCount > 0;
 
-  const validationStateFor = (name: FieldName): "error" | "none" =>
-    visibleError(name) ? "error" : "none";
-
-  function setField<K extends FieldName>(name: K, value: FormValues[K]) {
-    setValues(previous => {
-      const next: FormValues = { ...previous };
-      next[name] = value;
-      return next;
-    });
-  }
-
-  function markTouched(name: FieldName) {
-    setTouched(previous => {
-      const next = { ...previous };
-      next[name] = true;
-      return next;
-    });
-  }
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSubmitAttempted(true);
-
-    if (errorCount > 0) {
-      // Per-field messages and the summary are visible now; focus the first invalid control here.
+  // After a failed submit, focus the first control that Field marked aria-invalid.
+  React.useEffect(() => {
+    if (submitCount === 0) {
       return;
     }
+    formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [submitCount]);
 
-    setIsSubmitting(true);
-    try {
-      await new Promise(resolve => window.setTimeout(resolve, 600)); // replace with your API call
-      setValues(initialValues);
-      setTouched({});
-      setSubmitAttempted(false);
-    } finally {
-      setIsSubmitting(false);
+  const updateValue = <K extends keyof FormValues>(field: K, value: FormValues[K]) => {
+    setValues(previous => ({ ...previous, [field]: value }));
+    setSaved(false);
+  };
+
+  const markTouched = (field: keyof FormValues) => () => {
+    setTouched(previous => ({ ...previous, [field]: true }));
+  };
+
+  /** Reveal a message only once the field was visited or the form was submitted. */
+  const visibleError = (field: keyof FormValues): string | undefined =>
+    touched[field] || submitAttempted ? errors[field] : undefined;
+
+  const stateFor = (field: keyof FormValues): 'error' | 'none' => (visibleError(field) ? 'error' : 'none');
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitCount(count => count + 1);
+
+    if (!isInvalid) {
+      setSaved(true);
     }
-  }
+  };
 
   return (
-    <form onSubmit={handleSubmit} noValidate style={{ display: "grid", gap: 16, maxWidth: 480 }}>
-      {submitAttempted && errorCount > 0 ? (
-        <MessageBar intent="error" politeness="assertive">
-          <Text weight="semibold">
-            {errorCount === 1
-              ? "1 field needs your attention."
-              : `${errorCount} fields need your attention.`}
-          </Text>
+    <form
+      ref={formRef}
+      noValidate
+      onSubmit={handleSubmit}
+      style={{ display: 'grid', gap: '16px', maxWidth: '480px' }}
+    >
+      {submitAttempted && isInvalid && (
+        <MessageBar intent="error">
+          <MessageBarBody>
+            <MessageBarTitle>Your profile was not saved</MessageBarTitle>
+            Fix the {errorFields.length} highlighted {errorFields.length === 1 ? 'field' : 'fields'} and submit again.
+          </MessageBarBody>
         </MessageBar>
-      ) : null}
+      )}
+
+      {saved && (
+        <MessageBar intent="success">
+          <MessageBarBody>
+            <MessageBarTitle>Profile saved</MessageBarTitle>
+            We will send a confirmation to {values.email.trim()}.
+          </MessageBarBody>
+        </MessageBar>
+      )}
 
       <Field
         label="Full name"
         required
-        validationState={validationStateFor("fullName")}
-        validationMessage={visibleError("fullName")}
-        hint="Use the name that should appear on your invoices."
+        validationState={stateFor('fullName')}
+        validationMessage={visibleError('fullName')}
       >
         <Input
+          name="fullName"
           value={values.fullName}
-          onChange={(ev, data) => setField("fullName", data.value)}
-          onBlur={() => markTouched("fullName")}
-          autoComplete="name"
+          onChange={(_, data) => updateValue('fullName', data.value)}
+          onBlur={markTouched('fullName')}
         />
       </Field>
 
       <Field
-        label="Email"
+        label="Work email"
         required
-        validationState={validationStateFor("email")}
-        validationMessage={visibleError("email")}
+        hint="We only use this address for account notifications."
+        validationState={stateFor('email')}
+        validationMessage={visibleError('email')}
       >
         <Input
+          name="email"
           type="email"
           value={values.email}
-          onChange={(ev, data) => setField("email", data.value)}
-          onBlur={() => markTouched("email")}
-          autoComplete="email"
+          onChange={(_, data) => updateValue('email', data.value)}
+          onBlur={markTouched('email')}
         />
       </Field>
 
-      <Field
-        label="Plan"
-        required
-        validationState={validationStateFor("plan")}
-        validationMessage={visibleError("plan")}
-      >
+      <Field label="Role" required validationState={stateFor('role')} validationMessage={visibleError('role')}>
         <Select
-          value={values.plan}
-          onChange={(ev, data) => setField("plan", data.value)}
-          onBlur={() => markTouched("plan")}
+          name="role"
+          value={values.role}
+          onChange={(_, data) => {
+            updateValue('role', data.value);
+            setTouched(previous => ({ ...previous, role: true }));
+          }}
         >
-          <option value="" disabled>
-            Choose a plan
-          </option>
-          <option value="starter">Starter</option>
-          <option value="team">Team</option>
-          <option value="enterprise">Enterprise</option>
+          <option value="">Select a role</option>
+          <option value="designer">Designer</option>
+          <option value="engineer">Engineer</option>
+          <option value="researcher">Researcher</option>
         </Select>
       </Field>
 
       <Field
         label="Bio"
-        validationState={validationStateFor("bio")}
-        validationMessage={visibleError("bio")}
         hint={`${values.bio.length}/200 characters`}
+        validationState={stateFor('bio')}
+        validationMessage={visibleError('bio')}
       >
         <Textarea
-          value={values.bio}
+          name="bio"
           resize="vertical"
-          onChange={(ev, data) => setField("bio", data.value)}
-          onBlur={() => markTouched("bio")}
+          value={values.bio}
+          onChange={(_, data) => updateValue('bio', data.value)}
+          onBlur={markTouched('bio')}
         />
       </Field>
 
-      <Field
-        validationState={validationStateFor("acceptTerms")}
-        validationMessage={visibleError("acceptTerms")}
-      >
+      {/* No label on this Field: the Checkbox label is the accessible name. */}
+      <Field validationState={stateFor('acceptTerms')} validationMessage={visibleError('acceptTerms')}>
         <Checkbox
-          checked={values.acceptTerms}
           label="I accept the terms of service"
-          onChange={(ev, data) => setField("acceptTerms", data.checked === true)}
-          onBlur={() => markTouched("acceptTerms")}
+          checked={values.acceptTerms}
+          onChange={(_, data) => {
+            updateValue('acceptTerms', data.checked === true);
+            setTouched(previous => ({ ...previous, acceptTerms: true }));
+          }}
         />
       </Field>
 
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <Button
-          type="button"
-          appearance="secondary"
-          onClick={() => {
-            setValues(initialValues);
-            setTouched({});
-            setSubmitAttempted(false);
-          }}
-        >
-          Reset
-        </Button>
-        <Button type="submit" appearance="primary" disabled={isSubmitting}>
-          {isSubmitting ? "Creating account..." : "Create account"}
+      <div>
+        <Button appearance="primary" type="submit">
+          Create profile
         </Button>
       </div>
     </form>
@@ -325,275 +355,305 @@ export const SignUpForm: React.FC = () => {
 };
 ```
 
-### Async username availability field
+### Debounced async validation for a username field
 
-A single Field whose validation state is driven by an asynchronous, debounced, cancellable availability check, with a Spinner in the input's contentAfter slot and error/warning/success states for taken, unverified and available results.
+Field render-prop usage combined with a debounced availability check: a Spinner in the Input's contentAfter slot while checking, error state for a taken name, warning state when the service cannot be reached, success state for an available name, and a submit handler that only blocks on real errors.
 
 ```tsx
-import * as React from "react";
-import { Field, Input, Spinner } from "@fluentui/react-components";
+import * as React from 'react';
+import {
+  Button,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Spinner,
+} from '@fluentui/react-components';
 
-type AvailabilityStatus = "idle" | "checking" | "available" | "taken" | "unknown";
+type AvailabilityStatus = 'idle' | 'checking' | 'available' | 'taken' | 'unknown';
 
-const TAKEN_USERNAMES = new Set(["admin", "support", "fluent", "test"]);
+type ValidationState = 'none' | 'error' | 'warning' | 'success';
 
-function checkUsernameAvailable(username: string): Promise<boolean> {
+const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/i;
+
+const RESERVED_USERNAMES = new Set(['admin', 'root', 'support', 'help']);
+
+function isUsernameAvailable(username: string): Promise<boolean> {
   return new Promise(resolve => {
-    window.setTimeout(() => resolve(!TAKEN_USERNAMES.has(username.toLowerCase())), 500);
+    window.setTimeout(() => resolve(!RESERVED_USERNAMES.has(username.toLowerCase())), 600);
   });
 }
 
-export const UsernameField: React.FC = () => {
-  const [value, setValue] = React.useState("");
-  const [status, setStatus] = React.useState<AvailabilityStatus>("idle");
+export const UsernameForm: React.FC = () => {
+  const [username, setUsername] = React.useState('');
+  const [status, setStatus] = React.useState<AvailabilityStatus>('idle');
+  const [touched, setTouched] = React.useState(false);
+  const [submitAttempted, setSubmitAttempted] = React.useState(false);
+  const [claimed, setClaimed] = React.useState<string | null>(null);
 
-  const username = value.trim();
-  const isTooShort = username.length > 0 && username.length < 3;
+  const requiredError = username.length === 0 && submitAttempted ? 'Enter a username.' : undefined;
+  const formatError =
+    username.length === 0 || USERNAME_PATTERN.test(username)
+      ? undefined
+      : 'Use 3-20 characters: letters, numbers and underscores only.';
 
+  // Debounced availability check. The cancelled flag drops out-of-order responses.
   React.useEffect(() => {
-    if (username.length < 3) {
-      setStatus("idle");
+    if (formatError || username.length === 0) {
+      setStatus('idle');
       return;
     }
 
     let cancelled = false;
-    setStatus("checking");
+    setStatus('checking');
 
     const timer = window.setTimeout(() => {
-      checkUsernameAvailable(username)
+      isUsernameAvailable(username)
         .then(available => {
           if (!cancelled) {
-            setStatus(available ? "available" : "taken");
+            setStatus(available ? 'available' : 'taken');
           }
         })
         .catch(() => {
           if (!cancelled) {
-            setStatus("unknown");
+            setStatus('unknown');
           }
         });
-    }, 300);
+    }, 400);
 
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [username]);
+  }, [username, formatError]);
 
-  const validationState: "error" | "warning" | "success" | "none" =
-    isTooShort || status === "taken"
-      ? "error"
-      : status === "unknown"
-        ? "warning"
-        : status === "available"
-          ? "success"
-          : "none";
+  let validationState: ValidationState = 'none';
+  let validationMessage: string | undefined;
 
-  const validationMessage = isTooShort
-    ? "Use at least 3 characters."
-    : status === "taken"
-      ? "That username is already taken."
-      : status === "unknown"
-        ? "We could not check availability. Try again."
-        : status === "available"
-          ? "This username is available."
-          : undefined;
+  if (requiredError || formatError) {
+    validationState = 'error';
+    validationMessage = requiredError ?? formatError;
+  } else if (status === 'taken') {
+    validationState = 'error';
+    validationMessage = 'That username is already taken. Try another one.';
+  } else if (status === 'unknown') {
+    validationState = 'warning';
+    validationMessage = 'We could not check availability just now. We will verify again on submit.';
+  } else if (status === 'available' && touched) {
+    validationState = 'success';
+    validationMessage = 'This username is available.';
+  }
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitAttempted(true);
+
+    if (
+      username.length === 0 ||
+      Boolean(formatError) ||
+      status === 'taken' ||
+      status === 'checking'
+    ) {
+      return;
+    }
+
+    // 'unknown' intentionally does not block: the server re-validates on submit.
+    setClaimed(username);
+  };
 
   return (
-    <Field
-      label="Username"
-      required
-      validationState={validationState}
-      validationMessage={validationMessage}
-      hint="Letters, numbers and underscores only."
-    >
-      <Input
-        value={value}
-        autoComplete="username"
-        onChange={(ev, data) => setValue(data.value.replace(/[^a-zA-Z0-9_]/g, ""))}
-        contentAfter={status === "checking" ? <Spinner size="extra-tiny" /> : undefined}
-      />
-    </Field>
+    <form noValidate onSubmit={handleSubmit} style={{ display: 'grid', gap: '16px', maxWidth: '400px' }}>
+      <Field
+        label="Username"
+        required
+        hint="3-20 characters. Letters, numbers and underscores only."
+        validationState={validationState}
+        validationMessage={validationMessage}
+      >
+        {controlProps => (
+          <Input
+            {...controlProps}
+            name="username"
+            value={username}
+            onChange={(_, data) => {
+              setUsername(data.value);
+              setTouched(false);
+              setClaimed(null);
+            }}
+            onBlur={() => setTouched(true)}
+            contentAfter={status === 'checking' ? <Spinner size="extra-tiny" /> : undefined}
+          />
+        )}
+      </Field>
+
+      <div>
+        {/* Transient guard while the check is in flight; not a validation gate. */}
+        <Button appearance="primary" type="submit" disabled={status === 'checking'}>
+          Claim username
+        </Button>
+      </div>
+
+      {claimed && (
+        <MessageBar intent="success">
+          <MessageBarBody>
+            <MessageBarTitle>@{claimed} is yours</MessageBarTitle>
+            We reserved it for the next 10 minutes.
+          </MessageBarBody>
+        </MessageBar>
+      )}
+    </form>
   );
 };
 ```
 
-### Change password form with cross-field validation and a reusable validated field
+### Cross-field validation with a live requirement checklist
 
-Shows a typed ValidatedTextField wrapper around Field + Input, cross-field validation (confirm must match the new password), rule ordering for password strength, a success MessageBar after submit, and errors revealed only after blur or submit.
+Password and confirmation fields validated together: the requirement checklist is rendered inside Field's hint slot so it is part of the control's aria-describedby, the password flips from error to success once every rule passes, and the confirmation field only reports a mismatch against the current password value.
 
 ```tsx
-import * as React from "react";
-import { Button, Field, Input, MessageBar, Text } from "@fluentui/react-components";
+import * as React from 'react';
+import {
+  Button,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Text,
+} from '@fluentui/react-components';
 
-type SupportedInputType = "text" | "email" | "password" | "search" | "tel" | "url";
+type ValidationState = 'none' | 'error' | 'success';
 
-type ValidatedTextFieldProps = {
+type PasswordRule = {
+  id: string;
   label: string;
-  value: string;
-  onChange: (value: string) => void;
-  onBlur: () => void;
-  error?: string;
-  hint?: string;
-  required?: boolean;
-  type?: SupportedInputType;
-  autoComplete?: string;
+  test: (value: string) => boolean;
 };
 
-export const ValidatedTextField: React.FC<ValidatedTextFieldProps> = ({
-  label,
-  value,
-  onChange,
-  onBlur,
-  error,
-  hint,
-  required,
-  type = "text",
-  autoComplete,
-}) => (
-  <Field
-    label={label}
-    required={required}
-    hint={hint}
-    validationState={error ? "error" : "none"}
-    validationMessage={error}
-  >
-    <Input
-      type={type}
-      value={value}
-      autoComplete={autoComplete}
-      onChange={(ev, data) => onChange(data.value)}
-      onBlur={onBlur}
-    />
-  </Field>
-);
+const PASSWORD_RULES: PasswordRule[] = [
+  { id: 'length', label: 'At least 12 characters', test: value => value.length >= 12 },
+  {
+    id: 'case',
+    label: 'An uppercase and a lowercase letter',
+    test: value => /[A-Z]/.test(value) && /[a-z]/.test(value),
+  },
+  { id: 'number', label: 'At least one number', test: value => /\d/.test(value) },
+  { id: 'symbol', label: 'At least one symbol', test: value => /[^A-Za-z0-9]/.test(value) },
+];
 
-type PasswordValues = {
-  current: string;
-  next: string;
-  confirm: string;
-};
-
-type PasswordField = keyof PasswordValues;
-type PasswordErrors = Partial<Record<PasswordField, string>>;
-
-function validatePasswords(values: PasswordValues): PasswordErrors {
-  const errors: PasswordErrors = {};
-
-  if (values.current.length === 0) {
-    errors.current = "Enter your current password.";
-  }
-
-  if (values.next.length < 12) {
-    errors.next = "Use at least 12 characters.";
-  } else if (!/[0-9]/.test(values.next)) {
-    errors.next = "Add at least one number.";
-  } else if (!/[^A-Za-z0-9]/.test(values.next)) {
-    errors.next = "Add at least one symbol.";
-  }
-
-  if (values.confirm.length === 0) {
-    errors.confirm = "Re-enter the new password.";
-  } else if (values.confirm !== values.next) {
-    errors.confirm = "Passwords do not match.";
-  }
-
-  return errors;
-}
-
-export const ChangePasswordForm: React.FC = () => {
-  const [values, setValues] = React.useState<PasswordValues>({
-    current: "",
-    next: "",
-    confirm: "",
-  });
-  const [touched, setTouched] = React.useState<Partial<Record<PasswordField, boolean>>>({});
-  const [submitAttempted, setSubmitAttempted] = React.useState(false);
+export const PasswordForm: React.FC = () => {
+  const [password, setPassword] = React.useState('');
+  const [confirmation, setConfirmation] = React.useState('');
+  const [touched, setTouched] = React.useState({ password: false, confirmation: false });
   const [saved, setSaved] = React.useState(false);
 
-  // Cross-field rules are just part of the same derived validation pass.
-  const errors = validatePasswords(values);
-  const isValid = Object.keys(errors).length === 0;
+  const failedRules = PASSWORD_RULES.filter(rule => !rule.test(password));
+  const passwordError =
+    password.length === 0
+      ? undefined
+      : failedRules.length > 0
+      ? 'Your password does not meet every requirement listed below.'
+      : undefined;
 
-  const visibleError = (name: PasswordField): string | undefined =>
-    touched[name] || submitAttempted ? errors[name] : undefined;
+  const confirmationError =
+    confirmation.length > 0 && confirmation !== password ? 'Both passwords must match.' : undefined;
 
-  function setField<K extends PasswordField>(name: K, value: string) {
-    setValues(previous => {
-      const next: PasswordValues = { ...previous };
-      next[name] = value;
-      return next;
-    });
-    setSaved(false);
+  const markPasswordTouched = () => setTouched(previous => ({ ...previous, password: true }));
+  const markConfirmationTouched = () => setTouched(previous => ({ ...previous, confirmation: true }));
+
+  let passwordState: ValidationState = 'none';
+  let passwordMessage: string | undefined;
+  if (touched.password) {
+    passwordState = passwordError ? 'error' : password.length > 0 ? 'success' : 'none';
+    passwordMessage = passwordError ?? (password.length > 0 ? 'Password meets every requirement.' : undefined);
   }
 
-  function markTouched(name: PasswordField) {
-    setTouched(previous => {
-      const next = { ...previous };
-      next[name] = true;
-      return next;
-    });
+  let confirmationState: ValidationState = 'none';
+  if (confirmationError) {
+    confirmationState = 'error';
+  } else if (confirmation.length > 0 && password.length > 0 && confirmation === password) {
+    confirmationState = 'success';
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  const confirmationMessage =
+    confirmationError ?? (confirmationState === 'success' ? 'Passwords match.' : undefined);
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitAttempted(true);
+    setTouched({ password: true, confirmation: true });
 
-    if (!isValid) {
+    if (password.length === 0 || failedRules.length > 0 || confirmation !== password) {
       return;
     }
 
-    await new Promise(resolve => window.setTimeout(resolve, 500)); // replace with your API call
     setSaved(true);
-    setValues({ current: "", next: "", confirm: "" });
-    setTouched({});
-    setSubmitAttempted(false);
-  }
+  };
 
   return (
-    <form onSubmit={handleSubmit} noValidate style={{ display: "grid", gap: 16, maxWidth: 420 }}>
-      <ValidatedTextField
-        label="Current password"
-        type="password"
-        required
-        autoComplete="current-password"
-        value={values.current}
-        onChange={value => setField("current", value)}
-        onBlur={() => markTouched("current")}
-        error={visibleError("current")}
-      />
-
-      <ValidatedTextField
-        label="New password"
-        type="password"
-        required
-        autoComplete="new-password"
-        hint="At least 12 characters, with a number and a symbol."
-        value={values.next}
-        onChange={value => setField("next", value)}
-        onBlur={() => markTouched("next")}
-        error={visibleError("next")}
-      />
-
-      <ValidatedTextField
-        label="Confirm new password"
-        type="password"
-        required
-        autoComplete="new-password"
-        value={values.confirm}
-        onChange={value => setField("confirm", value)}
-        onBlur={() => markTouched("confirm")}
-        error={visibleError("confirm")}
-      />
-
-      {saved ? (
-        <MessageBar intent="success" politeness="polite">
-          <Text>Your password was updated.</Text>
+    <form noValidate onSubmit={handleSubmit} style={{ display: 'grid', gap: '16px', maxWidth: '420px' }}>
+      {saved && (
+        <MessageBar intent="success">
+          <MessageBarBody>
+            <MessageBarTitle>Password updated</MessageBarTitle>
+            Use the new password the next time you sign in.
+          </MessageBarBody>
         </MessageBar>
-      ) : null}
+      )}
+
+      <Field
+        label="New password"
+        required
+        validationState={passwordState}
+        validationMessage={passwordMessage}
+        hint={
+          <ul style={{ margin: 0, paddingInlineStart: '20px' }}>
+            {PASSWORD_RULES.map(rule => {
+              const met = rule.test(password);
+              return (
+                <li key={rule.id}>
+                  <Text size={200} weight={met ? 'semibold' : 'regular'}>
+                    {rule.label} - {met ? 'met' : 'not met'}
+                  </Text>
+                </li>
+              );
+            })}
+          </ul>
+        }
+      >
+        <Input
+          name="new-password"
+          type="password"
+          value={password}
+          onChange={(_, data) => {
+            setPassword(data.value);
+            setSaved(false);
+          }}
+          onBlur={markPasswordTouched}
+        />
+      </Field>
+
+      <Field
+        label="Confirm new password"
+        required
+        validationState={confirmationState}
+        validationMessage={confirmationMessage}
+      >
+        <Input
+          name="confirm-password"
+          type="password"
+          value={confirmation}
+          onChange={(_, data) => {
+            setConfirmation(data.value);
+            setSaved(false);
+          }}
+          onBlur={markConfirmationTouched}
+        />
+      </Field>
 
       <div>
-        <Button type="submit" appearance="primary">
-          Change password
+        <Button appearance="primary" type="submit">
+          Update password
         </Button>
       </div>
     </form>
@@ -603,18 +663,18 @@ export const ChangePasswordForm: React.FC = () => {
 
 ## Pitfalls
 
-- Rendering validationMessage and validationState from different sources: derive both from the same errors[name] value, otherwise error text appears styled like a hint or an error icon appears with nothing to explain it.
-- Showing errors before the user interacts: track a touched map (set in onBlur) and a submitAttempted flag, and only surface errors when one of them is true - otherwise a fresh form looks broken and users are scolded for fields they have not reached yet.
-- Storing errors in state next to values: derive errors with a pure validate(values) call on every render. A second errors state variable will eventually show a message for a value the user already corrected.
-- Wrapping a group of controls (radio set, checkbox list) in a single Field: Field labels exactly one control, so use one Field per control for individual messages, or group them with your own label element and validate the group as a single field.
-- Forgetting to cancel asynchronous checks: an older response can overwrite a newer one or mark a fixed value as taken. Use a cancelled flag plus window.clearTimeout in the effect cleanup, and re-check the value when the promise resolves.
-- Omitting noValidate on the form: the browser's native bubbles appear next to Fluent messages and prevent your onSubmit handler from running, so users see two different validation languages.
-- Validating on errors that never clear: recompute errors on every value change (as in the examples) so a message disappears as soon as the value becomes valid, instead of waiting for the next blur.
-- Silent submit failures: without an assertive MessageBar summary and a focus move to the first invalid control, keyboard and screen reader users get no feedback about why nothing happened.
+- Leaving native browser validation on. Without noValidate on the <form>, the browser blocks submission and shows its own untranslated, non-themable bubbles before Field can render validationMessage. Add noValidate and own the validation yourself.
+- Storing error strings in state instead of deriving them. A stored message survives after the value becomes valid, so the field stays red. Derive errors with useMemo from the values object and keep only touched / submitAttempted / async status in state.
+- Showing errors before the user interacts. Rendering validationState="error" on first paint shouts at people before they type and marks fields they have not reached. Gate message visibility with touched or submitAttempted.
+- Disabling the submit button to express invalidity. A disabled button cannot explain itself, and keyboard or screen reader users never learn what is missing. Keep it enabled, validate on submit, reveal messages, and move focus to the first invalid control; only disable it for transient reasons such as an in-flight async check.
+- Setting validationState without validationMessage (or the reverse). An error outline with no explanation is unusable, and a message with validationState="none" is not styled or announced as an error. Always set the two props together, one message per field.
+- Hand-writing id, aria-describedby or aria-invalid on a control inside Field. Field supplies those through context; passing your own values overrides them and drops the association with the hint and validation message. Use the Field render-prop child (control props) if you need a custom control.
+- Skipping focus management. Field messages are rendered below the control, so on a long form an invalid field can be off screen. Query '[aria-invalid="true"]' inside the form after a failed submit and focus it.
+- Racing async validation results. A slow response for an old value can overwrite the status of the value the user has already changed. Debounce with a timer, clear it in the effect cleanup, and ignore results flagged as cancelled; treat an unreachable service as validationState="warning" rather than blocking submit.
 
 ## Accessibility
 
-Let Field own the accessibility wiring: it renders the label, hint and validation message and passes the corresponding aria-labelledby and aria-describedby values to the wrapped control through context, so the error text is read as the control's description without hand-written ids. Always put noValidate on the <form> so the browser's native validation bubbles do not appear alongside the Fluent messages and block the submit handler. Announce form-level results with MessageBar: politeness="assertive" for the error summary after a failed submit (so screen readers interrupt and read it), politeness="polite" for success confirmation. Do not rely on colour alone - the validation message text plus the built-in error icon carry the meaning. After a failed submit, move focus to the first invalid control; because Field wires attributes through context rather than exposing the generated ids, keep your own refs on the controls for that purpose. Mark required fields with Field's required prop so the label shows the indicator and the control gets required semantics. Keep messages specific about what to fix and where (which field, which rule) rather than generic.
+Field does the ARIA work for you: it renders the label with the matching htmlFor/id, adds the hint and validation message to the control's aria-describedby, and sets aria-invalid="true" on the control when validationState is 'error'. Do not pass your own id or aria-describedby to a control inside a Field unless you carry the Field-provided values forward - overriding them silently disconnects the message (the Field render-prop child form hands you exactly those props). Never rely on colour alone to signal a problem: validationState also renders a status icon, and the message text should state the specific fix. Announce form-level failures through MessageBar, which is a live region - keep the copy short, use MessageBarTitle for the headline, and reserve politeness="assertive" for errors that must interrupt. After a failed submit, move focus to the first invalid control (query '[aria-invalid="true"]' inside the form) so screen reader users hear the associated message immediately, and consider the same for server-side errors. Always provide a visible label for every Field - placeholder text is not a label and disappears while typing - and keep user input intact on failure so nothing has to be retyped.
 
 ## Components used
 
@@ -623,6 +683,8 @@ Let Field own the accessibility wiring: it renders the label, hint and validatio
 - [Field](../../components/field.md)
 - [Input](../../components/input.md)
 - [MessageBar](../../components/message-bar.md)
+- [MessageBarBody](../../components/message-bar-body.md)
+- [MessageBarTitle](../../components/message-bar-title.md)
 - [Select](../../components/select.md)
 - [Spinner](../../components/spinner.md)
 - [Text](../../components/text.md)

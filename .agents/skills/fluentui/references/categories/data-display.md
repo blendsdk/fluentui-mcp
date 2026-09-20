@@ -2,88 +2,123 @@
 
 ## Overview
 
-The data display category covers the components that present information rather than collect it: identity (Avatar, Persona), short status and metadata tokens (Badge, Tags), media (Image), typographic content (Text), collections (List, Tree, Table), and loading placeholders (Skeleton). They share one job — making content scannable, comparable, and legible at a glance — and they differ mainly in the shape of the data they carry: a person, a single label, a flat sequence, a nested hierarchy, or a dense set of aligned columns. Most are read-mostly, but several support optional interaction such as selection, sorting, expansion, or removal, and that behavior should come from the component's own properties rather than from hand-rolled handlers attached to the root slot. Because these components are the pages users spend the most time reading, consistency across them matters more than novelty in any one of them.
+Data Display components present information for reading rather than for input. They cover identity and people (Avatar, AvatarGroup, AvatarGroupItem, AvatarGroupPopover, Persona, PresenceBadge), short metadata and status (Badge, CounterBadge, Tag, TagGroup, InteractionTag, InteractionTagPrimary, InteractionTagSecondary), typography and media (Text, Image), loading placeholders (Skeleton, SkeletonItem), and structured collections (List and ListItem, Table with its header, body, row, cell, layout, actions, resize and selection parts, DataGrid with its header, body, row, cell and selection-cell parts, and Tree, TreeItem, TreeItemLayout, TreeItemPersonaLayout, FlatTree and FlatTreeItem). Most of these are compositional families: a container such as Table, DataGrid, Tree, TagGroup, List, or AvatarGroup owns selection, sizing, or open state, while the children render rows, cells, items, and tags. Choosing the right component in this category is mostly about matching the shape of your data to the shape of the component, then keeping size, appearance, and state consistent inside a region.
 
 ## When to Use
 
-Reach for this category when the user's primary task is to read, scan, compare, or interpret content; reach for forms, buttons, or navigation when the task is to enter data or move through the app. Choose within the category by the shape of the content: Avatar when only an identity image or initials are needed, Persona when a name and supporting lines must travel with that identity, Badge for a single short status or count, Tags for a set of values the user may recognize, dimiss, or act on, Text for anything typographic, Image for media, List for a flat homogeneous sequence, Tree for nested hierarchy with expand/collapse, Table when rows must be compared across aligned columns with sorting or selection, and Skeleton when the layout is known but the data has not arrived. Several of these components carry optional interaction — List, Tree, and Table accept selection modes, Table sorts, Tree expands — so prefer the built-in behavior whenever the content is anything more than static text. If you find yourself adding state, focus handling, or click semantics on top of Avatar, Badge, Image, or Tags, you have probably chosen a display component for an interactive job.
+Reach for this category whenever the user needs to read, scan, compare, or navigate existing information. Use Persona when a person or entity needs a name plus supporting text and an avatar, and Avatar alone when space is tight and the visual identity is the whole message; use AvatarGroup plus AvatarGroupPopover when several people must be summarized and the tail must overflow gracefully. Use Badge for short categorical metadata, CounterBadge when the value is a number that can exceed the available width, and PresenceBadge for availability status. Use Tag for labels that are dismissible or selectable and InteractionTag when a tag needs both a primary action and a secondary action such as removal. Use Text for controlled typography instead of ad-hoc markup, and Image for shaped, fitted media. Use Skeleton and SkeletonItem to reserve the layout of content that is still loading. For collections, use List when order matters but columns do not, Table when you need semantic tabular markup with full control of every row and cell, DataGrid when you need sorting, selection, and resizable or virtualized columns, Tree when the data is hierarchical and users expand and collapse it, and FlatTree when that hierarchy is flattened for virtualization and carries explicit level and position information.
 
 ## Best Practices
 
 ### Do's
 
-- Match the component to the shape of the data: Avatar when only an identity image is needed, Persona when primary and secondary text must accompany the avatar, Badge for one short status or count, Tags for a set of values, Text for everything typographic.
-- Let Avatar derive initials from its name property, keep shape and size consistent everywhere the same person appears, and reserve the badge slot for a single small overlay such as a count.
-- Express status through more than color: pair Badge color with a short label and, when helpful, an icon positioned with iconPosition, and choose among filled, outline, tint, and ghost appearances to reflect how prominent the status should be.
-- Use Table's built-in capabilities — selectionMode, sortable headers with sortDirection, columnSizingOptions, and autoFitColumns — instead of layering custom sorting, resizing, or selection logic on the rendered cells.
-- Size Skeleton placeholders to the geometry of the content they replace using shape, size, and width, prefer translucent when the placeholder sits over a real surface, and remove it as soon as data resolves.
-- Let Image handle presentation with fit and shape rather than wrapping it in custom cropping or rounding, and set block when the image should fill its container's width.
-- Drive hierarchy and selection through the components themselves: Tree's defaultOpenItems with selectionMode, List's selectedItems, and Table's selectionMode keep state, focus, and keyboard behavior in sync.
-- Use Text's size, weight, and font properties within the shared ramp, and make truncation explicit with truncate while exposing the full value through a Tooltip or the surrounding layout.
+- Provide a name on Avatar so the component can derive initials and an identity, and use color with idForColor when the same person or entity must keep a stable color across the product.
+- Use Persona whenever a person needs more than an avatar: its name prop plus the primaryText, secondaryText, tertiaryText, and quaternaryText slots give you a consistent text stack, and textPosition and textAlignment control how that stack sits relative to the avatar.
+- Summarize people with AvatarGroup and control the arrangement through its layout and size props, and render the tail of a long list through AvatarGroupPopover with indicator and count instead of truncating silently; mark the overflow entry with isOverflow on AvatarGroupItem so its overflowLabel is used.
+- Pick the status component by the data, not by appearance: Badge for short labels and categories, CounterBadge with overflowCount for numbers that can grow, and PresenceBadge with status and outOfOffice for availability.
+- Make Tag interactive only when it truly is: set dismissible on Tag when the label can be removed, use selected together with TagGroup's selectedValues and onTagSelect when tags act as filters, and reach for InteractionTag with InteractionTagPrimary and InteractionTagSecondary only when a tag needs both a primary action and a secondary action.
+- Shape placeholders to match the content they stand in for: set size, shape, and width on Skeleton and choose animation and appearance deliberately, so the placeholder occupies roughly the same box as the loaded content and the page does not jump.
+- Use Text's typography props (size, weight, font, align, block, italic, underline, strikethrough, wrap, and truncate) to express intent instead of styling raw elements, and reserve larger sizes for hierarchy within a block rather than for document structure.
+- Use Image's fit, shape, shadow, bordered, and block props to control how media is cropped, framed, and laid out, and keep the same fit and shape for images that appear in a repeated pattern.
+- Compose DataGrid when a collection needs behavior: DataGridHeader and DataGridHeaderCell for sortable columns, DataGridBody and DataGridRow with DataGridCell for the cell content, DataGridSelectionCell with selectionMode and onSelectionChange for row selection, and columnSizingOptions, resizableColumnsOptions, and onColumnResize for column widths.
+- Compose Table when you need explicit control of the markup: TableHeader and TableHeaderCell (with sortable and sortDirection), TableBody, TableRow with its appearance, TableCell, and TableCellLayout for media, main text, description, and content, plus TableCellActions for row-level actions and TableSelectionCell for selection affordances.
+- Use Tree for hierarchical data with openItems, selectionMode, or checkedItems, and choose TreeItemLayout or TreeItemPersonaLayout for the row content instead of building row internals yourself; use FlatTree only when the hierarchy is flattened, and always supply value, aria-level, aria-setsize, and aria-posinset on FlatTreeItem.
+- Reach for List and ListItem when the content is a simple ordered or unordered set: use navigationMode to express whether items are links or composite widgets, and drive selection through selectionMode, selectedItems or defaultSelectedItems, and onSelectionChange rather than through custom state.
 
 ### Don'ts
 
-- Don't use Table for content that isn't column-aligned comparison; records with two or three fields read better as a List or as individual Cards.
-- Don't make Badge, Avatar, Image, or Tags' base element interactive by attaching click handlers — they expose no focus, keyboard, or pressed-state contract, so actions belong in Button or Link.
-- Don't encode meaning in color alone for Badge, Tags, or Avatar's active ring or shadow; a colored dot or ring without accompanying text is unreadable for many users and cannot be translated.
-- Don't invent your own highlight, checkmark, or expanded state on top of Tree, List, or Table — local selection state desynchronizes from selectionMode and from the component's keyboard model.
-- Don't restyle Text sizes and weights per screen to build hierarchy, and don't reassemble Avatar from Text and Image; both break the shared type ramp and identity consistency.
-- Don't leave Skeleton mounted after data has arrived or reuse it as a decorative divider, and don't overwrite your own geometry on top of Avatar's size and shape properties.
-- Don't overload Persona; quaternary text is the last supporting line, and further metadata belongs in the surrounding layout rather than in additional slots.
+- Don't add another avatar or person component inside a Persona, and don't render an Avatar inside AvatarGroupItem: Persona already provides an avatar slot, AvatarGroupItem already provides an avatar slot, and nesting them duplicates the identity and bloats the row.
+- Don't use Badge, CounterBadge, or PresenceBadge as controls. They are display-only; if a value must be clicked or toggled, use a button or an interaction component next to the display component.
+- Don't render a CounterBadge for an unbounded number without setting overflowCount, and don't rely on the count alone to communicate meaning when the underlying item also needs a text label.
+- Don't turn a status or presence indicator into the only signal of state; pair PresenceBadge and colored Badges with text so the state survives without color perception.
+- Don't use Tag as navigation or as the primary action of a page, and don't give a Tag a secondary action when InteractionTagSecondary exists for that purpose.
+- Don't mix Tree and FlatTreeItem or FlatTree and TreeItem in the same hierarchy: Tree owns nested TreeItem children, while FlatTree expects flattened FlatTreeItem entries.
+- Don't omit the required sizing and position metadata on FlatTreeItem; without aria-level, aria-setsize, and aria-posinset a flattened tree loses the level, sibling count, and position that assistive technology needs.
+- Don't hand-build sortable, selectable tables from raw markup when TableHeaderCell already exposes sortable and sortDirection and the data-grid family already handles selection and column resizing.
+- Don't control the same state twice: choose either controlled or uncontrolled props on a family, for example openItems versus defaultOpenItems on Tree, selectedValues versus defaultSelectedValues on TagGroup, and selectedItems versus defaultSelectedItems on List.
+- Don't leave Skeleton or SkeletonItem on screen after the content resolves, and don't give a placeholder a shape, size, or width unrelated to the content it replaces.
+- Don't force heading structure or section semantics through Text size or weight; use the correct structural element and use Text to style the run of text inside it.
+- Don't vary size, appearance, or shape arbitrarily within one region: keep Avatar, Persona, Badge, Tag, TableRow, and Text styling consistent so repeated rows read as a set.
 
 ## Anti-Patterns
 
-### Table as a general-purpose layout
+### Building tables and hierarchies out of generic containers
 
-❌ Table carries density and an implicit promise of column comparison, so records with two or three fields waste vertical space, force a horizontal reading pattern that doesn't pay off, and tempt developers to strip or fight the table semantics it renders.
+❌ Rendering tabular records or nested categories as rows of plain flex items or repeated Text loses header association, sort state, selection semantics, level, and position, so assistive technology cannot describe the structure and you must rebuild sorting, selection, and expansion by hand.
 
-✅ Reserve Table for data that benefits from aligned columns, sorting, and selection. Use List for homogeneous rows, Card for a handful of rich items, and Avatar or Persona plus Text for identity rows.
+✅ Compose the collection families instead: Table with TableHeaderCell, TableRow, TableCell, and TableCellLayout for markup you control, DataGrid with DataGridHeader, DataGridRow, DataGridCell, and DataGridSelectionCell when you need sorting, selection, and column sizing, and Tree or FlatTree with TreeItemLayout, TreeItemPersonaLayout, or FlatTreeItem for hierarchical data with proper level and position metadata.
 
-### Faking interactivity on display primitives
+### Treating display-only components as interactive controls
 
-❌ Badge, Avatar, Image, and the Tags root are not interactive controls; attaching click handlers produces affordances that cannot be reached by keyboard, expose no focus or pressed state, and behave inconsistently for assistive technology.
+❌ Badge, CounterBadge, PresenceBadge, Avatar, Image, and Skeleton are presentation-only. Attaching click handlers to them produces elements that cannot be focused, cannot be activated from the keyboard, and are not announced as controls, while Tag and InteractionTag exist precisely to make labels actionable.
 
-✅ Put actions in Button or Link, and when a tag genuinely needs a dismiss or secondary affordance, enable the secondary action on Tags so the control and its accessible name exist; use TagPicker when the user is composing a set of tags.
+✅ Decide first whether the element is read or operated. Keep display components display-only and put a real button next to them for the action; when a label itself must be removed or selected, use Tag with dismissible and selected plus TagGroup's selectedValues and onTagSelect, and when a label needs two distinct actions, use InteractionTag with InteractionTagPrimary and InteractionTagSecondary.
 
-### Color-only status and presence
+### Silent overflow in groups of people or metadata
 
-❌ Badge colors, tag colors, and Avatar's active ring or shadow communicate state through a single visual channel that color-blind and non-visual users cannot perceive, and translated labels cannot repair an unlabeled dot.
+❌ An AvatarGroup, TagGroup, or list of status items that simply stops rendering when it runs out of room hides information and gives the user no way to reach the remainder; clipping avatars or tags mid-row also makes counts unreadable.
 
-✅ Always pair color with a short text label and, when useful, an icon through iconPosition. For availability, express presence in Persona's presence slot alongside text rather than relying on Avatar's active appearance alone.
+✅ Plan the overflow explicitly. Use AvatarGroup with layout and size, render the hidden tail through AvatarGroupPopover with indicator and count, and mark the summarizing entry with isOverflow and overflowLabel on AvatarGroupItem; for numeric metadata use CounterBadge's overflowCount, and for label collections let TagGroup own dismissal and selection through onDismiss and onTagSelect instead of dropping items.
 
-### Hand-rolled selection, sorting, and expansion
+### Mixing controlled and uncontrolled state across a family
 
-❌ Tracking selection, sort order, or expanded nodes in local state or by manipulating rendered cells loses the component's keyboard model and its announcements, and quickly drifts out of sync with the visual state users see.
+❌ Families such as Tree, FlatTree, TagGroup, List, and DataGrid separate what is rendered from what is owned. Passing both the controlled and the default variant of the same value, or storing open and selected state on the children instead of the container, leads to surfaces that disagree with each other and to state that snaps back on re-render.
 
-✅ Use Tree's selectionMode with openItems or defaultOpenItems, List's selectionMode with selectedItems and its change callback, and Table's selectionMode plus sortable and sortDirection with the sort change callback.
+✅ Choose one owner per piece of state: the container holds openItems or defaultOpenItems, selectionMode with checkedItems, selectedValues or defaultSelectedValues, and selectedItems or defaultSelectedItems, and the children render from that state. Keep value, and on FlatTreeItem the required aria-level, aria-setsize, and aria-posinset, driven by the same source that produces the flattened order.
 
-### Skeleton mismatch and Skeleton forever
+### Inconsistent sizing and density inside a single surface
 
-❌ Placeholders whose shape or size differs from the final content cause a layout jump when data arrives, and a Skeleton that never unmounts reads as permanently broken or as decoration rather than as a loading signal.
+❌ Mixing Avatar sizes, Persona sizes, Badge sizes, Tag sizes, and Text sizes in the same row, or varying shape and appearance arbitrarily, makes repeated data look ragged and makes scanning harder; it also makes truncation and alignment unpredictable.
 
-✅ Mirror the final geometry with shape, size, and width, keep the placeholder short-lived, remove it the moment data resolves, and avoid long-running looping wave or pulse animations on screens that stay open.
-
-### Reimplementing identity and typography
-
-❌ Building initials circles out of Text and Image, or overriding Avatar's internals with gradients and borders, breaks size and color consistency across surfaces and discards the name-derived initials fallback; restyling every heading from scratch erodes the shared type ramp.
-
-✅ Use Avatar's name, size, shape, and color properties with idForColor for stable per-person color, and use Text's size, weight, and font properties within the ramp while keeping real heading semantics for document structure.
+✅ Fix the scale for a region and pass it down: set Image shape and fit, Avatar size and shape, Persona size and textPosition, Tag size, shape, and appearance (inherited from TagGroup where possible), Badge and CounterBadge size and shape, and Text size and weight to one consistent set, and reuse that set for every row, cell, and card in the surface.
 
 ## Accessibility
 
-These components render meaningful native or ARIA semantics — Table produces real table structure, Tree produces tree structure, List produces list structure — so preserve those semantics instead of replacing roots with generic containers or flattening rows into styled divs. Non-text content needs a textual equivalent: Avatar derives initials from its name property and should be hidden from the accessibility tree when the same name is already rendered next to it, and Image needs alt text that describes its content, with an empty alternative when the image is purely decorative. Badge and Tags must include readable text, never color alone, and when Tags has a secondary action enabled the tag body and the action need distinct accessible names so they are not announced as duplicates. State changes must come from the component properties that expose them: selectionMode on List and Table, sortable with sortDirection on Table, and selectionMode with checkedItems or openItems on Tree, so screen readers receive the updates; Tab and Table also define their own keyboard models through focusMode and Tree through navigationMode, and overriding those keys removes the model keyboard users rely on. Skeleton is placeholder geometry and should be hidden from assistive technology while a separate live region announces that content is loading, and its looping wave or pulse animation should not persist indefinitely or ignore a reduced-motion preference in the app. Typography set through Text must still meet contrast requirements at every size and weight, and document structure such as headings must come from real heading elements rather than from enlarged text alone.
+Accessibility for this category is mostly about making displayed information perceivable and keeping semantics intact. Always give identity components a text name: Avatar derives its accessible identity from name, and Persona's name plus its primaryText and secondaryText slots should carry the same information that sighted users read, so a person is never represented by an image alone. Do not let color be the only carrier of meaning in Badge, CounterBadge, PresenceBadge, or Avatar's color and active props; include adjacent text or an explicit status word. Meaningful images need a text alternative and decorative images should be kept out of the accessibility tree, and Image should be used so media is framed consistently rather than conveying information through framing alone. Interactive display components must expose real controls: Tag dismissibility and InteractionTag's primary and secondary actions must be reachable and operable with the keyboard, and TagGroup's onDismiss and onTagSelect should be wired so removal and filtering are available without a pointer. Loading placeholders such as Skeleton and SkeletonItem have no text equivalent, so the surrounding region should communicate that content is loading and the announcement should occur once, when the real content arrives. For collections, the container communicates the semantics: Table and DataGrid must use header cells for column headers so sortable and sortDirection state is announced, DataGridSelectionCell and TableSelectionCell must match the configured selectionMode so checkbox or radio selection is described correctly, DataGridCell's focusMode should be set deliberately because it governs whether cells are individually focusable, and column resizing exposed through onColumnResize and the resize handle must be operable from the keyboard. In tree structures, TreeItemLayout and TreeItemPersonaLayout provide the expand affordance, selectors, and actions slots so those controls are exposed rather than hidden in decorative markup, while FlatTreeItem must always receive value, aria-level, aria-setsize, and aria-posinset so a flattened tree is announced with its true depth and position. Finally, respect motion and density preferences: choose Skeleton's animation and appearance rather than inventing motion, and keep size props aligned within a region so zoomed and high-density layouts stay coherent.
 
 ## Components in this category
 
 - [Avatar](../components/avatar.md)
+- [AvatarGroup](../components/avatar-group.md)
+- [AvatarGroupItem](../components/avatar-group-item.md)
+- [AvatarGroupPopover](../components/avatar-group-popover.md)
 - [Badge](../components/badge.md)
+- [CounterBadge](../components/counter-badge.md)
+- [DataGrid](../components/data-grid.md)
+- [DataGridBody](../components/data-grid-body.md)
+- [DataGridCell](../components/data-grid-cell.md)
+- [DataGridHeader](../components/data-grid-header.md)
+- [DataGridHeaderCell](../components/data-grid-header-cell.md)
+- [DataGridRow](../components/data-grid-row.md)
+- [DataGridSelectionCell](../components/data-grid-selection-cell.md)
+- [FlatTree](../components/flat-tree.md)
+- [FlatTreeItem](../components/flat-tree-item.md)
 - [Image](../components/image.md)
+- [InteractionTag](../components/interaction-tag.md)
+- [InteractionTagPrimary](../components/interaction-tag-primary.md)
+- [InteractionTagSecondary](../components/interaction-tag-secondary.md)
 - [List](../components/list.md)
+- [ListItem](../components/list-item.md)
 - [Persona](../components/persona.md)
+- [PresenceBadge](../components/presence-badge.md)
 - [Skeleton](../components/skeleton.md)
+- [SkeletonItem](../components/skeleton-item.md)
 - [Table](../components/table.md)
-- [Tags](../components/tags.md)
+- [TableBody](../components/table-body.md)
+- [TableCell](../components/table-cell.md)
+- [TableCellActions](../components/table-cell-actions.md)
+- [TableCellLayout](../components/table-cell-layout.md)
+- [TableHeader](../components/table-header.md)
+- [TableHeaderCell](../components/table-header-cell.md)
+- [TableResizeHandle](../components/table-resize-handle.md)
+- [TableRow](../components/table-row.md)
+- [TableSelectionCell](../components/table-selection-cell.md)
+- [Tag](../components/tag.md)
+- [TagGroup](../components/tag-group.md)
 - [Text](../components/text.md)
 - [Tree](../components/tree.md)
+- [TreeItem](../components/tree-item.md)
+- [TreeItemLayout](../components/tree-item-layout.md)
+- [TreeItemPersonaLayout](../components/tree-item-persona-layout.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

@@ -4,1062 +4,1027 @@
 
 ## Goal
 
-Build a wizard-style multi-step form with FluentUI React v9: one controlled values object shared by every step, per-step validation that gates Next, a review step, a single submit that re-validates everything, and progress/focus/announcement handling.
+Build an accessible, validated multi-step form (wizard) in Fluent UI React v9 by composing Card, CardHeader/CardFooter, Field, form controls, Button, ProgressBar or TabList, MessageBar and Dialog, with per-step validation, guarded navigation, a review step and an async submit confirmation.
 
 ## When to Use
 
-Use this recipe for onboarding or signup flows, checkout funnels (address, delivery, payment, review), configuration wizards, or any form with roughly 8 or more fields where later steps depend on earlier answers. It is also the right choice when you want to validate one small chunk at a time, show a completion indicator, and keep a clean Back path so users never lose data.
+Use this recipe when a single form is too long or too consequential for one screen and the data must be collected in a guided, ordered sequence: sign-up/onboarding flows, checkout, account or workspace setup, insurance/loan applications, or any flow where each step has its own validation rules and the user must not proceed until the current step is valid. It is also the right choice when you need a review/confirm step, progress feedback, or a confirmation dialog before the final save.
 
 ## When Not to Use
 
-Do not use it for short forms (2-5 fields) - a single Form with Field and one Button submits faster than three clicks through a wizard. Avoid it when users must jump freely between sections or compare them, which is better served by Tabs or by an Accordion (multiple, collapsible). Avoid it for conditional disclosure of a few options inside one screen; that is a Switch or Checkbox plus conditional rendering. And avoid it inside a Dialog unless the flow truly has 2-3 steps, because a modal wizard hides the page behind it and complicates Back-button behavior.
+Do not use a wizard when all fields fit comfortably on one screen with a single submit button - a plain Field-based form is faster to build and less frustrating. Avoid it when users need random access to any section (use tabs, Accordion, or a settings page with anchored sections instead) or when steps are truly independent pages that should be deep-linkable (use your router and render one step per route). Do not use it for long-running background operations (use a Toast/MessageBar with progress feedback). For short, non-sequential confirmations of the last action, prefer a single Dialog over a multi-step flow.
 
-A multi-step form (wizard) turns one large submission into a short sequence of validated steps. Users see only a handful of fields at a time, the app decides when they may advance, and the network is touched exactly once - on the final submit.
+A wizard is a form split across ordered screens. Fluent UI v9 has no `Wizard` component, so you compose one from `Card`, `Field`, `Button`, `ProgressBar` (or `TabList`) and `MessageBar` while keeping a single source of truth for the collected values.
 
-## The state model
+## What the recipe produces
 
-Three pieces of state run the whole wizard:
+- A `Card` shell with `CardHeader` (title plus visible "Step X of Y" text), a `ProgressBar`, the current step's fields, and `CardFooter` navigation.
+- Every control wrapped in `Field` with a render-function child, so label, hint and validation message are programmatically associated with the control.
+- Per-step validation that runs when the user presses **Next**; a failing step stays put and surfaces both an error summary and inline messages.
+- Optional tab-based step navigation (`TabList`) in which not-yet-reached steps are `disabled`.
+- A final review step with an explicit confirmation (`Checkbox` or typing your name in a `Dialog`) and an async submit that shows a `Spinner` and disables the primary button.
 
-| State | Type | Purpose |
-| --- | --- | --- |
-| `values` | `FormValues` | Every field from every step, in one controlled object |
-| `errors` | `Partial<Record<keyof FormValues, string>>` | Messages keyed by **field**, not by step |
-| `stepIndex` | `number` | Which step renders, which slides the ProgressBar bar |
+## Anatomy of the pattern
 
-Three rules make it work:
+### 1. One state object, one error object
 
-1. **One values object.** Every Input, Select, Textarea, Checkbox and Switch in every step is controlled by `values`. Steps can mount and unmount freely without losing data.
-2. **Errors keyed by field.** A single map means the review step and the final submit can surface a message for any field, including ones that are no longer on screen.
-3. **Validate on transition, not on every keystroke.** Validate when the user tries to leave a step or submits; clear the message for a field the moment its value changes.
-
-## 1. Describe the steps as data
-
-```ts
-type StepId = 'profile' | 'preferences' | 'review';
-
-type StepDefinition = {
-  id: StepId;
-  title: string;
-  description: string;
-};
-
-const STEPS: StepDefinition[] = [
-  { id: 'profile', title: 'Your profile', description: 'Tell us who is creating the workspace.' },
-  { id: 'preferences', title: 'Workspace preferences', description: 'Pick a plan and decide how the workspace behaves.' },
-  { id: 'review', title: 'Review and confirm', description: 'Check the values below, then create the workspace.' },
-];
-```
-
-The step list is the single source of truth for the headings, the `ProgressBar` bar, the `Badge` counter, and the order of validation. Adding a step means adding one entry plus one block of JSX - nothing else changes.
-
-## 2. Write one validation function with a step switch
-
-```ts
-function validateStep(stepId: StepId, values: FormValues): FormErrors {
-  const errors: FormErrors = {};
-  if (stepId === 'profile') {
-    if (!values.firstName.trim()) errors.firstName = 'Enter your first name.';
-    // ...email, last name
-  }
-  if (stepId === 'preferences' && !values.plan) {
-    errors.plan = 'Choose a plan to continue.';
-  }
-  if (stepId === 'review' && !values.agreed) {
-    errors.agreed = 'You must accept the terms of service.';
-  }
-  return errors;
-}
-```
-
-Because each step owns a disjoint set of field keys, the results can be merged with `Object.assign` when the whole form must be checked.
-
-## 3. Gate every transition
-
-- **Next** validates the current step only. On failure, store the errors and stay on the step.
-- **Back** never validates. Going back must always be free.
-- **Submit** validates *every* step, merges the results, and moves the user to the first invalid step. This catches the classic case where the user fills step 1, walks to the review step, and then clears a field.
-
-```ts
-const goNext = () => {
-  const stepErrors = validateStep(step.id, values);
-  if (Object.keys(stepErrors).length > 0) {
-    setErrors(stepErrors);
-    return;
-  }
-  setErrors({});
-  setStepIndex(index => Math.min(index + 1, STEPS.length - 1));
-};
-```
-
-Pair that with a single `updateField` helper that patches values *and* drops the error for the patched keys, so a message disappears as soon as the user fixes it.
-
-## 4. Build the chrome: Card, Text, Badge, ProgressBar, Divider
+Keep the values of every step in one state object at the wizard level and never let a step own its own copy:
 
 ```tsx
-<Card appearance='outline' style={{ padding: 24 }}>
-  <form noValidate onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <Text size={500} weight='semibold'>Create your workspace</Text>
-      <Badge appearance='tint' color='brand'>{`Step ${stepIndex + 1} of ${STEPS.length}`}</Badge>
-    </div>
-    <ProgressBar value={stepIndex + 1} max={STEPS.length} aria-label={`Step ${stepIndex + 1} of ${STEPS.length}`} />
-    {/* fields */}
-    <Divider />
-    {/* footer with Back / Next / Submit */}
-  </form>
-</Card>
+const [values, setValues] = React.useState<FormValues>(INITIAL_VALUES);
+const [errors, setErrors] = React.useState<FormErrors>({});
 ```
 
-`ProgressBar` is 0..1 by default, so always pass `max={STEPS.length}` together with the 1-based `value`. Always render the numeric step counter as text as well - color and bar length alone are not a text alternative.
+`FormErrors` is `Partial<Record<keyof FormValues, string>>`, so an empty object means "this step is valid". A small `update(patch)` helper merges the patch and deletes errors for the touched keys, so a message disappears the moment the user edits the offending field.
 
-## 5. Lay out fields with Field
+### 2. Validate per step, re-validate at submit
 
-`Field` owns the label, the required marker, the hint, the validation message, and the `aria-describedby` wiring between them and the control. Use exactly one `Field` per control and never pass a validation state without a message.
+`validateStep(step, values)` returns an error map for one step only. `goNext()` calls it, stores the result, and returns early when the map is non-empty. The final submit branch should validate the whole payload again, because a value can be edited after its step was passed.
+
+### 3. Wire every control through Field
+
+`Field` supports a render-function child that receives the control props (`id`, `aria-labelledby`, `aria-describedby`, and related state). Spread them onto the control:
 
 ```tsx
-<Field
-  label='Work email'
-  required
-  hint='We will send the activation link here.'
-  validationState={errors.email ? 'error' : 'none'}
-  validationMessage={errors.email}
->
-  <Input type='email' value={values.email} onChange={(_, data) => updateField({ email: data.value })} />
+<Field label="Email" required validationState={errors.email ? "error" : "none"} validationMessage={errors.email}>
+  {(fieldProps) => (
+    <Input {...fieldProps} value={values.email} onChange={(_, data) => update({ email: data.value })} />
+  )}
 </Field>
 ```
 
-`Select` renders a native select element, so its options are plain `<option>` children. `Checkbox` and `Switch` take a `label` prop. A `Field` can wrap a `Checkbox` with no label at all when you only need the validation message underneath (the terms-of-service checkbox on the review step).
+Use the same shape for `Select`, `Textarea` and `RadioGroup`; the same idea applies to other controls such as `Switch` or `Slider`. `validationState` plus `validationMessage` is what paints the error styling and the message under the control.
 
-## 6. Make the review step earn its place
+### 4. Navigation and guards
 
-A review step is worth it when the flow has a destructive or expensive action at the end (creating an account, charging a card). Render the collected values as simple label/value rows so users can scan them, then ask for the final confirmation inside the same step:
+- Buttons: `appearance="primary"` for **Next** / **Submit** (one primary action per step), `appearance="secondary"` for **Back**, `disabled` on the first step.
+- With `TabList` as the stepper, set `selectTabOnFocus={false}` so arrow-key navigation does not change steps without validation, and disable tabs beyond a `furthestStep` index that only advances after a step validates.
+- Render the active step inside a container with `role="tabpanel"` when using `TabList`; otherwise simply switch on a `step` number.
 
-```tsx
-const ReviewRow = (props: { label: string; value: string }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-    <Text size={200}>{props.label}</Text>
-    <Text size={200} weight='semibold'>{props.value}</Text>
-  </div>
-);
-```
+### 5. Feedback
 
-Do **not** make each summary row a link back to its step unless you also implement `goTo(index)`; a plain summary plus a working Back button is enough.
+- `ProgressBar` reflects completion: `value={step + 1} max={steps.length}`.
+- A step-level error summary in `MessageBar` (`intent="error"`, `politeness="polite"`) lists every problem, while each `Field` renders its own message. Clear the summary when the step changes or the user presses Back.
+- End with an explicit success state - a `MessageBar` (`intent="success"`) plus a way to start again - rather than a silent no-op.
 
-## 7. Own the submit lifecycle
+### 6. Review and async submit
 
-- Disable the primary `Button` with `disabled={submitting}` **and** return early inside the handler, so a double click cannot fire two requests.
-- Show an inline `Spinner` with a `label` and `labelPosition='after'` next to the button - do not replace the button label with so the button keeps its accessible name.
-- On failure render `MessageBar intent='error' politeness='assertive'` above the footer and keep the values untouched so the user can retry.
-- On success swap the whole form for a confirmation panel inside the same `Card`, and offer a reset action.
+The last step is a read-only summary of the collected values. Gate submission on an explicit confirmation (terms `Checkbox`, or typing your name in a `Dialog`). While the request is in flight, disable the primary button and render a `Spinner` inside its `icon` slot; keep the surface open until the promise resolves so input cannot be lost.
 
-## 8. Extract the logic for the second wizard
+## Choosing the shell
 
-Copy-pasting the transition handlers into a second flow is where bugs start. Example 2 shows a reusable `useWizard` hook (stepIndex, errors, goNext, goBack, goTo, validateAll) plus a `StepIndicator` built from `Text`, `Badge` and `ProgressBar` that any form can drop in.
-
-## 9. Async validation inside a step
-
-Some fields can only be validated by the server (is this email already registered?). Example 3 shows the pattern: keep a request counter in a `useRef`, ignore responses that are no longer the latest, show `checking` state through the `contentAfter` slot of `Input` with a small `Spinner`, and map the result onto the `Field` as `validationState='error'` or `'success'`. Gate the step button on the resolved result rather than on optimistic state.
-
-## Accessibility checklist
-
-- Wrap each step's fields in `role='group'` with `aria-labelledby` pointing at the step heading.
-- Move focus to the step heading on every step change (see example 1) and make it focusable with `tabIndex={-1}`.
-- Give every control a `Field` label; never rely on `placeholder` as the only label.
-- Announce submit failures assertively; keep per-field messages polite and attached to their control.
-- Use `noValidate` on the `<form>` so the browser and Fluent validation do not fight.
-- Set `type='button'` on Back and Next - only the final button should be `type='submit'`.
+- Inline page section: `Card` + `CardHeader` / `CardFooter` (examples 1 and 2).
+- Short confirmation of the final step: `Dialog` with `DialogSurface`, `DialogBody`, `DialogTitle`, `DialogContent`, `DialogActions` and a `DialogTrigger action="close"` cancel button (example 3).
+- Multi-page flows: keep the same state shapes but render one step per route.
+- Long but non-sequential forms: use sections with `Accordion` instead of a wizard.
 
 ## Examples
 
-### Three-step workspace creation form
+### Account setup wizard (Card + ProgressBar + Field validation)
 
-A complete wizard with a profile step, a preferences step, and a review step. Demonstrates per-step validation, clearing errors on change, a Progress/Badge header, focus management on step change, submit-time re-validation that jumps to the first invalid step, and the submitting/submitted lifecycle with Spinner and MessageBar.
+A three-step wizard inside a Card: account details, plan selection (RadioGroup/Select/Textarea), and a review step with a terms Checkbox. Each step validates on Next, shows inline Field messages plus a MessageBar summary, and ends with a success MessageBar and a reset action.
 
 ```tsx
-import * as React from 'react';
-import { Badge, Button, Card, Checkbox, Divider, Field, Input, MessageBar, ProgressBar, Select, Spinner, Switch, Text, Textarea } from '@fluentui/react-components';
+import * as React from "react";
+import {
+  Button,
+  Card,
+  CardFooter,
+  CardHeader,
+  Checkbox,
+  Divider,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  ProgressBar,
+  Radio,
+  RadioGroup,
+  Select,
+  Text,
+  Textarea,
+} from "@fluentui/react-components";
 
-/* ---------------------------------- model ---------------------------------- */
+type Plan = "starter" | "standard" | "premium";
 
-type StepId = 'profile' | 'preferences' | 'review';
-
-type StepDefinition = {
-  id: StepId;
-  title: string;
-  description: string;
-};
-
-type FormValues = {
-  firstName: string;
-  lastName: string;
+interface FormValues {
+  fullName: string;
   email: string;
   company: string;
-  plan: string;
+  plan: Plan | "";
+  teamSize: string;
+  budget: string;
   notes: string;
-  newsletter: boolean;
-  twoFactor: boolean;
-  agreed: boolean;
-};
+  acceptedTerms: boolean;
+}
 
 type FormErrors = Partial<Record<keyof FormValues, string>>;
 
-const STEPS: StepDefinition[] = [
-  { id: 'profile', title: 'Your profile', description: 'Tell us who is creating the workspace.' },
-  { id: 'preferences', title: 'Workspace preferences', description: 'Pick a plan and decide how the workspace behaves.' },
-  { id: 'review', title: 'Review and confirm', description: 'Check the values below, then create the workspace.' },
-];
-
-const INITIAL_VALUES: FormValues = {
-  firstName: '',
-  lastName: '',
-  email: '',
-  company: '',
-  plan: 'team',
-  notes: '',
-  newsletter: true,
-  twoFactor: false,
-  agreed: false,
-};
-
-const PLAN_LABELS: Record<string, string> = {
-  free: 'Free (1 project)',
-  team: 'Team (10 projects)',
-  enterprise: 'Enterprise (unlimited projects)',
-};
-
+const STEPS = ["Account", "Plan", "Review"] as const;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Validates one step. Steps own disjoint fields, so results can be merged safely. */
-function validateStep(stepId: StepId, values: FormValues): FormErrors {
-  const errors: FormErrors = {};
+const PLAN_LABELS: Record<Plan, string> = {
+  starter: "Starter (5 users, 10 GB)",
+  standard: "Standard (25 users, 100 GB)",
+  premium: "Premium (unlimited users, 1 TB)",
+};
 
-  if (stepId === 'profile') {
-    if (!values.firstName.trim()) {
-      errors.firstName = 'Enter your first name.';
-    }
-    if (!values.lastName.trim()) {
-      errors.lastName = 'Enter your last name.';
+const INITIAL_VALUES: FormValues = {
+  fullName: "",
+  email: "",
+  company: "",
+  plan: "",
+  teamSize: "",
+  budget: "",
+  notes: "",
+  acceptedTerms: false,
+};
+
+function validateStep(step: number, values: FormValues): FormErrors {
+  if (step === 0) {
+    const errors: FormErrors = {};
+    if (!values.fullName.trim()) {
+      errors.fullName = "Enter your full name.";
     }
     if (!values.email.trim()) {
-      errors.email = 'Enter your work email.';
+      errors.email = "Enter your work email.";
     } else if (!EMAIL_PATTERN.test(values.email.trim())) {
-      errors.email = 'Enter a valid email address, for example ada@company.com.';
+      errors.email = "Enter a valid email address, such as name@company.com.";
     }
+    return errors;
   }
 
-  if (stepId === 'preferences' && !values.plan) {
-    errors.plan = 'Choose a plan to continue.';
+  if (step === 1) {
+    const errors: FormErrors = {};
+    if (!values.plan) {
+      errors.plan = "Select the plan you want to start with.";
+    }
+    if (!values.teamSize) {
+      errors.teamSize = "Select how many people will use the workspace.";
+    }
+    if (values.budget.trim() !== "" && Number.isNaN(Number(values.budget))) {
+      errors.budget = "Budget must be a number.";
+    }
+    return errors;
   }
 
-  if (stepId === 'review' && !values.agreed) {
-    errors.agreed = 'You must accept the terms of service.';
-  }
-
-  return errors;
+  return values.acceptedTerms ? {} : { acceptedTerms: "Accept the terms to create your workspace." };
 }
 
-/** Stand-in for the real API. Emails containing fail reject, so the error path is easy to demo. */
-function createWorkspace(values: FormValues): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    window.setTimeout(() => {
-      if (values.email.toLowerCase().includes('fail')) {
-        reject(new Error('We could not create the workspace. Please try again.'));
-      } else {
-        resolve();
-      }
-    }, 900);
-  });
-}
-
-/* --------------------------------- helpers --------------------------------- */
-
-const ReviewRow = (props: { label: string; value: string }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-    <Text size={200}>{props.label}</Text>
-    <Text size={200} weight='semibold'>{props.value}</Text>
-  </div>
-);
-
-type WizardStatus = 'editing' | 'submitting' | 'submitted';
-
-/* -------------------------------- component -------------------------------- */
-
-export const MultiStepForm = () => {
+export const AccountSetupWizard: React.FC = () => {
+  const [step, setStep] = React.useState(0);
   const [values, setValues] = React.useState<FormValues>(INITIAL_VALUES);
   const [errors, setErrors] = React.useState<FormErrors>({});
-  const [stepIndex, setStepIndex] = React.useState(0);
-  const [status, setStatus] = React.useState<WizardStatus>('editing');
-  const [submitError, setSubmitError] = React.useState<string | undefined>(undefined);
+  const [submitted, setSubmitted] = React.useState(false);
 
-  const step = STEPS[stepIndex];
-  const headingId = `wizard-heading-${step.id}`;
-  const headingRef = React.useRef<HTMLHeadingElement>(null);
-  const isFirstRender = React.useRef(true);
-
-  // Move focus to the new step heading so keyboard and screen reader users hear the change.
-  React.useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    headingRef.current?.focus();
-  }, [stepIndex]);
-
-  /** Patches values and clears the error of every patched field. */
-  const updateField = (patch: Partial<FormValues>) => {
-    setValues(previous => ({ ...previous, ...patch }));
-    setErrors(previous => {
-      if (!Object.keys(patch).some(key => key in previous)) {
+  const update = (patch: Partial<FormValues>) => {
+    setValues((previous) => ({ ...previous, ...patch }));
+    setErrors((previous) => {
+      const patchedKeys = Object.keys(patch) as Array<keyof FormValues>;
+      if (!patchedKeys.some((key) => previous[key])) {
         return previous;
       }
       const next = { ...previous };
-      Object.keys(patch).forEach(key => {
-        delete next[key as keyof FormValues];
-      });
+      patchedKeys.forEach((key) => delete next[key]);
       return next;
     });
   };
 
+  const errorKeys = Object.keys(errors) as Array<keyof FormValues>;
+  const isLastStep = step === STEPS.length - 1;
+
+  const goBack = () => {
+    setErrors({});
+    setStep((current) => Math.max(0, current - 1));
+  };
+
   const goNext = () => {
-    const stepErrors = validateStep(step.id, values);
+    const stepErrors = validateStep(step, values);
+    setErrors(stepErrors);
     if (Object.keys(stepErrors).length > 0) {
-      setErrors(stepErrors);
       return;
     }
+    if (isLastStep) {
+      setSubmitted(true);
+    } else {
+      setStep((current) => current + 1);
+    }
+  };
+
+  const startOver = () => {
+    setValues(INITIAL_VALUES);
     setErrors({});
-    setSubmitError(undefined);
-    setStepIndex(index => Math.min(index + 1, STEPS.length - 1));
+    setSubmitted(false);
+    setStep(0);
+  };
+
+  return (
+    <Card appearance="outline" style={{ maxWidth: 620, margin: "0 auto" }}>
+      <CardHeader
+        header={
+          <Text weight="semibold" size={500}>
+            Create your workspace
+          </Text>
+        }
+        description={
+          <Text size={200}>
+            Step {step + 1} of {STEPS.length}: {STEPS[step]}
+          </Text>
+        }
+      />
+
+      <ProgressBar
+        value={step + 1}
+        max={STEPS.length}
+        thickness="large"
+        aria-label={`Step ${step + 1} of ${STEPS.length}`}
+      />
+
+      <Divider appearance="subtle" />
+
+      {submitted ? (
+        <MessageBar intent="success">
+          <MessageBarBody>
+            <MessageBarTitle>Workspace created</MessageBarTitle>
+            <Text>
+              {`${values.fullName || "Your account"} is set up on the ${
+                values.plan ? PLAN_LABELS[values.plan] : "selected"
+              } plan. We sent a confirmation to ${values.email}.`}
+            </Text>
+          </MessageBarBody>
+        </MessageBar>
+      ) : (
+        <>
+          {errorKeys.length > 0 && (
+            <MessageBar intent="error" politeness="polite">
+              <MessageBarBody>
+                <MessageBarTitle>Check the highlighted fields</MessageBarTitle>
+                <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+                  {errorKeys.map((key) => (
+                    <li key={key}>{errors[key]}</li>
+                  ))}
+                </ul>
+              </MessageBarBody>
+            </MessageBar>
+          )}
+
+          {step === 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 420 }}>
+              <Field
+                label="Full name"
+                required
+                validationState={errors.fullName ? "error" : "none"}
+                validationMessage={errors.fullName}
+              >
+                {(fieldProps) => (
+                  <Input
+                    {...fieldProps}
+                    value={values.fullName}
+                    onChange={(_, data) => update({ fullName: data.value })}
+                  />
+                )}
+              </Field>
+
+              <Field
+                label="Work email"
+                required
+                validationState={errors.email ? "error" : "none"}
+                validationMessage={errors.email}
+              >
+                {(fieldProps) => (
+                  <Input
+                    {...fieldProps}
+                    type="email"
+                    value={values.email}
+                    onChange={(_, data) => update({ email: data.value })}
+                  />
+                )}
+              </Field>
+
+              <Field label="Company" hint="Optional">
+                {(fieldProps) => (
+                  <Input
+                    {...fieldProps}
+                    value={values.company}
+                    onChange={(_, data) => update({ company: data.value })}
+                  />
+                )}
+              </Field>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 420 }}>
+              <Field
+                label="Plan"
+                required
+                hint="You can change your plan at any time."
+                validationState={errors.plan ? "error" : "none"}
+                validationMessage={errors.plan}
+              >
+                {(fieldProps) => (
+                  <RadioGroup
+                    {...fieldProps}
+                    value={values.plan}
+                    onChange={(_, data) => update({ plan: data.value as Plan })}
+                    layout="vertical"
+                  >
+                    <Radio value="starter" label={PLAN_LABELS.starter} />
+                    <Radio value="standard" label={PLAN_LABELS.standard} />
+                    <Radio value="premium" label={PLAN_LABELS.premium} />
+                  </RadioGroup>
+                )}
+              </Field>
+
+              <Field
+                label="Team size"
+                required
+                validationState={errors.teamSize ? "error" : "none"}
+                validationMessage={errors.teamSize}
+              >
+                {(fieldProps) => (
+                  <Select
+                    {...fieldProps}
+                    value={values.teamSize}
+                    onChange={(_, data) => update({ teamSize: data.value })}
+                  >
+                    <option value="">Select a range</option>
+                    <option value="1-10">1-10 people</option>
+                    <option value="11-50">11-50 people</option>
+                    <option value="51-200">51-200 people</option>
+                    <option value="200+">More than 200 people</option>
+                  </Select>
+                )}
+              </Field>
+
+              <Field
+                label="Monthly budget (USD)"
+                validationState={errors.budget ? "error" : "none"}
+                validationMessage={errors.budget}
+              >
+                {(fieldProps) => (
+                  <Input
+                    {...fieldProps}
+                    type="number"
+                    value={values.budget}
+                    onChange={(_, data) => update({ budget: data.value })}
+                  />
+                )}
+              </Field>
+
+              <Field label="Anything we should know?" hint="Optional">
+                {(fieldProps) => (
+                  <Textarea
+                    {...fieldProps}
+                    value={values.notes}
+                    resize="vertical"
+                    onChange={(_, data) => update({ notes: data.value })}
+                  />
+                )}
+              </Field>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <Text weight="semibold">Review your details</Text>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(120px, 160px) 1fr",
+                  rowGap: 8,
+                  columnGap: 12,
+                }}
+              >
+                <Text size={200} weight="semibold">
+                  Name
+                </Text>
+                <Text>{values.fullName || "-"}</Text>
+                <Text size={200} weight="semibold">
+                  Email
+                </Text>
+                <Text>{values.email || "-"}</Text>
+                <Text size={200} weight="semibold">
+                  Company
+                </Text>
+                <Text>{values.company || "-"}</Text>
+                <Text size={200} weight="semibold">
+                  Plan
+                </Text>
+                <Text>{values.plan ? PLAN_LABELS[values.plan] : "-"}</Text>
+                <Text size={200} weight="semibold">
+                  Team size
+                </Text>
+                <Text>{values.teamSize || "-"}</Text>
+                <Text size={200} weight="semibold">
+                  Budget
+                </Text>
+                <Text>{values.budget ? `$${values.budget}` : "-"}</Text>
+              </div>
+
+              {values.notes && (
+                <>
+                  <Text size={200} weight="semibold">
+                    Notes
+                  </Text>
+                  <Text>{values.notes}</Text>
+                </>
+              )}
+
+              <Divider appearance="subtle" />
+
+              <Checkbox
+                checked={values.acceptedTerms}
+                onChange={(_, data) => update({ acceptedTerms: data.checked === true })}
+                label="I accept the terms of service and privacy policy"
+              />
+
+              {errors.acceptedTerms && (
+                <MessageBar intent="error" politeness="polite">
+                  <MessageBarBody>
+                    <Text>{errors.acceptedTerms}</Text>
+                  </MessageBarBody>
+                </MessageBar>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      <CardFooter>
+        <div style={{ display: "flex", gap: 8, width: "100%", justifyContent: "flex-end" }}>
+          {submitted ? (
+            <Button appearance="primary" onClick={startOver}>
+              Create another workspace
+            </Button>
+          ) : (
+            <>
+              <Button appearance="secondary" disabled={step === 0} onClick={goBack}>
+                Back
+              </Button>
+              <Button appearance="primary" onClick={goNext}>
+                {isLastStep ? "Create workspace" : "Next"}
+              </Button>
+            </>
+          )}
+        </div>
+      </CardFooter>
+    </Card>
+  );
+};
+```
+
+### Checkout wizard with TabList step navigation
+
+A three-step checkout where TabList acts as the stepper. Tabs for steps the user has not reached are disabled, selectTabOnFocus is false so arrow keys cannot bypass validation, the active step renders inside role="tabpanel", and Back/Next in CardFooter drive the flow until the order is placed.
+
+```tsx
+import * as React from "react";
+import {
+  Button,
+  Card,
+  CardFooter,
+  CardHeader,
+  Divider,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Select,
+  Tab,
+  TabList,
+  Text,
+} from "@fluentui/react-components";
+
+type StepKey = "contact" | "delivery" | "payment";
+
+interface CheckoutValues {
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  postcode: string;
+  deliverySpeed: string;
+  cardName: string;
+  cardNumber: string;
+}
+
+type CheckoutErrors = Partial<Record<keyof CheckoutValues, string>>;
+
+const STEP_ORDER: StepKey[] = ["contact", "delivery", "payment"];
+
+const STEP_LABELS: Record<StepKey, string> = {
+  contact: "Contact",
+  delivery: "Delivery",
+  payment: "Payment",
+};
+
+const INITIAL_VALUES: CheckoutValues = {
+  email: "",
+  phone: "",
+  address: "",
+  city: "",
+  postcode: "",
+  deliverySpeed: "standard",
+  cardName: "",
+  cardNumber: "",
+};
+
+function validateStep(step: StepKey, values: CheckoutValues): CheckoutErrors {
+  const errors: CheckoutErrors = {};
+
+  if (step === "contact") {
+    if (!values.email.includes("@")) {
+      errors.email = "Enter an email address we can send the receipt to.";
+    }
+    if (values.phone.replace(/\D/g, "").length < 7) {
+      errors.phone = "Enter a phone number with at least 7 digits.";
+    }
+  }
+
+  if (step === "delivery") {
+    if (!values.address.trim()) {
+      errors.address = "Enter a street address.";
+    }
+    if (!values.city.trim()) {
+      errors.city = "Enter a city.";
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9 -]{2,9}$/.test(values.postcode.trim())) {
+      errors.postcode = "Enter a valid postal code (3-10 characters).";
+    }
+  }
+
+  if (step === "payment") {
+    if (!values.cardName.trim()) {
+      errors.cardName = "Enter the name printed on the card.";
+    }
+    if (values.cardNumber.replace(/\s/g, "").length < 12) {
+      errors.cardNumber = "Enter a valid card number.";
+    }
+  }
+
+  return errors;
+}
+
+export const CheckoutWizard: React.FC = () => {
+  const [currentStep, setCurrentStep] = React.useState<StepKey>("contact");
+  const [furthestStep, setFurthestStep] = React.useState(0);
+  const [values, setValues] = React.useState<CheckoutValues>(INITIAL_VALUES);
+  const [errors, setErrors] = React.useState<CheckoutErrors>({});
+  const [confirmation, setConfirmation] = React.useState<string | undefined>();
+
+  const currentIndex = STEP_ORDER.indexOf(currentStep);
+
+  const update = (patch: Partial<CheckoutValues>) => {
+    setValues((previous) => ({ ...previous, ...patch }));
+    setErrors((previous) => {
+      const patchedKeys = Object.keys(patch) as Array<keyof CheckoutValues>;
+      if (!patchedKeys.some((key) => previous[key])) {
+        return previous;
+      }
+      const next = { ...previous };
+      patchedKeys.forEach((key) => delete next[key]);
+      return next;
+    });
+  };
+
+  const selectStep = (step: StepKey) => {
+    if (confirmation) {
+      return;
+    }
+    if (STEP_ORDER.indexOf(step) <= furthestStep) {
+      setErrors({});
+      setCurrentStep(step);
+    }
   };
 
   const goBack = () => {
     setErrors({});
-    setSubmitError(undefined);
-    setStepIndex(index => Math.max(index - 1, 0));
+    setCurrentStep(STEP_ORDER[Math.max(0, currentIndex - 1)]);
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    // Re-validate every step: the user can reach the review step, go back, and empty a field.
-    const allErrors: FormErrors = {};
-    let firstInvalidStep = -1;
-
-    STEPS.forEach((candidate, index) => {
-      const stepErrors = validateStep(candidate.id, values);
-      if (firstInvalidStep === -1 && Object.keys(stepErrors).length > 0) {
-        firstInvalidStep = index;
-      }
-      Object.assign(allErrors, stepErrors);
-    });
-
-    if (firstInvalidStep !== -1) {
-      setErrors(allErrors);
-      setStepIndex(firstInvalidStep);
-      setSubmitError('Some fields need attention before the workspace can be created.');
+  const goNext = () => {
+    const stepErrors = validateStep(currentStep, values);
+    setErrors(stepErrors);
+    if (Object.keys(stepErrors).length > 0) {
       return;
     }
-
-    setErrors({});
-    setSubmitError(undefined);
-    setStatus('submitting');
-
-    try {
-      await createWorkspace(values);
-      setStatus('submitted');
-    } catch (error) {
-      setStatus('editing');
-      setSubmitError(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+    if (currentIndex === STEP_ORDER.length - 1) {
+      setConfirmation(`Order placed. A receipt is on its way to ${values.email}.`);
+      return;
     }
+    const nextIndex = currentIndex + 1;
+    setFurthestStep((previous) => Math.max(previous, nextIndex));
+    setCurrentStep(STEP_ORDER[nextIndex]);
   };
-
-  const reset = () => {
-    setValues(INITIAL_VALUES);
-    setErrors({});
-    setStepIndex(0);
-    setStatus('editing');
-    setSubmitError(undefined);
-  };
-
-  const submitting = status === 'submitting';
-  const errorMessages = Object.values(errors).filter((message): message is string => Boolean(message));
-  const planLabel = PLAN_LABELS[values.plan] ?? values.plan;
-
-  if (status === 'submitted') {
-    return (
-      <Card appearance='outline' style={{ maxWidth: 640, margin: '0 auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <h2 style={{ margin: 0 }}>
-          <Text size={500} weight='semibold'>Workspace created</Text>
-        </h2>
-        <Text>
-          {`We sent a confirmation to ${values.email}. The ${planLabel} plan is ready to use.`}
-        </Text>
-        <Divider />
-        <div>
-          <Button appearance='primary' onClick={reset}>Create another workspace</Button>
-        </div>
-      </Card>
-    );
-  }
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto' }}>
-      <Card appearance='outline' style={{ padding: 24 }}>
-        <form noValidate onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <header style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <Text size={500} weight='semibold'>Create your workspace</Text>
-              <Badge appearance='tint' color='brand' size='medium' shape='rounded'>
-                {`Step ${stepIndex + 1} of ${STEPS.length}`}
-              </Badge>
-            </div>
-            <ProgressBar value={stepIndex + 1} max={STEPS.length} aria-label={`Step ${stepIndex + 1} of ${STEPS.length}`} />
-          </header>
+    <Card appearance="outline" style={{ maxWidth: 620, margin: "0 auto" }}>
+      <CardHeader
+        header={
+          <Text weight="semibold" size={500}>
+            Checkout
+          </Text>
+        }
+        description={<Text size={200}>Complete each section, then place your order.</Text>}
+      />
 
-          <div role='group' aria-labelledby={headingId} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <h3 id={headingId} ref={headingRef} tabIndex={-1} style={{ margin: 0 }}>
-                <Text size={400} weight='semibold'>{step.title}</Text>
-              </h3>
-              <Text size={200}>{step.description}</Text>
-            </div>
+      <TabList
+        selectedValue={currentStep}
+        onTabSelect={(_, data) => selectStep(data.value as StepKey)}
+        selectTabOnFocus={false}
+        aria-label="Checkout steps"
+      >
+        {STEP_ORDER.map((step, index) => (
+          <Tab
+            key={step}
+            value={step}
+            disabled={index > furthestStep || confirmation !== undefined}
+          >
+            {`${index + 1}. ${STEP_LABELS[step]}`}
+          </Tab>
+        ))}
+      </TabList>
 
-            {errorMessages.length > 0 && (
-              <MessageBar intent='error' politeness='assertive'>
-                {`Please fix ${errorMessages.length} ${errorMessages.length === 1 ? 'field' : 'fields'} before continuing. ${errorMessages[0]}`}
-              </MessageBar>
-            )}
+      <Divider appearance="subtle" />
 
-            {step.id === 'profile' && (
+      {confirmation ? (
+        <MessageBar intent="success">
+          <MessageBarBody>
+            <MessageBarTitle>Thank you!</MessageBarTitle>
+            <Text>{confirmation}</Text>
+          </MessageBarBody>
+        </MessageBar>
+      ) : (
+        <>
+          {Object.keys(errors).length > 0 && (
+            <MessageBar intent="error" politeness="polite">
+              <MessageBarBody>
+                <MessageBarTitle>Fix these before continuing</MessageBarTitle>
+                <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+                  {(Object.keys(errors) as Array<keyof CheckoutValues>).map((key) => (
+                    <li key={key}>{errors[key]}</li>
+                  ))}
+                </ul>
+              </MessageBarBody>
+            </MessageBar>
+          )}
+
+          <div
+            role="tabpanel"
+            aria-label={STEP_LABELS[currentStep]}
+            style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 420 }}
+          >
+            {currentStep === "contact" && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                  <Field
-                    label='First name'
-                    required
-                    validationState={errors.firstName ? 'error' : 'none'}
-                    validationMessage={errors.firstName}
-                  >
-                    <Input
-                      value={values.firstName}
-                      onChange={(_, data) => updateField({ firstName: data.value })}
-                      placeholder='Ada'
-                    />
-                  </Field>
-                  <Field
-                    label='Last name'
-                    required
-                    validationState={errors.lastName ? 'error' : 'none'}
-                    validationMessage={errors.lastName}
-                  >
-                    <Input
-                      value={values.lastName}
-                      onChange={(_, data) => updateField({ lastName: data.value })}
-                      placeholder='Lovelace'
-                    />
-                  </Field>
-                </div>
                 <Field
-                  label='Work email'
+                  label="Email"
                   required
-                  hint='We will send the activation link here.'
-                  validationState={errors.email ? 'error' : 'none'}
+                  validationState={errors.email ? "error" : "none"}
                   validationMessage={errors.email}
                 >
-                  <Input
-                    type='email'
-                    value={values.email}
-                    onChange={(_, data) => updateField({ email: data.value })}
-                    placeholder='ada@company.com'
-                  />
+                  {(fieldProps) => (
+                    <Input
+                      {...fieldProps}
+                      type="email"
+                      value={values.email}
+                      onChange={(_, data) => update({ email: data.value })}
+                    />
+                  )}
                 </Field>
-                <Field label='Company' hint='Optional'>
-                  <Input
-                    value={values.company}
-                    onChange={(_, data) => updateField({ company: data.value })}
-                  />
-                </Field>
-              </>
-            )}
 
-            {step.id === 'preferences' && (
-              <>
                 <Field
-                  label='Plan'
+                  label="Phone"
                   required
-                  validationState={errors.plan ? 'error' : 'none'}
-                  validationMessage={errors.plan}
+                  validationState={errors.phone ? "error" : "none"}
+                  validationMessage={errors.phone}
                 >
-                  <Select value={values.plan} onChange={(_, data) => updateField({ plan: data.value })}>
-                    <option value='free'>Free - 1 project</option>
-                    <option value='team'>Team - 10 projects</option>
-                    <option value='enterprise'>Enterprise - unlimited projects</option>
-                  </Select>
+                  {(fieldProps) => (
+                    <Input
+                      {...fieldProps}
+                      type="tel"
+                      value={values.phone}
+                      onChange={(_, data) => update({ phone: data.value })}
+                    />
+                  )}
                 </Field>
-                <Field label='Anything we should know?' hint='Optional'>
-                  <Textarea
-                    value={values.notes}
-                    onChange={(_, data) => updateField({ notes: data.value })}
-                    resize='vertical'
-                  />
-                </Field>
-                <Checkbox
-                  label='Email me product updates'
-                  checked={values.newsletter}
-                  onChange={(_, data) => updateField({ newsletter: data.checked === true })}
-                />
-                <Switch
-                  label='Require two-factor authentication for every member'
-                  checked={values.twoFactor}
-                  onChange={(_, data) => updateField({ twoFactor: data.checked })}
-                />
               </>
             )}
 
-            {step.id === 'review' && (
+            {currentStep === "delivery" && (
               <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <Text size={300} weight='semibold'>Account</Text>
-                  <Divider />
-                  <ReviewRow label='Name' value={`${values.firstName} ${values.lastName}`.trim() || 'Not provided'} />
-                  <ReviewRow label='Email' value={values.email || 'Not provided'} />
-                  <ReviewRow label='Company' value={values.company || 'Not provided'} />
-                  <Text size={300} weight='semibold'>Workspace</Text>
-                  <Divider />
-                  <ReviewRow label='Plan' value={planLabel} />
-                  <ReviewRow label='Product updates' value={values.newsletter ? 'On' : 'Off'} />
-                  <ReviewRow label='Two-factor authentication' value={values.twoFactor ? 'Required' : 'Optional'} />
-                  <ReviewRow label='Notes' value={values.notes || 'None'} />
-                </div>
                 <Field
-                  validationState={errors.agreed ? 'error' : 'none'}
-                  validationMessage={errors.agreed}
+                  label="Street address"
+                  required
+                  validationState={errors.address ? "error" : "none"}
+                  validationMessage={errors.address}
                 >
-                  <Checkbox
-                    label='I agree to the terms of service'
-                    checked={values.agreed}
-                    onChange={(_, data) => updateField({ agreed: data.checked === true })}
-                  />
+                  {(fieldProps) => (
+                    <Input
+                      {...fieldProps}
+                      value={values.address}
+                      onChange={(_, data) => update({ address: data.value })}
+                    />
+                  )}
+                </Field>
+
+                <Field
+                  label="City"
+                  required
+                  validationState={errors.city ? "error" : "none"}
+                  validationMessage={errors.city}
+                >
+                  {(fieldProps) => (
+                    <Input
+                      {...fieldProps}
+                      value={values.city}
+                      onChange={(_, data) => update({ city: data.value })}
+                    />
+                  )}
+                </Field>
+
+                <Field
+                  label="Postal code"
+                  required
+                  validationState={errors.postcode ? "error" : "none"}
+                  validationMessage={errors.postcode}
+                >
+                  {(fieldProps) => (
+                    <Input
+                      {...fieldProps}
+                      value={values.postcode}
+                      onChange={(_, data) => update({ postcode: data.value })}
+                    />
+                  )}
+                </Field>
+
+                <Field label="Delivery speed">
+                  {(fieldProps) => (
+                    <Select
+                      {...fieldProps}
+                      value={values.deliverySpeed}
+                      onChange={(_, data) => update({ deliverySpeed: data.value })}
+                    >
+                      <option value="standard">Standard (3-5 days)</option>
+                      <option value="express">Express (next day)</option>
+                      <option value="pickup">Pick up in store</option>
+                    </Select>
+                  )}
+                </Field>
+              </>
+            )}
+
+            {currentStep === "payment" && (
+              <>
+                <Field
+                  label="Name on card"
+                  required
+                  validationState={errors.cardName ? "error" : "none"}
+                  validationMessage={errors.cardName}
+                >
+                  {(fieldProps) => (
+                    <Input
+                      {...fieldProps}
+                      value={values.cardName}
+                      onChange={(_, data) => update({ cardName: data.value })}
+                    />
+                  )}
+                </Field>
+
+                <Field
+                  label="Card number"
+                  required
+                  hint="This demo validates the length only - never store raw card data."
+                  validationState={errors.cardNumber ? "error" : "none"}
+                  validationMessage={errors.cardNumber}
+                >
+                  {(fieldProps) => (
+                    <Input
+                      {...fieldProps}
+                      value={values.cardNumber}
+                      onChange={(_, data) => update({ cardNumber: data.value })}
+                    />
+                  )}
                 </Field>
               </>
             )}
           </div>
+        </>
+      )}
 
-          {submitError && (
-            <MessageBar intent='error' politeness='assertive'>{submitError}</MessageBar>
-          )}
-
-          <Divider />
-
-          <footer style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <Button
-              type='button'
-              appearance='secondary'
-              onClick={goBack}
-              disabled={stepIndex === 0 || submitting}
-            >
-              Back
-            </Button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {submitting && <Spinner size='tiny' label='Creating workspace' labelPosition='after' />}
-              {stepIndex < STEPS.length - 1 ? (
-                <Button type='button' appearance='primary' onClick={goNext}>
-                  Next
-                </Button>
-              ) : (
-                <Button type='submit' appearance='primary' disabled={submitting}>
-                  Create workspace
-                </Button>
-              )}
-            </div>
-          </footer>
-        </form>
-      </Card>
-    </div>
-  );
-};
-```
-
-### Reusable useWizard hook plus a StepIndicator
-
-Extracts the wizard mechanics into a generic useWizard hook (stepIndex, field-keyed errors, goNext/goBack/goTo/validateAll) and a StepIndicator built from Text, Badge and Progress, then uses both in a compact three-step contact form with Select, Textarea, Checkbox and MessageBar.
-
-```tsx
-import * as React from 'react';
-import { Badge, Button, Card, Checkbox, Divider, Field, Input, MessageBar, ProgressBar, Select, Text, Textarea } from '@fluentui/react-components';
-
-/* -------------------------------- useWizard -------------------------------- */
-
-export type WizardStepDefinition<StepId extends string> = {
-  id: StepId;
-  title: string;
-  description?: string;
-};
-
-export type UseWizardOptions<StepId extends string, Values> = {
-  steps: WizardStepDefinition<StepId>[];
-  values: Values;
-  /** Return a field-keyed map of messages for the step. An empty object means the step is valid. */
-  validateStep: (stepId: StepId, values: Values) => Record<string, string>;
-};
-
-export function useWizard<StepId extends string, Values>(options: UseWizardOptions<StepId, Values>) {
-  const { steps, values, validateStep } = options;
-  const [stepIndex, setStepIndex] = React.useState(0);
-  const [errors, setErrors] = React.useState<Record<string, string>>({});
-
-  const step = steps[stepIndex];
-
-  const clearError = React.useCallback((field: string) => {
-    setErrors(previous => {
-      if (!(field in previous)) {
-        return previous;
-      }
-      const next = { ...previous };
-      delete next[field];
-      return next;
-    });
-  }, []);
-
-  /** Validates the current step and advances only when it is clean. Returns false when blocked. */
-  const goNext = React.useCallback(() => {
-    const stepErrors = validateStep(step.id, values);
-    if (Object.keys(stepErrors).length > 0) {
-      setErrors(stepErrors);
-      return false;
-    }
-    setErrors({});
-    setStepIndex(index => Math.min(index + 1, steps.length - 1));
-    return true;
-  }, [step.id, steps.length, validateStep, values]);
-
-  const goBack = React.useCallback(() => {
-    setErrors({});
-    setStepIndex(index => Math.max(index - 1, 0));
-  }, []);
-
-  const goTo = React.useCallback(
-    (index: number) => {
-      setErrors({});
-      setStepIndex(Math.max(0, Math.min(index, steps.length - 1)));
-    },
-    [steps.length],
-  );
-
-  /** Validates every step before submitting and jumps to the first invalid one. Returns false when blocked. */
-  const validateAll = React.useCallback(() => {
-    const allErrors: Record<string, string> = {};
-    let firstInvalidIndex = -1;
-
-    steps.forEach((candidate, index) => {
-      const stepErrors = validateStep(candidate.id, values);
-      if (firstInvalidIndex === -1 && Object.keys(stepErrors).length > 0) {
-        firstInvalidIndex = index;
-      }
-      Object.assign(allErrors, stepErrors);
-    });
-
-    if (firstInvalidIndex !== -1) {
-      setErrors(allErrors);
-      setStepIndex(firstInvalidIndex);
-      return false;
-    }
-
-    setErrors({});
-    return true;
-  }, [steps, validateStep, values]);
-
-  return {
-    step,
-    stepIndex,
-    isFirstStep: stepIndex === 0,
-    isLastStep: stepIndex === steps.length - 1,
-    errors,
-    clearError,
-    goNext,
-    goBack,
-    goTo,
-    validateAll,
-  };
-}
-
-/* ------------------------------ StepIndicator ------------------------------ */
-
-export type StepIndicatorProps = {
-  steps: { id: string; title: string }[];
-  currentIndex: number;
-};
-
-export const StepIndicator = (props: StepIndicatorProps) => {
-  const { steps, currentIndex } = props;
-  const current = steps[currentIndex];
-  const percent = Math.round(((currentIndex + 1) / steps.length) * 100);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <Text size={200} weight='semibold'>
-          {`Step ${currentIndex + 1} of ${steps.length} - ${current.title}`}
-        </Text>
-        <Badge appearance='tint' color='brand' shape='rounded' size='small'>{`${percent}%`}</Badge>
-      </div>
-      <ProgressBar
-        value={currentIndex + 1}
-        max={steps.length}
-        aria-label={`Step ${currentIndex + 1} of ${steps.length}`}
-      />
-    </div>
-  );
-};
-
-/* -------------------------------- contact form ------------------------------ */
-
-type ContactStepId = 'details' | 'message' | 'confirm';
-
-type ContactValues = {
-  fullName: string;
-  email: string;
-  topic: string;
-  message: string;
-  consent: boolean;
-};
-
-const CONTACT_STEPS: WizardStepDefinition<ContactStepId>[] = [
-  { id: 'details', title: 'Your details' },
-  { id: 'message', title: 'Your message' },
-  { id: 'confirm', title: 'Confirm' },
-];
-
-const CONTACT_INITIAL_VALUES: ContactValues = {
-  fullName: '',
-  email: '',
-  topic: 'sales',
-  message: '',
-  consent: false,
-};
-
-function validateContactStep(stepId: ContactStepId, values: ContactValues): Record<string, string> {
-  const errors: Record<string, string> = {};
-
-  if (stepId === 'details') {
-    if (!values.fullName.trim()) {
-      errors.fullName = 'Tell us your name.';
-    }
-    if (!values.email.trim()) {
-      errors.email = 'We need an email address to reply.';
-    } else if (!values.email.includes('@')) {
-      errors.email = 'That email address does not look right.';
-    }
-  }
-
-  if (stepId === 'message' && values.message.trim().length < 20) {
-    errors.message = 'Please give us at least 20 characters.';
-  }
-
-  if (stepId === 'confirm' && !values.consent) {
-    errors.consent = 'Please confirm before sending.';
-  }
-
-  return errors;
-}
-
-export const ContactWizard = () => {
-  const [values, setValues] = React.useState<ContactValues>(CONTACT_INITIAL_VALUES);
-  const [status, setStatus] = React.useState<'editing' | 'sending' | 'sent'>('editing');
-
-  const wizard = useWizard<ContactStepId, ContactValues>({
-    steps: CONTACT_STEPS,
-    values,
-    validateStep: validateContactStep,
-  });
-
-  const updateField = (patch: Partial<ContactValues>) => {
-    setValues(previous => ({ ...previous, ...patch }));
-    Object.keys(patch).forEach(key => wizard.clearError(key));
-  };
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!wizard.validateAll()) {
-      return;
-    }
-    setStatus('sending');
-    window.setTimeout(() => setStatus('sent'), 800);
-  };
-
-  if (status === 'sent') {
-    return (
-      <Card appearance='outline' style={{ maxWidth: 560, margin: '0 auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <Text size={400} weight='semibold'>Thanks, {values.fullName}</Text>
-        <Text>{`We received your message and will reply to ${values.email} shortly.`}</Text>
-        <div>
+      <CardFooter>
+        <div style={{ display: "flex", gap: 8, width: "100%", justifyContent: "flex-end" }}>
           <Button
-            appearance='primary'
-            onClick={() => {
-              setValues(CONTACT_INITIAL_VALUES);
-              setStatus('editing');
-              wizard.goTo(0);
-            }}
-          >
-            Send another message
-          </Button>
-        </div>
-      </Card>
-    );
-  }
-
-  return (
-    <Card appearance='outline' style={{ maxWidth: 560, margin: '0 auto', padding: 24 }}>
-      <form noValidate onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <StepIndicator steps={CONTACT_STEPS} currentIndex={wizard.stepIndex} />
-        <Divider />
-        <Text size={400} weight='semibold'>{wizard.step.title}</Text>
-
-        {wizard.step.id === 'details' && (
-          <>
-            <Field
-              label='Full name'
-              required
-              validationState={wizard.errors.fullName ? 'error' : 'none'}
-              validationMessage={wizard.errors.fullName}
-            >
-              <Input value={values.fullName} onChange={(_, data) => updateField({ fullName: data.value })} />
-            </Field>
-            <Field
-              label='Email'
-              required
-              validationState={wizard.errors.email ? 'error' : 'none'}
-              validationMessage={wizard.errors.email}
-            >
-              <Input type='email' value={values.email} onChange={(_, data) => updateField({ email: data.value })} />
-            </Field>
-          </>
-        )}
-
-        {wizard.step.id === 'message' && (
-          <>
-            <Field label='Topic' required>
-              <Select value={values.topic} onChange={(_, data) => updateField({ topic: data.value })}>
-                <option value='sales'>Sales</option>
-                <option value='support'>Support</option>
-                <option value='partnership'>Partnership</option>
-              </Select>
-            </Field>
-            <Field
-              label='Message'
-              required
-              hint='At least 20 characters.'
-              validationState={wizard.errors.message ? 'error' : 'none'}
-              validationMessage={wizard.errors.message}
-            >
-              <Textarea
-                value={values.message}
-                onChange={(_, data) => updateField({ message: data.value })}
-                resize='vertical'
-              />
-            </Field>
-          </>
-        )}
-
-        {wizard.step.id === 'confirm' && (
-          <>
-            <MessageBar intent='info'>
-              {`We will reply to ${values.email || 'the email address you provide'}.`}
-            </MessageBar>
-            <Field
-              validationState={wizard.errors.consent ? 'error' : 'none'}
-              validationMessage={wizard.errors.consent}
-            >
-              <Checkbox
-                label='I agree to be contacted about my request'
-                checked={values.consent}
-                onChange={(_, data) => updateField({ consent: data.checked === true })}
-              />
-            </Field>
-          </>
-        )}
-
-        <Divider />
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <Button
-            type='button'
-            appearance='secondary'
-            onClick={wizard.goBack}
-            disabled={wizard.isFirstStep || status === 'sending'}
+            appearance="secondary"
+            onClick={goBack}
+            disabled={currentIndex === 0 || confirmation !== undefined}
           >
             Back
           </Button>
-          {wizard.isLastStep ? (
-            <Button type='submit' appearance='primary' disabled={status === 'sending'}>
-              {status === 'sending' ? 'Sending' : 'Send message'}
-            </Button>
-          ) : (
-            <Button type='button' appearance='primary' onClick={wizard.goNext}>
-              Next
-            </Button>
-          )}
+          <Button appearance="primary" onClick={goNext} disabled={confirmation !== undefined}>
+            {currentIndex === STEP_ORDER.length - 1 ? "Place order" : "Next"}
+          </Button>
         </div>
-      </form>
+      </CardFooter>
     </Card>
   );
 };
 ```
 
-### Async availability check inside a step
+### Final step confirmation in a Dialog with async submit
 
-A single Account step that validates the email against a fake server while the user types. Shows the request-id guard that ignores stale responses, the checking state rendered through the contentAfter slot of Input with a tiny Spinner, Field validationState toggling between error and success, and a submit button gated on the resolved result.
+The last step of the wizard opens a Dialog that summarizes the entries, requires the applicant to type their name to confirm, and submits asynchronously with a Spinner in the primary button's icon slot. The dialog stays open and the buttons stay disabled until the request resolves.
 
 ```tsx
-import * as React from 'react';
-import { Button, Card, Field, Input, MessageBar, Spinner, Text } from '@fluentui/react-components';
+import * as React from "react";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  Divider,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Spinner,
+  Text,
+} from "@fluentui/react-components";
 
-type Availability = 'idle' | 'checking' | 'available' | 'taken';
-
-const MIN_PASSWORD_LENGTH = 12;
-
-/** Stand-in for a real availability endpoint. Emails ending in contoso.com are treated as taken. */
-function checkEmailAvailability(email: string): Promise<boolean> {
-  return new Promise<boolean>(resolve => {
-    window.setTimeout(() => resolve(!email.toLowerCase().endsWith('@contoso.com')), 700);
-  });
+export interface SubmitConfirmationDialogProps {
+  applicantName: string;
+  planLabel: string;
+  onSubmitted: () => void;
 }
 
-export const StepWithAsyncValidation = () => {
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [availability, setAvailability] = React.useState<Availability>('idle');
-  const [takenMessage, setTakenMessage] = React.useState<string | undefined>(undefined);
-  const [completed, setCompleted] = React.useState(false);
-  const latestRequest = React.useRef(0);
+const saveApplication = () =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, 1200);
+  });
 
-  const handleEmailChange = (nextEmail: string) => {
-    setEmail(nextEmail);
-    setCompleted(false);
-    setTakenMessage(undefined);
+export const SubmitConfirmationDialog: React.FC<SubmitConfirmationDialogProps> = ({
+  applicantName,
+  planLabel,
+  onSubmitted,
+}) => {
+  const [open, setOpen] = React.useState(false);
+  const [typedName, setTypedName] = React.useState("");
+  const [error, setError] = React.useState<string | undefined>();
+  const [saving, setSaving] = React.useState(false);
 
-    const requestId = latestRequest.current + 1;
-    latestRequest.current = requestId;
+  const isMatch = typedName.trim().toLowerCase() === applicantName.trim().toLowerCase();
 
-    if (!nextEmail.includes('@')) {
-      setAvailability('idle');
+  const handleConfirm = async () => {
+    if (!isMatch) {
+      setError(`Type "${applicantName}" exactly as written to confirm.`);
       return;
     }
-
-    setAvailability('checking');
-
-    checkEmailAvailability(nextEmail).then(isAvailable => {
-      // A newer keystroke already started the check that matters, so drop this response.
-      if (requestId !== latestRequest.current) {
-        return;
-      }
-      setAvailability(isAvailable ? 'available' : 'taken');
-      if (!isAvailable) {
-        setTakenMessage('That email is already registered. Try signing in instead.');
-      }
-    });
-  };
-
-  const isEmailValid = availability === 'available';
-  const passwordTooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
-  const isPasswordValid = password.length >= MIN_PASSWORD_LENGTH;
-  const canContinue = isEmailValid && isPasswordValid;
-
-  const emailValidationState = takenMessage ? 'error' : isEmailValid ? 'success' : 'none';
-  const emailValidationMessage =
-    takenMessage ?? (isEmailValid ? 'That email address is available.' : undefined);
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!canContinue) {
-      return;
+    setError(undefined);
+    setSaving(true);
+    try {
+      await saveApplication();
+      setOpen(false);
+      setTypedName("");
+      onSubmitted();
+    } finally {
+      setSaving(false);
     }
-    setCompleted(true);
   };
 
   return (
-    <Card appearance='outline' style={{ maxWidth: 480, margin: '0 auto', padding: 24 }}>
-      <form noValidate onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <Text size={400} weight='semibold'>Step 1 of 3 - Account</Text>
-          <Text size={200}>We check the email address against the server while you type.</Text>
-        </div>
+    <>
+      <Button appearance="primary" onClick={() => setOpen(true)}>
+        Review and submit
+      </Button>
 
-        <Field
-          label='Work email'
-          required
-          hint='Availability is checked automatically.'
-          validationState={emailValidationState}
-          validationMessage={emailValidationMessage}
-        >
-          <Input
-            type='email'
-            value={email}
-            onChange={(_, data) => handleEmailChange(data.value)}
-            contentAfter={
-              availability === 'checking'
-                ? <Spinner size='extra-tiny' aria-label='Checking availability' />
-                : undefined
-            }
-          />
-        </Field>
+      <Dialog open={open} onOpenChange={(_, data) => setOpen(data.open)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Submit your application?</DialogTitle>
+            <DialogContent>
+              <Text>{`${applicantName} - ${planLabel}`}</Text>
+              <Divider appearance="subtle" />
+              <Field
+                label="Type your full name to confirm"
+                required
+                validationState={error ? "error" : "none"}
+                validationMessage={error}
+              >
+                {(fieldProps) => (
+                  <Input
+                    {...fieldProps}
+                    value={typedName}
+                    onChange={(_, data) => {
+                      setTypedName(data.value);
+                      setError(undefined);
+                    }}
+                  />
+                )}
+              </Field>
+            </DialogContent>
+            <DialogActions>
+              <DialogTrigger action="close" disableButtonEnhancement>
+                <Button appearance="secondary" disabled={saving}>
+                  Cancel
+                </Button>
+              </DialogTrigger>
+              <Button
+                appearance="primary"
+                onClick={handleConfirm}
+                disabled={saving}
+                icon={saving ? <Spinner size="tiny" /> : undefined}
+              >
+                {saving ? "Submitting..." : "Submit application"}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+    </>
+  );
+};
 
-        <Field
-          label='Password'
-          required
-          hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
-          validationState={passwordTooShort ? 'warning' : 'none'}
-          validationMessage={passwordTooShort ? `Use at least ${MIN_PASSWORD_LENGTH} characters.` : undefined}
-        >
-          <Input type='password' value={password} onChange={(_, data) => setPassword(data.value)} />
-        </Field>
+export const SubmitStepExample: React.FC = () => {
+  const [submittedAt, setSubmittedAt] = React.useState<string | undefined>();
 
-        {completed && (
-          <MessageBar intent='success'>Account step complete. Continue to the next step.</MessageBar>
-        )}
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 420 }}>
+      {submittedAt && (
+        <MessageBar intent="success">
+          <MessageBarBody>
+            <MessageBarTitle>Application submitted</MessageBarTitle>
+            <Text>{submittedAt}</Text>
+          </MessageBarBody>
+        </MessageBar>
+      )}
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12 }}>
-          {availability === 'checking' && <Spinner size='tiny' label='Checking email' labelPosition='after' />}
-          <Button type='submit' appearance='primary' disabled={!canContinue}>
-            Continue
-          </Button>
-        </div>
-      </form>
-    </Card>
+      <SubmitConfirmationDialog
+        applicantName="Ada Lovelace"
+        planLabel="Standard (25 users, 100 GB)"
+        onSubmitted={() => setSubmittedAt(`Submitted at ${new Date().toLocaleTimeString()}.`)}
+      />
+    </div>
   );
 };
 ```
 
 ## Pitfalls
 
-- Validating the entire form when the user clicks Next. Every future step lights up with errors the user cannot fix from where they are. Validate only the current step while navigating, and validate all steps only inside the submit handler - then move the user to the first invalid step.
-- Forgetting to re-validate earlier steps on submit. A user can complete step 1, walk forward to the review step, go back and clear a field. Always loop over the step list in the submit handler and merge the per-step results with Object.assign before touching the network.
-- Not clearing a field error when its value changes. Keep errors keyed by field and delete the patched keys in one updateField helper (returning the previous object when nothing changed so React can bail out), otherwise stale messages stay under fields that are already fixed.
-- Keeping per-step copies of the data in local useState inside each step component. When the step unmounts, that copy disappears and Back loses data. Every value must live in the wizard's single values object and be passed down as controlled props.
-- Skipping focus management on step change. Swapping step content leaves focus on the Next button and screen readers announce nothing. Focus the step heading with tabIndex={-1} in an effect keyed on stepIndex, and use a first-render ref so the initial page load does not steal focus.
-- Passing validationState='error' to Field without a validationMessage. The styling is invisible to screen readers and confusing to everyone else; always pair the two, or drop the state entirely.
-- Duplicating the same sentence in a Field validationMessage and in a step-level MessageBar. Screen readers announce both, so reserve Field for field-level problems and MessageBar for step-level or submit-level problems.
-- Leaving Back and Next as implicit submit buttons. Inside a form every Button defaults to type='submit', so pressing Enter in a text field submits the whole wizard from step 1. Set type='button' on everything except the final submit.
-- Letting async field validation resolve out of order. Two keystrokes can produce two requests whose responses arrive in the wrong order. Keep a counter in a useRef, compare it when the promise resolves, and ignore stale responses.
-- Disabling or hiding the Back button on the first step and letting the footer layout jump between steps. Keep the button mounted and disabled so the primary action stays in the same screen position on every step.
-- Firing the submit request twice because the button is only visually disabled. Combine disabled={submitting} with an early return in the handler and hold the request state in the wizard, not in the button.
+- Validating only on final submit: users fill several screens before learning that step one was wrong. Validate the current step inside goNext(), render the error map on that step, and re-validate the whole payload at submit time.
+- Letting each step own its own state (local useState or uncontrolled defaultValue): the value is lost when the step unmounts as the user navigates. Keep values in one object above the step switch and pass value + onChange down.
+- Wrapping controls in Field but passing plain children (e.g. <Field label="Email"><Input /></Field>): the label's htmlFor references an id that no control has, so the control is announced unlabeled. Always use the render function and spread the provided props onto the control, including for Select, Textarea and RadioGroup.
+- Leaving stale errors behind. If errors are only cleared when a step validates, they reappear incorrectly after Back/forward navigation. Clear errors on Back and on step change, and clear an individual field's error as soon as the user edits that field (the update(patch) helper in the examples does both).
+- Using TabList as a stepper without selectTabOnFocus={false} and disabled tabs: arrow-key or click focus changes the step and skips validation entirely. Keep a furthestStep index, raise it only after a step validates, and disable every tab beyond it.
+- Allowing double submission. An async final step that only disables the button after the state update flushes, or that closes the surface immediately, lets users submit twice or lose input. Set the pending flag before awaiting, disable both actions, and close only after the promise resolves.
+- Treating ProgressBar as the only progress indicator or hardcoding a percentage: derive value and max from the step index and step count so the bar cannot drift from the actual flow, and keep the textual "Step X of Y" for screen readers.
+- Rendering an error summary but not moving focus or scrolling to it, so keyboard and screen-reader users hear nothing and stay at the bottom of the form after pressing Next.
 
 ## Accessibility
 
-Wrap each step's controls in a container with role='group' and aria-labelledby pointing at the step heading so assistive technology announces which step it is entering. Because React does not move focus when step content is swapped, focus the step heading (tabIndex={-1}) inside an effect keyed on stepIndex, and skip the very first render so the page does not steal focus on load; without this, keyboard users stay on the Next button and screen readers announce nothing. Every control must sit inside a Field so the label, required state, hint and validation message are programmatically associated with the input; never use placeholder text as the only label. Field validationState='error' must always be paired with a validationMessage, otherwise the red outline conveys nothing to non-visual users. Reserve MessageBar politeness='assertive' for submit failures and step-blocking summaries; use the default polite politeness for informational messages, and avoid repeating the same sentence in both a Field and a MessageBar because it is announced twice. Progress is a visual aid only - always render the textual 'Step X of Y' counter and give the bar an aria-label. Buttons inside the form that are not the final submit need type='button', otherwise pressing Enter in a text field submits the wizard. While submitting, keep the submit button mounted with its label and show the Spinner separately with an accessible label rather than swapping the button text, and do not move focus during the request. Use noValidate on the form so browser validation bubbles do not conflict with Fluent error messaging.
+- Label every control programmatically. Use the Field render-function child so the control receives the generated id and the aria-labelledby / aria-describedby wiring; a plain element child leaves the visible label's htmlFor pointing at an id that no element uses, which is a serious screen-reader defect.
+- Field also forwards the required/invalid state to the control, and the hint plus validationMessage are referenced through aria-describedby, so the message is announced when the control takes focus - users do not have to hunt for the text.
+- Announce step changes and validation failures. The visible "Step X of Y" text in CardHeader should be in the DOM before the fields, and the error MessageBar should use politeness="polite" so it is announced without interrupting typing. Never move focus on every keystroke; move it only when the user presses Next and validation fails.
+- When a step fails validation, move focus to the error summary or to the first invalid field, and make sure the summary is visible (scroll it into view) rather than rendering it above off-screen content.
+- With TabList, render the active step inside role="tabpanel" with an accessible name, keep selectTabOnFocus={false} so arrow-key focus does not silently change steps, and disable tabs that must not be reachable. Tabs that are disabled are removed from the tab order, which is the correct signal that they cannot be visited yet.
+- In a Dialog, DialogTitle supplies the accessible name of the surface. Keep the surface open while the async submit is pending, disable the cancel/submit buttons, and rely on DialogTrigger's close action so focus returns to the trigger element afterwards.
+- Use exactly one appearance="primary" button per step so the primary action is unambiguous, and use RadioGroup (radiogroup semantics) rather than styling buttons as radios.
+- ProgressBar is visual only; keep the textual step indicator as well, and give the bar an aria-label when the step text is not adjacent to it.
 
 ## Components used
 
-- [Badge](../../components/badge.md)
 - [Button](../../components/button.md)
 - [Card](../../components/card.md)
+- [CardFooter](../../components/card-footer.md)
+- [CardHeader](../../components/card-header.md)
 - [Checkbox](../../components/checkbox.md)
+- [Dialog](../../components/dialog.md)
+- [DialogActions](../../components/dialog-actions.md)
+- [DialogBody](../../components/dialog-body.md)
+- [DialogContent](../../components/dialog-content.md)
+- [DialogSurface](../../components/dialog-surface.md)
+- [DialogTitle](../../components/dialog-title.md)
+- [DialogTrigger](../../components/dialog-trigger.md)
 - [Divider](../../components/divider.md)
 - [Field](../../components/field.md)
 - [Input](../../components/input.md)
 - [MessageBar](../../components/message-bar.md)
-- [Progress](../../components/progress.md)
+- [MessageBarBody](../../components/message-bar-body.md)
+- [MessageBarTitle](../../components/message-bar-title.md)
+- [ProgressBar](../../components/progress-bar.md)
+- [Radio](../../components/radio.md)
+- [RadioGroup](../../components/radio-group.md)
 - [Select](../../components/select.md)
 - [Spinner](../../components/spinner.md)
-- [Switch](../../components/switch.md)
+- [Tab](../../components/tab.md)
+- [TabList](../../components/tab-list.md)
 - [Text](../../components/text.md)
 - [Textarea](../../components/textarea.md)
 

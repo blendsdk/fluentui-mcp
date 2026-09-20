@@ -2,629 +2,648 @@
 
 > **Category**: foundation
 
-Fluent UI v9 does not ship one bespoke widget per concept. It ships a small set of architectural ideas — **slots**, **appearance props**, **owned state**, **provider context**, **portals**, and **motion** — and every component in the library is assembled from them. Once you internalize those ideas, learning a new component is mostly a matter of reading its slot table and its `default*` / `on*Change` pairs.
+Fluent UI React v9 was rebuilt around one strict component model. `Button`, `Input`, `Dialog`, `NavItem`, `AccordionPanel` and `TeachingPopoverCarouselNavButton` are all assembled from the same four layers, use the same naming conventions, and expose the same kinds of extension points. Once you internalize the model you can predict an API you have never seen: knowing `Button` tells you most of what you need to know about `Card`, `TreeItemLayout` or `SwatchPicker`.
 
-This guide describes the architecture that is visible in the public API surface of the v9 components: how components are structured, how state is owned and shared, how content gets rendered into layers, and how you should build your own components so they behave like first-party ones.
+## 1. The four layers of every v9 component
 
-## 1. The layer cake: where a component sits tells you what it owns
+- **Public component and props.** The named export you import from `@fluentui/react-components`, plus its documented props and slots.
+- **State layer.** An internal state hook normalizes props into a plain state object: it resolves controlled vs uncontrolled values, merges event handlers, computes ARIA attributes, and decides which slots exist for this render.
+- **Style layer.** A style hook maps that state onto atomic class names. You rarely call these yourself, but their names are public through `FluentProvider`'s `customStyleHooks_unstable` map: `useButtonStyles_unstable`, `useCardStyles_unstable`, `useFieldStyles_unstable`, `useDialogSurfaceStyles_unstable`, `useTreeItemLayoutStyles_unstable`, `useNavItemStyles_unstable`, and so on for nearly every part in the library.
+- **Render layer.** Slots are resolved into React elements: default element + default props + caller props.
 
-Components fall into four layers. The layer a component lives in predicts how much it owns (state, DOM placement, focus) and how much you are expected to own.
+The design consequence matters more than the vocabulary: **props flow into state, and state flows into slots and class names.** So the supported ways to change a component are, in order of preference: props → slots → style hooks. Targeting generated class names in CSS is never one of them.
 
-**Layer 0 — primitives and utilities.** These render almost nothing on their own, but every composite is built on them:
+## 2. Slots: the unit of composition
 
-- `Aria` — screen-reader announcement plumbing.
-- `Portal` — renders children into a different DOM node (`mountNode`).
-- `Positioning` — anchored-surface placement shared by `Tooltip`, `Menu`, `Popover` and `TeachingPopover`.
-- `Tabster` — focus management and keyboard-navigation infrastructure (arrow-key traversal, focus traps, grouppers).
-- `ContextSelector` — context subscriptions where only the consumers that opt in re-render.
-- `Utilities` — shared helpers.
+A slot is a named, replaceable part of a component. Each slot owns:
 
-**Layer 1 — context and theming.** `FluentProvider` supplies the theme, writing direction (`dir`), the document used for portals and events (`targetDocument`), style injection into portals (`applyStylesToPortals`), provider-wide per-slot style overrides (`customStyleHooks_unstable`) and the unstable `overrides_unstable` escape hatch.
+- a **default element** (`Button.root` renders a `button`, `CardHeader.image` can render a `div` or an `img`, ...),
+- **default props** contributed by the component (class names, ARIA attributes, handlers),
+- a **name** that documents its role.
 
-**Layer 2 — building blocks.** Single-purpose, mostly presentational components: `Button`, `Input`, `Textarea`, `Field`, `Label`, `Select`, `Combobox`, `Checkbox`, `Switch`, `Radio`, `Slider`, `Rating`, `SpinButton`, `ColorPicker`, `Search`, `InfoLabel`, `Badge`, `Avatar`, `Persona`, `Image`, `Skeleton`, `Text`, `Divider`, `Card`, `Link`, `MessageBar`, `Spinner`, `ProgressBar`.
+Slot names *are* the architecture. `Input` exposes `root, input, contentBefore, contentAfter`. `Field` exposes `root, label, validationMessage, validationMessageIcon, hint`. `MenuItem` exposes `root, icon, checkmark, submenuIndicator, content, secondaryContent, subText`. `TreeItemLayout` exposes `root, main, iconBefore, iconAfter, expandIcon, aside, actions, selector`. `CardHeader` exposes `root, image, header, description, action`. `Avatar` exposes `root, image, initials, icon, badge`. If you need to change "just the icon" or "just the badge", there is almost always a slot for it — and using it is always better than wrapping the whole component.
 
-**Layer 3 — composites and overlays.** Components that own a state machine, register children, and/or render into a portal: `Dialog`, `Menu`, `Popover`, `Drawer`, `TeachingPopover`, `Tooltip`, `Toast`, `Accordion`, `Tabs`, `Tree`, `List`, `Nav`, `Breadcrumb`, `TagPicker`, `SwatchPicker`, `Table`, `Carousel`, `Overflow`, `Toolbar`, and the compat date/time family (`DatepickerCompat`, `TimepickerCompat`, `CalendarCompat`).
+### The four shorthand forms
 
-Rule of thumb: the higher the layer, the more the component owns, and the less you should reach into it. Your job at layer 3 is to supply a model (selected values, open items, sort state) and content; the component supplies interaction, focus, layering and ARIA.
+1. **React element** — `icon={<MyGlyph />}` renders the element inside the slot.
+2. **Text or number** — the value becomes the slot element's children.
+3. **Props object** — `icon={{ children: <MyGlyph />, className: 'myIcon' }}` is merged on top of the slot's default props, which is how you reach `className`, `style`, `id`, or extra handlers on exactly one part.
+4. **`null` / `false`** — renders nothing, only where the slot is optional.
 
-## 2. Slots: the public skeleton of every component
+### Changing the rendered element with `as`
 
-Every component publishes a `slots` table. A slot is a named position inside the component with a fixed role and a fixed position in the render tree. `root` is always the outermost element; every other entry is a named interior position.
+Most slots are constrained to a small set of elements rather than being a free-for-all. `AvatarGroupItem.root` is `Slot<'div', 'li'>` (a list item when the group is a real list), `CardHeader.image` is `Slot<'div', 'img'>`, `DrawerHeader.heading` is `Slot<'h2', 'h1' | 'h3' | 'h4' | 'h5' | 'h6' | 'div'>`, `DialogTitle.root` is `Slot<'h2', 'h1' | 'h3' | 'h4' | 'h5' | 'h6' | 'div'>`. Pass `as` to pick one of those elements while keeping the component's styling and behaviour: `<Text as="h2">`, `<Button as="a" href="...">`, `<DialogTitle as="h3">`.
 
-The `undefined` value in a slot table is not a missing value — it means the entry is a *slot descriptor*. The component decides whether that position renders, what element it uses, and in which order.
+### Required (NonNullable) slots
 
-### Slot order is fixed by the component
+Some slots cannot be removed because they carry non-negotiable semantics. `NavCategoryItem.root`, `MenuButton.root`, `AvatarGroupItem.avatar`, `DrawerHeader.heading` and `TeachingPopoverHeader.root` are typed as `NonNullable<Slot<...>>`. Treat those as part of the accessibility contract: configure them, change their element with `as`, but do not try to delete them.
 
-You cannot reorder slots by rearranging JSX. The component owns the order. Compare the slot tables of a few common components:
+## 3. Compound families are state machines
 
-- `Input`: `root` → `contentBefore` → `input` → `contentAfter`.
-- `Field`: `root` → `label` → children → `validationMessageIcon` → `validationMessage` → `hint`.
-- `Checkbox` / `Switch`: `root` → `input` → `indicator` → `label`.
-- `Slider`: `root` → `rail` → `thumb` → `input`.
-- `Avatar`: `root` → `image` → `initials` → `icon` → `badge`.
-- `Persona`: `root` → `avatar` → `presence` → `primaryText` → `secondaryText` → `tertiaryText` → `quaternaryText`.
-- `MessageBar`: `root` → `icon` → content → `bottomReflowSpacer`.
-- `Card`: `root` → `floatingAction` → `checkbox`.
-- `Select`: `root` → `select` → `icon`; `Combobox`: `root` → `input` → `expandIcon` → `clearIcon` → `listbox`.
-- `Spinner`: `root` → `spinner` → `spinnerTail` → `label`.
-- `Label`: `root` → `required`.
-- `Divider`: `wrapper` → `root`.
+Most non-trivial UI in v9 is a *family* of components that share state through React context. The leaf parts are not standalone widgets; they are declared inside their parent and read what they need from it.
 
-Because the order is fixed, the API gives you *placement props* instead of reordering. You choose between `contentBefore` / `contentAfter` on `Input`, `iconPosition: 'before' | 'after'` on `Button` and `Badge`, `labelPosition` on `Checkbox`, `Switch`, `Radio` and `Input`-adjacent controls, `textPosition` / `textAlignment` on `Persona`, and `alignContent` / `inset` / `vertical` on `Divider`. If a control does not offer a placement prop, the position is genuinely not yours to control.
+- **Accordion** — `Accordion` owns `openItems`; `AccordionItem` contributes `value`/`disabled`; `AccordionHeader` and `AccordionPanel` consume that context (the panel's `open`/`disabled` state is derived, not authored by you).
+- **Card** — `Card` owns selection and focus mode; `CardHeader` (`image`, `header`, `description`, `action`) and `CardFooter` (`action`) are pure layout parts.
+- **Dialog** — `Dialog` owns open state and modal type; `DialogSurface`, `DialogTitle`, `DialogBody`, `DialogContent`, `DialogActions` and `DialogTrigger` all read it.
+- **Menu** — `Menu` owns open/positioning; `MenuList` owns `checkedValues`, `hasCheckmarks` and `hasIcons` and pushes them to `MenuItemCheckbox`, `MenuItemRadio` and `MenuItemSwitch`.
+- **Nav** — `Nav` owns selection and open categories; `NavCategory` provides `value`, `NavCategoryItem` reads it, `NavSubItemGroup` hosts `NavSubItem` leaves. `NavDrawer`, `NavDrawerHeader`, `NavDrawerBody`, `NavDrawerFooter`, `SplitNavItem`, `AppItem`, `AppItemStatic` and `Hamburger` are the drawer-shaped members of the same family.
+- **Tree** — `Tree` owns `openItems`/`selectionMode`/`checkedItems`; `TreeItem` takes `itemType`/`value`/`parentValue`; `TreeItemLayout` and `TreeItemPersonaLayout` are the visual skins.
+- **Tag** — `TagGroup` owns `selectedValues` and dismissal; `Tag` and `InteractionTag` (with `InteractionTagPrimary`/`InteractionTagSecondary`) are the visuals.
+- **Drawer** — `InlineDrawer`, `OverlayDrawer` and `NavDrawer` share `DrawerHeader`/`DrawerBody`/`DrawerFooter`/`DrawerHeaderTitle`/`DrawerHeaderNavigation`.
+- **Toast** — `Toaster` renders what `Toast`/`ToastTitle`/`ToastBody`/`ToastFooter`/`ToastTrigger` declare.
+- **TeachingPopover / Carousel / DataGrid / Table / SwatchPicker** follow the same pattern.
 
-### Filling a slot
+**Corollary:** do not re-implement state that context already carries, and do not expect a leaf component to work outside its family.
 
-A slot prop accepts content — an element, a string, a fragment. Omitting it leaves the component default (or means the slot is not rendered at all). Passing `null` suppresses a slot the component would otherwise render. Passing an element replaces the default content of that slot without changing its position in the tree.
+## 4. Triggers and "button enhancement"
 
-This is the single most important architectural idea in v9: **you configure the component's anatomy through named props rather than by nesting your own DOM and hoping the styles line up.**
+`MenuTrigger`, `PopoverTrigger`, `DialogTrigger`, `ToastTrigger` and `TeachingPopoverTrigger` exist so that a single child element can become a fully accessible trigger. By default the trigger *enhances* its child with button semantics — role, tab stop, keyboard activation — so a plain element behaves like a button. Pass `disableButtonEnhancement` when the child already handles those semantics (a Fluent `Button`, or a `Link`), which is the documented pattern for Fluent buttons.
 
-### Composite state: components that publish their internals
+`DialogTrigger` additionally takes an `action` (`open` / `close`), which is how a Cancel button inside `DialogActions` closes the dialog without any wiring from you. Nested interactive content is never placed inside a trigger; if a composite such as `Card` must ignore clicks that came from an inner action, use its dedicated escape hatch (`Card.shouldRestrictTriggerAction`).
 
-Some slot tables expose architectural machinery rather than visual regions:
+## 5. Controlled and uncontrolled state
 
-- `Dialog`, `Menu` and `Popover` expose a `surfaceMotion` slot — the animated surface is a first-class, replaceable part of the component.
-- `Tree` exposes `collapseMotion`.
-- `Card` exposes `floatingAction` and `checkbox` so that badges, menus and selection affordances sit in the component's own layout rather than being absolutely positioned by you.
-- `Prompt (`MessageBar`) exposes `bottomReflowSpacer`, a layout-reservation element used so that pushing other content is handled by the component.
+v9 standardizes the React controlled/uncontrolled convention across the library: a `default*` prop means "manage this yourself, tell me when it changes", and the un-prefixed prop means "I own this state, call this handler when the user asks for a change".
 
-## 3. Appearance is an API, not a stylesheet
-
-Each component exposes its visual axes as typed props. This is deliberate: appearance props are resolved through design tokens, so they follow the active theme, respect `dir`, and stay correct in high-contrast and density modes.
-
-Representative axes drawn from the components in this guide:
-
-- `appearance`: `Button`, `Badge`, `Card`, `Link`, `MessageBar`, `Spinner`, `Textarea`, `Select`, `Tree`, `Table`.
-- `size`: `Button`, `Badge`, `Card`, `Field`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `Slider`, `Rating`, `Spinner`, `Persona`, `Avatar`, `Toolbar`, `Tree`, `Breadcrumb`.
-- `shape`: `Button`, `Badge`, `Checkbox`, `Card`-adjacent checkboxes, `MessageBar`, `Spinner`/`ProgressBar` (`shape: 'rounded' | 'square'`), `Image`, `Skeleton`, `SwatchPicker`.
-- `color`: `Badge`, `Avatar`, `ProgressBar`, `Rating`.
-- Layout: `orientation` (`Card`, `Field`), `vertical` (`Divider`, `Slider`, `Toolbar`), `inline` (`Link`, `Popover`, `Menu`, `TagPicker`), `block` / `truncate` / `wrap` / `align` (`Text`), `inset` / `alignContent` (`Divider`).
-
-When appearance props are not enough, the escape hatches are ordered by blast radius:
-
-1. `className` / inline style on the instance — smallest radius.
-2. `customStyleHooks_unstable` on `FluentProvider` — keyed by component name, then by slot name; applies to every instance inside that provider and keeps your overrides in one place.
-3. `overrides_unstable` on `FluentProvider` — unstable, for provider-wide re-mapping of internals.
-
-Prefer (1) for genuine one-offs and (2) whenever the same tweak would otherwise be repeated. Avoid reaching into internal DOM with a selector: the slot table is the contract, the internal DOM is not.
-
-## 4. State ownership: uncontrolled seeds vs controlled values
-
-Every stateful component follows one convention.
-
-- **Uncontrolled:** you pass a `default*` prop once. The component owns the state from then on. Changing the `default*` prop later has no effect.
-- **Controlled:** you pass the state prop plus its change handler. The component renders exactly what you give it and reports intent through the handler.
-
-Representative pairs from the inventory:
-
-| Component | Controlled | Uncontrolled seed | Change handler |
+| Component | Uncontrolled | Controlled | Change callback |
 | --- | --- | --- | --- |
-| `Dialog` | `open` | `defaultOpen` | `onOpenChange` |
-| `Menu` | `open` | `defaultOpen` | `onOpenChange` |
-| `Popover` | `open` | `defaultOpen` | `onOpenChange` |
-| `Accordion` | `openItems` | `defaultOpenItems` | `onToggle` |
-| `Tree` | `openItems` | `defaultOpenItems` | (see `selectionMode`, `checkedItems`) |
-| `Card` | `selected` | `defaultSelected` | `onSelectionChange` |
-| `Carousel` | `activeIndex` | `defaultActiveIndex` | `onActiveIndexChange` |
-| `Input` / `Textarea` | `value` | `defaultValue` | `onChange` |
-| `Checkbox` | `checked` | `defaultChecked` | `onChange` |
-| `Switch` | `checked` | `defaultChecked` | `onChange` |
-| `Slider` | `value` | `defaultValue` | `onChange` |
-| `Rating` | `value` | `defaultValue` | `onChange` |
-| `List` | `selectedItems` | `defaultSelectedItems` | `onSelectionChange` |
-| `SwatchPicker` | `selectedValue` | `defaultSelectedValue` | `onSelectionChange` |
-| `Nav` | `selectedValue` | `defaultSelectedValue` | `onNavItemSelect` |
+| `Accordion` | `defaultOpenItems` | `openItems` | `onToggle` |
+| `Dialog` / `Menu` / `Popover` / `Drawer` | `defaultOpen` | `open` | `onOpenChange` |
+| `Checkbox` / `Switch` / `ToggleButton` | `defaultChecked` | `checked` | `onChange` |
+| `Input` / `Textarea` / `Dropdown` / `RadioGroup` | `defaultValue` | `value` | `onChange` |
+| `Nav` | `defaultSelectedValue`, `defaultOpenCategories`, `defaultSelectedCategoryValue` | `selectedValue`, `openCategories`, `selectedCategoryValue` | `onNavItemSelect`, `onNavCategoryItemToggle` |
+| `TabList` | `defaultSelectedValue` | `selectedValue` | `onTabSelect` |
+| `Tree` / `FlatTree` | `defaultOpenItems` | `openItems`, `checkedItems` | `onOpenChange` (per `TreeItem`) |
+| `SwatchPicker` / `TagGroup` / `List` | `defaultSelectedValue(s)`, `defaultSelectedItems` | `selectedValue(s)`, `selectedItems` | `onSelectionChange` |
+| `Carousel` | `defaultActiveIndex` | `activeIndex` | `onActiveIndexChange` |
 
-Never pass both members of a pair for the same piece of state. `checked` plus `defaultChecked` is contradictory: the default is only a seed, but the controlled value wins — leaving readers unsure who owns the truth.
+Pick exactly one mode per component and stay there. In controlled mode nothing moves until you update state — a controlled `Dialog` with a trigger that has no `action` will not open by itself; you open it from your handler or by setting `open`.
 
-### Handler naming and signatures
+## 6. FluentProvider: the context root
 
-Handler names are derived from the state they affect: `onChange`, `onOpenChange`, `onSelectionChange`, `onActiveIndexChange`, `onToggle`, `onSortChange`, `onCheckedValueChange`, `onOptionSelect`, `onTimeChange`, `onSelectDate`, `onNavItemSelect`, `onRegister` / `onUnregister`. The convention is `on<Thing>Change` for value updates and `on<Thing>Select` for selection intent.
+`FluentProvider` is not decoration; it is the architectural root of the app. It supplies:
 
-Handlers receive the DOM event first and a typed data object second (for example `(ev, data) => data.value` for `Input`, `data.checked` for `Checkbox` and `Switch`, `data.selected` for `Card`). Always read from the data object rather than digging into the event target.
+- `theme` (`Partial<Theme>`) — swap it anywhere in the tree to re-theme a subtree.
+- `dir` (`ltr` | `rtl`) — direction, used by layout and by portalled content.
+- `targetDocument` — the document used for portal/SSR work.
+- `applyStylesToPortals` — keeps class names valid for content rendered outside the provider's DOM subtree.
+- `customStyleHooks_unstable` — a map from style-hook name to your own implementation (`useButtonStyles_unstable`, `useCardStyles_unstable`, ...), the supported global styling escape hatch.
+- `overrides_unstable` — an additional low-level escape hatch; treat as experimental.
 
-### Registration callbacks: parents own, children report
+Overlays (`Dialog`, `Menu`, `Popover`, `Tooltip`, `OverlayDrawer`) render through portals, so their DOM lives elsewhere while React context still flows normally. Use `Portal` with `mountNode` (an `HTMLElement`, or `{ element, className }`) when the overlay must live inside a specific container of your app shell, and keep `applyStylesToPortals` on so the portal content still receives provider classes. `AriaLiveAnnouncer` and `Toaster` are the global announcer/notification hosts and belong at the same level as the provider.
 
-The most advanced pattern in the library is *registration*. `Tabs` receives `onRegister`, `onUnregister`, `onSelect` and holds `registeredTabs`, `selectedValue`, `previousSelectedValue`, `selectTabOnFocus` and `reserveSelectedTabSpace`. `Table` requires a `tableState` object and exposes `onSortChange`, `onSelectionChange`, `columnSizingOptions`, `autoFitColumns`, `containerWidthOffset` and per-column `columnId` / `width`. `Overflow` requires an `id` and reports `onOverflowChange` with an `OverflowState`.
+## 7. Focus, keyboard and selection architecture
 
-The architectural lesson: **the parent owns the model; children register metadata; the composite computes layout-dependent behavior (focus order, column sizing, overflow) from that registry.** When you build your own composite, follow the same split — never let children own shared state.
+v9 pushes focus behaviour into declarative props so you never hand-roll keyboard handling for a composite widget:
 
-## 5. Composition patterns
+- `focusMode` — `Card` (`off` | `no-tab` | `tab-exit` | `tab-only`), `Breadcrumb` (`arrow` | `tab`), `SwatchPicker` (`arrow` | `tab`), `DataGridCell`/`DataGridHeaderCell` (`DataGridCellFocusMode`).
+- `navigationMode` — `Tree`/`FlatTree` (`tree` | `treegrid`) and `List` (`ListNavigationMode`).
+- `selectionMode` — `Tree`, `FlatTree`, `List`, `DataGrid`.
+- `TabList` — `selectTabOnFocus`, `reserveSelectedTabSpace`, `vertical`.
+- `disabledFocusable` — `Button`, `Link`, `MenuItem`, `ToggleButton`/`Switch` families: `aria-disabled` instead of the `disabled` attribute so focus is never lost inside a composite widget.
+- `inertTrapFocus` (and `modalType`, `unmountOnClose`) on `Dialog` control how focus is contained and restored.
 
-There are five ways to compose with v9 components. Pick deliberately.
+## 8. Motion is a slot
 
-1. **Configure (slot filling).** Pass content into named slots: `icon`, `contentBefore`, `contentAfter`, `floatingAction`, `label`, `hint`, `validationMessage`. This is the cheapest and most theme-safe option, and it is right most of the time.
-2. **Compose (children).** Pass arbitrary children into the root slot for content-driven components: `Card`, `MessageBar`, `Dialog` (`children` is required), `Menu` (`children` is required), `TagPicker` (`children` is required).
-3. **Render functions.** Several components accept a function so you can control rendering without forking the component: `TeachingPopover` (nav buttons and page-count render functions), `Rating.itemLabel` (accessible label per rating value), `Carousel.announcement` (custom screen-reader text), `Table.onSortChange` (receive sort state and re-render yourself), `TagPicker.onOptionSelect`.
-4. **Wrap.** Build your own component that composes Fluent parts and exposes its own props, including forwarding `className` and refs to the root. This is how product-level design systems are built on top of v9.
-5. **Go headless.** For preview surfaces — `HeadlessComponentsPreview`, `MotionComponentsPreview`, `MenuGridPreview` — the structure and behavior are provided with more of the styling left to you.
+Enter/exit animation is expressed as *slots*, never as hidden CSS. Examples: `AccordionPanel.collapseMotion`, `NavSubItemGroup.collapseMotion`, `Tree.collapseMotion`, `NavCategoryItem.expandIconMotion`, `DialogSurface.backdropMotion` and `surfaceMotion`, `OverlayDrawer.backdropMotion`/`surfaceMotion`, `Menu.surfaceMotion`, `Popover.surfaceMotion`, `ProgressBar.indeterminateMotion`. Because they are slots they can be replaced with your own presence-aware component (to honour reduced motion) or removed entirely.
 
-Prefer (1) and (2) until they genuinely cannot express your design. Wrapping before configuring produces thick adapters that quietly reimplement Fluent behavior.
+## 9. Render-function children
 
-## 6. Context and theming
+Some families take *functions* as children so the parent keeps ownership of the data while the child only draws. `DataGridBody` takes `RowRenderFunction<TItem>`, `DataGridRow` takes `CellRenderFunction<TItem>`, `CarouselNav` and `TeachingPopoverCarouselNav` take `NavButtonRenderFunction`, `TeachingPopoverCarouselPageCount` takes a page-count render function, and `Field` accepts either a node or `(props: FieldControlProps) => React.ReactNode`. Use the function form whenever the parent must inject ids, ARIA wiring or per-item state into your markup.
 
-`FluentProvider` is the architectural seam between the library and your app:
+## 10. Extending components without forking them
 
-- `theme` — a partial theme merged over the ambient one.
-- `dir` — `'ltr' | 'rtl'`; every component's slots and logical styles flip accordingly.
-- `targetDocument` — the document used for portals, events and style injection (iframes, SSR hydration).
-- `applyStylesToPortals` — injects the provider's styles into portal containers, so `Tooltip`, `Menu`, `Dialog` and `Popover` surfaces rendered outside your app's DOM root stay themed.
-- `customStyleHooks_unstable` / `overrides_unstable` — provider-wide style hooks.
+In order of preference:
 
-Supporting context machinery lives one layer down: `ContextSelector` makes context subscriptions selective so a theme or registry change does not re-render every consumer, and `Tabster` carries the focus/navigation state that composites rely on. In most applications you never touch them directly — but knowing they exist explains why v9 components cooperate on focus and why provider-wide changes stay cheap.
+1. **Props and slots.** Reach for `appearance`, `size`, `shape`, `orientation`, `layout` and slot props first — the design tokens are already wired.
+2. **Slot overrides.** Pass an element or a props object to a slot (`image`, `action`, `icon`, `contentBefore`, ...) to restyle or replace one part.
+3. **Element swapping.** `as` changes the rendered element for a semantic variant.
+4. **Global style hooks.** `FluentProvider.customStyleHooks_unstable` lets you append classes in the component's own style pass, scoped by provider.
+5. **Composition.** Wrap the component in your own component and forward `className`, `style`, refs and the rest of the props.
 
-In some packages and examples this provider is written as `FluentProvider`; it is the same component.
+## 11. Checklist for authoring your own v9-style components
 
-## 7. Layering: portals, positioning and modality
-
-Anything that floats — menus, tooltips, popovers, teaching surfaces, dialogs, drawers — is layered above the app rather than nested in it. Four props control that layering:
-
-- **Placement:** `Portal.mountNode` decides where the DOM goes, and `Positioning` (used through each overlay's `positioning` prop on `Tooltip`, `Menu`, `Popover` and `DatepickerCompat`) decides where the surface lands relative to its anchor.
-- **Inline vs. portalled:** `Popover.inline`, `Menu.inline` and `TagPicker.inline` render the surface inside the trigger's subtree when you need it to participate in the surrounding layout (sticky headers, custom scroll containers). `Drawer.type` chooses between `'inline'` and `'overlay'` with the same intent.
-- **Modality and focus:** `Dialog.modalType`, `Dialog.inertTrapFocus`, `Dialog.unmountOnClose`, `Popover.trapFocus`, `Popover.legacyTrapFocus`, `Popover.inertTrapFocus` and `Popover.unstable_disableAutoFocus` express how the layer interacts with focus. `Menu.persistOnItemClick` keeps the surface open after a selection; `Menu.closeOnScroll`, `Popover.closeOnScroll` and `Popover.closeOnIframeFocus` define dismissal behavior.
-- **Trigger semantics:** `Menu.openOnContext`, `Menu.openOnHover`, `Menu.hoverDelay`, `Popover.openOnHover`, `Popover.openOnContext`, `Popover.mouseLeaveDelay`, `Tooltip.showDelay`, `Tooltip.hideDelay`, `Tooltip.visible` and `Tooltip.onVisibleChange` describe *why* a layer opens, not just whether it is open.
-
-At the primitive level, `Portal` and `Positioning` are the pieces you assemble if you must build a custom layer yourself — but reaching for `Dialog`, `Popover` or `Menu` first means modality, focus containment, Escape handling and screen-reader wiring come for free.
-
-## 8. Focus, navigation and selection modes
-
-Keyboard behavior is configured through explicit mode props rather than left to the DOM:
-
-- `focusMode: 'arrow' | 'tab'` — `Breadcrumb`, `SwatchPicker`: whether composite items are reached by arrow keys or by Tab.
-- `Card.focusMode: 'off' | 'no-tab' | 'tab-exit' | 'tab-only'` — whether a card participates in tab order and whether Tab inside it exits.
-- `Card.shouldRestrictTriggerAction` — veto hook for whether an event is allowed to trigger the card's action.
-- `navigationMode` — `Tree`, `List`: how focus moves through items.
-- `selectionMode` — `Tree`, `List`, `Table`: single, multiple, or none; `Tree.checkedItems` even supports mixed (indeterminate) checkbox state.
-- `disabledFocusable` — `Button`, `Link`, `Switch`: renders a control that is *not actionable* but *is still focusable and announced*, which is the correct choice inside toolbars and menus where removing focus would break arrow-key traversal.
-
-These props exist because the same visual component has different keyboard contracts in different contexts; the mode is architecture, not decoration.
-
-## 9. Motion
-
-Motion is part of the component architecture rather than an add-on animation layer.
-
-- Composites own their surface transitions through `surfaceMotion` slots (`Dialog`, `Menu`, `Popover`) and `collapseMotion` (`Tree`).
-- `Motion` is the standalone primitive: it takes `children`, `appear`, `replayKey`, `imperativeRef`, and reports lifecycle through `onMotionStart`, `onMotionFinish` and `onMotionCancel` — so application code can chain state changes to an animation instead of guessing at timings.
-- `MotionComponentsPreview` adds staggering: `itemDelay`, `itemDuration`, `delayMode`, `hideMode`, `reversed`, `visible` and `onMotionFinish`.
-- `Carousel` shows motion as a first-class behavior surface: `motion`, `draggable`, `whitespace`, `align`, `groupSize`, `circular`, `autoplayInterval` and `announcement` (the accessible narration of slide changes).
-- `Toast.appearance` and `Spinner.delay` show that even ambient feedback is expressed declaratively instead of with hand-written timers.
-
-## 10. Designing your own component the Fluent way
-
-When you wrap or extend v9, mirror the architecture so your component feels native:
-
-1. **Accept a single props object** and let callers pass `className`, `style` and refs to your root element.
-2. **Name your slots after their role** (`header`, `floatingAction`, `icon`) and accept them as props — do not require callers to compose internal layout themselves.
-3. **Support both controlled and uncontrolled usage** if you own state: `defaultX` to seed, `x` + `onXChange` to control.
-4. **Report changes through typed data objects** (`(ev, data) => void`), not by mutating props.
-5. **Add appearance axes instead of booleans** when the axis can grow: `size: 'small' | 'medium' | 'large'` beats `isSmall` and `isLarge`.
-6. **Delegate accessibility to primitives.** Use `Field` for form wiring, `Tooltip.relationship` for label/description semantics, `Portal`/`Positioning` for layering, and `Aria` for announcements rather than re-implementing them.
-7. **Never fork internals.** If the component does not expose a slot, the correct move is a new component composed from Fluent parts, not a CSS override against internal class names.
-
-## 11. Choosing the right tool
-
-| Need | Reach for |
-| --- | --- |
-| Show content above the flow, positioned to a trigger, dismissed on Escape | `Popover` (`inline` for layout-bound, default for portalled) |
-| Modal task with focus containment | `Dialog` (`modalType`, `inertTrapFocus`, `unmountOnClose`) |
-| Commands on click/hover/right-click with item semantics | `Menu` (`openOnHover`, `openOnContext`, `persistOnItemClick`) |
-| Short text on hover/focus | `Tooltip` (`relationship` is required, so decide up front: `label`, `description` or `inaccessible`) |
-| Onboarding sequence with steps | `TeachingPopover` |
-| Persistent inline panel | `Drawer` with `type: 'inline'` |
-| Selection with keyboard modes | `List`, `Tree`, `Table`, `SwatchPicker`, `Card` |
-| Layout that must react to available width | `Overflow` with `id` / `groupId` and `onOverflowChange` |
-| Global visual tuning | `FluentProvider.customStyleHooks_unstable` |
-
-## 12. Review checklist
-
-- Every surface that floats is inside a `FluentProvider`, and `applyStylesToPortals` is set when the portal target is outside the app root.
-- No component receives both a `default*` prop and its controlled counterpart.
-- Every controlled component has a handler that actually updates the state it reports.
-- Slot content is passed through named slot props rather than by re-parenting DOM.
-- Keyboard objects: `focusMode`, `navigationMode`, `selectionMode` and `disabledFocusable` were chosen intentionally.
-- Appearance was tuned with appearance props first, `className` second, `customStyleHooks_unstable` when the same tweak repeats.
-- Layered components declare their trigger semantics (`openOnHover`, `openOnContext`, delays) instead of open-coded listeners.
+- Model variant markup as named slots with semantic names (`media`, `primaryText`, `actions`), and accept element, text and props-object shorthands for them.
+- Keep default DOM semantics correct; use required (`NonNullable`) slots for parts that carry accessible meaning.
+- Support both controlled and uncontrolled state when state matters, with the `default*` / `*` + callback convention.
+- Forward `className`, `style` and ref onto the root element, and spread the rest of the props onto it.
+- Own the keyboard model of any composite you build (arrow keys, Home/End, roving tab stop) instead of leaving it to consumers.
+- Make motion replaceable and let the consumer opt out.
+- Announce important state changes (live regions), and never duplicate accessible names that a `Tooltip`, `Field` or `Label` already provides.
 
 ## Key Takeaways
 
-- Slots are the contract: every component publishes named positions (root plus interior slots) and owns their order. You fill slots with props such as contentBefore, contentAfter, icon, label and floatingAction - you never reorder them from JSX.
-- Appearance is an API. Use appearance/size/shape/color/orientation/vertical/inline props first, className for local one-offs, and Provider.customStyleHooks_unstable when the same visual tweak would otherwise be repeated across instances.
-- State follows one convention everywhere: a default* prop seeds uncontrolled state, while a value prop plus an on*Change handler makes you the single source of truth. Never pass both halves of a pair for the same state.
-- Composites own their model and children register into it (Tabs' onRegister/registeredTabs, Table's required tableState, Overflow's onOverflowChange). Parent owns state, children report metadata, the composite computes layout-dependent behavior.
-- Layering is explicit: Portal.mountNode, inline on Popover/Menu/TagPicker, positioning for placement, and focus/modality props (Dialog.modalType, Dialog.inertTrapFocus, Popover.trapFocus, Popover.legacyTrapFocus) describe how a floating surface behaves rather than where it happens to render.
-- Keyboard behavior is configured through mode props - focusMode, navigationMode, selectionMode, disabledFocusable - chosen per context, not left to DOM defaults.
-- When you build your own component, mirror the architecture: single props object, className/ref forwarding, controlled and uncontrolled support, typed data-object handlers, role-named slots, and delegation to Field, Tooltip, Portal, Positioning and Aria for accessibility.
-- Reach for the highest layer that solves the problem (Dialog/Popover/Menu before hand-rolled overlays), and drop to primitives (Portal, Positioning, Tabster, Aria) only when no higher-layer component expresses the behavior.
+- Every v9 component follows the same four layers: public props → state normalization → style hook → slot-based render. Learn it once and you can predict unfamiliar APIs.
+- Slots are the composition contract. Each named part (root, icon, label, contentBefore, addonAfter, action, ...) can take an element, text, a props object, or null, and many slots can change their element with `as`.
+- Compound families share state through context; leaf parts (AccordionPanel, DialogTitle, NavSubItem, MenuItemCheckbox) are not standalone and read from their parent.
+- State follows one convention everywhere: `default*` = uncontrolled, un-prefixed prop = controlled, plus a change callback (defaultOpen/open/onOpenChange, defaultSelectedValue/selectedValue, defaultChecked/checked, ...).
+- FluentProvider is the architectural root: theme, dir, targetDocument, applyStylesToPortals, customStyleHooks_unstable. Portal content keeps React context but needs applyStylesToPortals for its class names.
+- Accessibility is built into the architecture: required (NonNullable) slots, trigger button enhancement with disableButtonEnhancement, focusMode/navigationMode/selectionMode, disabledFocusable, inertTrapFocus, motion slots.
 
 ## Examples
 
-### Slot composition: Field, Input and Badge
+### Provider shell: theme, direction, portals and the announcer
 
-Shows how content is placed through named slots (contentBefore, contentAfter, icon, label, hint) rather than nested DOM. Note that rendering order is owned by the component and driven by props such as iconPosition.
+The architectural root of a v9 app: FluentProvider owns theme/dir/targetDocument/applyStylesToPortals, AriaLiveAnnouncer hosts live regions, Toaster hosts notifications, and Portal controls where overlay DOM lands.
 
 ```tsx
 import * as React from 'react';
-import { Badge, Button, Field, Input, FluentProvider, Text } from '@fluentui/react-components';
+import {
+  AriaLiveAnnouncer,
+  FluentProvider,
+  Portal,
+  Toaster,
+} from '@fluentui/react-components';
 
-export const SlotCompositionExample = () => {
-  const [email, setEmail] = React.useState('');
+// Derive the theme prop type from the component itself so nothing is invented.
+type FluentThemeProp = React.ComponentProps<typeof FluentProvider>['theme'];
+
+export interface AppShellProps {
+  theme?: FluentThemeProp;
+  dir?: 'ltr' | 'rtl';
+  children: React.ReactNode;
+}
+
+/**
+ * Every cross-cutting concern lives here exactly once:
+ * theme, text direction, style propagation into portals, live regions.
+ */
+export const AppShell: React.FC<AppShellProps> = ({ theme, dir = 'ltr', children }) => (
+  <FluentProvider
+    theme={theme}
+    dir={dir}
+    applyStylesToPortals
+    targetDocument={typeof document === 'undefined' ? undefined : document}
+  >
+    <AriaLiveAnnouncer>
+      {children}
+      <Toaster />
+    </AriaLiveAnnouncer>
+  </FluentProvider>
+);
+
+/**
+ * Overlays (Dialog, Menu, Popover, Tooltip) portal out of the React tree.
+ * Portal.mountNode decides where they land while React context keeps flowing.
+ */
+export const PortalHost: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [mountNode, setMountNode] = React.useState<HTMLDivElement | null>(null);
 
   return (
-    <FluentProvider>
-      {/* Field's slots render in a fixed order: label, children,
-          validationMessageIcon, validationMessage, hint. */}
+    <div ref={setMountNode} style={{ position: 'relative', zIndex: 1000 }}>
+      <Portal mountNode={mountNode}>{children}</Portal>
+    </div>
+  );
+};
+```
+
+### Slots in practice: element, props object, `as`, and composite parts
+
+Shows the four slot shorthands, how `as` changes the rendered element of a slot, and how compound components (Card/CardHeader/CardPreview/CardFooter) split their markup into named slots.
+
+```tsx
+import * as React from 'react';
+import {
+  Avatar,
+  Button,
+  Card,
+  CardFooter,
+  CardHeader,
+  CardPreview,
+  Text,
+} from '@fluentui/react-components';
+
+const ChevronIcon: React.FC = () => (
+  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
+    <path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" />
+  </svg>
+);
+
+export const SlotPlayground: React.FC = () => (
+  <>
+    {/* 1. Element shorthand: the icon slot receives a React element. */}
+    <Button appearance="primary" icon={<ChevronIcon />} iconPosition="after">
+      Continue
+    </Button>
+
+    {/* 2. `as` swaps the element rendered by the root slot. */}
+    <Button as="a" href="https://example.com" appearance="subtle">
+      Open documentation
+    </Button>
+
+    {/* 3. Props-object shorthand: extra props are merged into that slot only. */}
+    <Button icon={{ children: <ChevronIcon />, className: 'myIcon' }} iconPosition="after">
+      Continue
+    </Button>
+
+    {/* 4. Composite components expose their own named slots. */}
+    <Card appearance="outline">
+      <CardHeader
+        image={<Avatar name="Ada Lovelace" />}
+        header={<Text weight="semibold">Ada Lovelace</Text>}
+        description={<Text size={200}>Mathematician</Text>}
+        action={
+          <Button appearance="subtle" aria-label="More options" icon={<ChevronIcon />} />
+        }
+      />
+      <CardPreview>
+        <img src="/preview.png" alt="" />
+      </CardPreview>
+      <CardFooter action={<Button appearance="primary">View profile</Button>} />
+    </Card>
+
+    {/* 5. Text keeps its typography while rendering a different element. */}
+    <Text as="h2" size={500} weight="semibold">
+      Section title
+    </Text>
+  </>
+);
+```
+
+### Compound family + trigger enhancement: Menu
+
+Demonstrates context-driven composition (Menu/MenuPopover/MenuList pushing checkedValues and hasCheckmarks to MenuItemCheckbox/MenuItemRadio) and the trigger convention: Fluent Buttons opt out with disableButtonEnhancement.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Menu,
+  MenuDivider,
+  MenuItem,
+  MenuItemCheckbox,
+  MenuItemRadio,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+} from '@fluentui/react-components';
+
+export const EditorMenu: React.FC = () => {
+  const [checkedValues, setCheckedValues] = React.useState<Record<string, string[]>>({
+    wrap: ['on'],
+  });
+
+  return (
+    <Menu
+      onOpenChange={(event, data) => {
+        // One place to observe open/close for analytics or focus management.
+        // eslint-disable-next-line no-console
+        console.log('menu open:', data.open);
+      }}
+    >
+      {/* A Fluent Button already has button semantics, so opt out of enhancement. */}
+      <MenuTrigger disableButtonEnhancement>
+        <Button appearance="subtle">Editor actions</Button>
+      </MenuTrigger>
+
+      <MenuPopover>
+        <MenuList
+          hasCheckmarks
+          hasIcons
+          checkedValues={checkedValues}
+          onCheckedValueChange={(event, data) => setCheckedValues(data.checkedValues)}
+        >
+          <MenuItem>New file</MenuItem>
+          <MenuItem>Open file</MenuItem>
+          <MenuDivider />
+          {/* MenuItemCheckbox/Radio read their state from MenuList context. */}
+          <MenuItemCheckbox name="wrap" value="on">
+            Word wrap
+          </MenuItemCheckbox>
+          <MenuItemRadio name="theme" value="light">
+            Light theme
+          </MenuItemRadio>
+          <MenuItemRadio name="theme" value="dark">
+            Dark theme
+          </MenuItemRadio>
+        </MenuList>
+      </MenuPopover>
+    </Menu>
+  );
+};
+```
+
+### Controlled vs uncontrolled: Accordion and Dialog
+
+One component driven by React state (Accordion with openItems/onToggle) and one left uncontrolled with trigger actions (Dialog with DialogTrigger action=open/close, inertTrapFocus, unmountOnClose).
+
+```tsx
+import * as React from 'react';
+import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+} from '@fluentui/react-components';
+
+const ConfirmDialog: React.FC = () => (
+  /* Uncontrolled: Dialog owns its open state, triggers declare the action. */
+  <Dialog inertTrapFocus unmountOnClose>
+    <DialogTrigger disableButtonEnhancement>
+      <Button appearance="primary">Delete file</Button>
+    </DialogTrigger>
+
+    <DialogSurface>
+      <DialogBody>
+        <DialogTitle>Delete this file?</DialogTitle>
+        <DialogContent>This action cannot be undone.</DialogContent>
+        <DialogActions>
+          <DialogTrigger action="close" disableButtonEnhancement>
+            <Button appearance="secondary">Cancel</Button>
+          </DialogTrigger>
+          <Button appearance="primary">Delete</Button>
+        </DialogActions>
+      </DialogBody>
+    </DialogSurface>
+  </Dialog>
+);
+
+export const PreferencesPanel: React.FC = () => {
+  // Controlled: React state is the single source of truth for open panels.
+  const [openItems, setOpenItems] = React.useState<string[]>(['general']);
+
+  return (
+    <Accordion
+      multiple
+      collapsible
+      openItems={openItems}
+      onToggle={(event, data) => setOpenItems((data.openItems as string[]) ?? [])}
+    >
+      <AccordionItem value="general">
+        <AccordionHeader>General</AccordionHeader>
+        {/* The panel's open/disabled state comes from the AccordionItem context. */}
+        <AccordionPanel>
+          <ConfirmDialog />
+        </AccordionPanel>
+      </AccordionItem>
+
+      <AccordionItem value="advanced">
+        <AccordionHeader>Advanced</AccordionHeader>
+        <AccordionPanel>Advanced settings</AccordionPanel>
+      </AccordionItem>
+    </Accordion>
+  );
+};
+```
+
+### Form architecture: Field owns label, hint and validation
+
+Field supplies the label/hint/validation slots and wires them to the control, InfoLabel adds an explanatory popover for a label, and each control keeps its own controlled value.
+
+```tsx
+import * as React from 'react';
+import { Field, InfoLabel, Input, Textarea } from '@fluentui/react-components';
+
+export const SignUpForm: React.FC = () => {
+  const [email, setEmail] = React.useState('');
+  const [bio, setBio] = React.useState('');
+
+  const emailInvalid = email.length > 0 && !email.includes('@');
+
+  return (
+    <form noValidate>
       <Field
-        label='Work email'
-        hint='Teammates use this address to mention you.'
-        orientation='vertical'
-        size='medium'
-        validationState='none'
+        /* The label slot accepts any node, including InfoLabel. */
+        label={<InfoLabel info="We only use it for account recovery.">Email</InfoLabel>}
         required
+        hint="Work or personal address"
+        validationState={emailInvalid ? 'error' : 'none'}
+        validationMessage={emailInvalid ? 'Enter a valid email address' : undefined}
       >
         <Input
-          type='email'
+          type="email"
           value={email}
-          placeholder='name@contoso.com'
-          contentBefore={<Text size={300}>@</Text>}
-          contentAfter={
-            <Button
-              appearance='subtle'
-              size='small'
-              disabled={email.length === 0}
-              onClick={() => setEmail('')}
-            >
-              Clear
-            </Button>
-          }
-          onChange={(ev, data) => setEmail(data.value)}
+          onChange={(event, data) => setEmail(data.value)}
         />
       </Field>
 
-      {/* Badge renders icon, then root content - iconPosition decides the order. */}
-      <Badge
-        appearance='tint'
-        color='success'
-        shape='rounded'
-        size='medium'
-        icon={<span aria-hidden='true'>&#10003;</span>}
-        iconPosition='before'
-      >
-        Verified
-      </Badge>
-    </FluentProvider>
+      <Field label="Short bio" orientation="vertical">
+        <Textarea
+          value={bio}
+          resize="vertical"
+          onChange={(event, data) => setBio(data.value)}
+        />
+      </Field>
+    </form>
   );
 };
 ```
 
-### Controlled vs uncontrolled state
+### Nav family: context-driven selection inside a navigation shell
 
-Contrasts the default-seed pattern with the controlled pattern across Switch, Checkbox, Slider and Rating, and shows a small controlled wrapper that translates the data-object handler into a domain-level callback.
+The Nav family in action: Nav owns selectedValue/openCategories, NavCategory provides categoryValue for NavCategoryItem, and NavSubItemGroup hosts NavSubItem leaves.
 
 ```tsx
 import * as React from 'react';
-import { Checkbox, FluentProvider, Rating, Slider, Switch, Text } from '@fluentui/react-components';
+import {
+  Nav,
+  NavCategory,
+  NavCategoryItem,
+  NavDivider,
+  NavItem,
+  NavSectionHeader,
+  NavSubItem,
+  NavSubItemGroup,
+} from '@fluentui/react-components';
 
-/** Uncontrolled: the control owns its state from first render. */
-export const UncontrolledExample = () => (
-  <FluentProvider>
-    <Switch defaultChecked label='Product updates' />
-    <Checkbox defaultChecked label='Weekly digest' size='medium' shape='square' />
-    <Rating
-      defaultValue={3}
-      max={5}
-      step={1}
-      itemLabel={(rating) => `${rating} of 5`}
-    />
-  </FluentProvider>
-);
-
-/** Controlled: the parent is the single source of truth. */
-export const ControlledExample = () => {
-  const [volume, setVolume] = React.useState(40);
-  const [notify, setNotify] = React.useState(true);
-  const [state, setState] = React.useState<boolean | 'mixed'>('mixed');
+export const AppNavigation: React.FC = () => {
+  const [selectedValue, setSelectedValue] = React.useState<string>('home');
+  const [openCategories, setOpenCategories] = React.useState<string[]>(['settings']);
 
   return (
-    <FluentProvider>
-      <Text block>{`Volume ${volume}% / notifications ${
-        notify ? 'on' : 'off'
-      }`}</Text>
+    <Nav
+      multiple
+      selectedValue={selectedValue}
+      openCategories={openCategories}
+      onNavItemSelect={(event, data) => setSelectedValue(data.value as string)}
+      onNavCategoryItemToggle={() => {
+        /* Category open/close is observed here; the Nav owns the state. */
+      }}
+    >
+      <NavSectionHeader>Workspace</NavSectionHeader>
 
-      <Slider
-        min={0}
-        max={100}
-        step={5}
-        value={volume}
-        onChange={(ev, data) => setVolume(data.value)}
-      />
+      <NavItem value="home">Home</NavItem>
+      <NavItem value="files" href="/files">
+        Files
+      </NavItem>
 
-      <Switch
-        checked={notify}
-        onChange={(ev, data) => setNotify(data.checked)}
-        label='Desktop notifications'
-      />
+      {/* NavCategory supplies the category value its items report back. */}
+      <NavCategory value="settings">
+        <NavCategoryItem>Settings</NavCategoryItem>
+        <NavSubItemGroup>
+          <NavSubItem value="profile">Profile</NavSubItem>
+          <NavSubItem value="billing">Billing</NavSubItem>
+        </NavSubItemGroup>
+      </NavCategory>
 
-      <Checkbox
-        checked={state}
-        onChange={(ev, data) =>
-          setState(data.checked === 'mixed' ? true : data.checked)
-        }
-        label='Select all messages'
-      />
-    </FluentProvider>
+      <NavDivider />
+    </Nav>
   );
-};
-
-/** Wrapping a Fluent control keeps Fluent's data-object handler internal. */
-type SummaryToggleProps = {
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
-  label: string;
-};
-
-const SummaryToggle = ({ checked, onCheckedChange, label }: SummaryToggleProps) => (
-  <Switch
-    checked={checked}
-    size='medium'
-    label={label}
-    onChange={(ev, data) => onCheckedChange(data.checked)}
-  />
-);
-
-export const SummaryToggleUsage = () => {
-  const [on, setOn] = React.useState(false);
-  return <SummaryToggle checked={on} onCheckedChange={setOn} label='Daily summary' />;
 };
 ```
 
-### Building a reusable composite from Fluent parts
+### Selection, focus modes and single-part overrides
 
-A product-level component that composes Card (root, floatingAction and selection slots) with Label, Text, Divider and Badge, exposes its own props, and keeps the Fluent state convention (selected + onSelectionChange) intact.
+Card selection with focusMode and an onSelectionChange handler, a Table built from TableHeader/TableBody/TableRow/TableCell with TableSelectionCell, TableCellLayout and TableCellActions, and a sortable TableHeaderCell.
 
 ```tsx
 import * as React from 'react';
-import { Badge, Card, Divider, Label, FluentProvider, Text } from '@fluentui/react-components';
+import {
+  Avatar,
+  Button,
+  Card,
+  CardFooter,
+  CardHeader,
+  Table,
+  TableBody,
+  TableCell,
+  TableCellActions,
+  TableCellLayout,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
+  TableSelectionCell,
+  Text,
+} from '@fluentui/react-components';
 
-type PlanCardProps = {
-  name: string;
-  price: string;
-  summary: string;
-  selected: boolean;
-  onSelectedChange: (selected: boolean) => void;
-  /** Optional content for Card's floatingAction slot. */
-  ribbon?: React.ReactNode;
-};
-
-const PlanCard = ({
-  name,
-  price,
-  summary,
-  selected,
-  onSelectedChange,
-  ribbon,
-}: PlanCardProps) => (
-  <Card
-    appearance='filled-alternative'
-    orientation='vertical'
-    size='medium'
-    focusMode='tab-only'
-    selected={selected}
-    onSelectionChange={(event, data) => onSelectedChange(data.selected)}
-    floatingAction={
-      ribbon ?? (
-        <Badge appearance='tint' color='brand' shape='circular' size='small'>
-          {price}
-        </Badge>
-      )
-    }
-  >
-    <Label weight='semibold' size='medium'>
-      {name}
-    </Label>
-    <Text size={200} block>
-      {summary}
-    </Text>
-    <Divider inset appearance='subtle' />
-    <Text size={100}>{`Billed monthly - ${price}`}</Text>
-  </Card>
-);
-
-export const PlanPicker = () => {
-  const [selectedPlan, setSelectedPlan] = React.useState('pro');
+export const SelectableCard: React.FC = () => {
+  const [selected, setSelected] = React.useState(false);
 
   return (
-    <FluentProvider>
-      <PlanCard
-        name='Standard'
-        price='$12'
-        summary='Everything a small team needs to get going.'
-        selected={selectedPlan === 'standard'}
-        onSelectedChange={() => setSelectedPlan('standard')}
-      />
-      <PlanCard
-        name='Pro'
-        price='$28'
-        summary='Advanced controls and unlimited history.'
-        selected={selectedPlan === 'pro'}
-        onSelectedChange={() => setSelectedPlan('pro')}
-      />
-    </FluentProvider>
+    <Card
+      appearance="outline"
+      /* focusMode decides how the card participates in the tab sequence. */
+      focusMode="tab-exit"
+      selected={selected}
+      onSelectionChange={(event, data) => setSelected(data.selected)}
+    >
+      <CardHeader header={<Text weight="semibold">Quarterly report</Text>} />
+      <CardFooter>
+        <Button appearance="subtle">Download</Button>
+      </CardFooter>
+    </Card>
   );
 };
-```
 
-### Provider, portals and layering
-
-Shows the provider as the architectural seam (direction, portal style injection) and Portal.mountNode as the layering mechanism, plus Tooltip's required relationship prop and MessageBar's politeness contract.
-
-```tsx
-import * as React from 'react';
-import { Button, MessageBar, Portal, FluentProvider, Text, Tooltip } from '@fluentui/react-components';
-
-export const LayeredAppShell = () => {
-  const [mountNode, setMountNode] = React.useState<HTMLElement | null>(null);
+export const FilesTable: React.FC = () => {
+  const [allSelected, setAllSelected] = React.useState(false);
 
   return (
-    <FluentProvider dir='ltr' applyStylesToPortals>
-      <div
-        ref={(node) => {
-          setMountNode(node);
-        }}
-        style={{ position: 'relative', padding: 16 }}
-      >
-        {/* Tooltip forces a decision about semantics up front. */}
-        <Tooltip
-          content='Deletes the draft for everyone on the team'
-          relationship='description'
-          withArrow
-          showDelay={200}
-          hideDelay={100}
-        >
-          <Button appearance='primary' shape='rounded'>
-            Delete draft
-          </Button>
-        </Tooltip>
+    <Table aria-label="Files">
+      <TableHeader>
+        <TableRow>
+          <TableSelectionCell
+            type="checkbox"
+            checked={allSelected}
+            onClick={() => setAllSelected(value => !value)}
+            aria-label="Select all files"
+          />
+          <TableHeaderCell>Name</TableHeaderCell>
+          <TableHeaderCell sortable sortDirection="ascending">
+            Size
+          </TableHeaderCell>
+        </TableRow>
+      </TableHeader>
 
-        {/* Portal renders into mountNode when it exists, inline otherwise. */}
-        <Portal mountNode={mountNode}>
-          <MessageBar intent='warning' politeness='polite' shape='rounded'>
-            <Text block>
-              This banner is portalled out of the normal flow, yet still inherits
-              the provider theme, direction and portal styles.
-            </Text>
-          </MessageBar>
-        </Portal>
-      </div>
-    </FluentProvider>
+      <TableBody>
+        <TableRow>
+          <TableSelectionCell type="checkbox" checked={allSelected} aria-label="Select report.pdf" />
+          <TableCell>
+            <TableCellLayout media={<Avatar name="Report" />}>report.pdf</TableCellLayout>
+            {/* TableCellActions is a single slot-driven part of the cell. */}
+            <TableCellActions visible>
+              <Button appearance="subtle">Open</Button>
+            </TableCellActions>
+          </TableCell>
+          <TableCell>1.2 MB</TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
   );
 };
 ```
 
-### Global style hooks and the className escape hatch
+### Global styling escape hatch with customStyleHooks_unstable
 
-Demonstrates customStyleHooks_unstable (keyed by component name, then by slot name) for provider-wide tuning, versus className for a genuinely local tweak.
+Shows how FluentProvider.customStyleHooks_unstable targets a single component's style pass (here useButtonStyles_unstable) so you can append classes globally without touching generated class names or forking the component.
 
 ```tsx
 import * as React from 'react';
-import { Badge, Button, Card, FluentProvider, Text } from '@fluentui/react-components';
+import { Button, FluentProvider } from '@fluentui/react-components';
+
+type FluentThemeProp = React.ComponentProps<typeof FluentProvider>['theme'];
+type CustomStyleHooks = React.ComponentProps<typeof FluentProvider>['customStyleHooks_unstable'];
 
 /**
- * customStyleHooks_unstable is keyed by component display name, then by slot
- * name. It applies to every instance inside this provider, so repeated tweaks
- * stay consistent with the theme instead of being duplicated per call site.
+ * A style hook receives the state that was computed for the component
+ * (including the class name produced by its own style hook) and may append
+ * its own class. `compactButton` lives in your global stylesheet.
  */
-const customStyleHooks = {
-  Badge: {
-    root: {
-      letterSpacing: '0.04em',
-      textTransform: 'uppercase' as const,
-    },
-  },
-  Card: {
-    root: {
-      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
-    },
-  },
+const useCompactButtonStyles = (state: unknown) => {
+  const buttonState = state as { className?: string };
+  buttonState.className = [buttonState.className, 'compactButton'].filter(Boolean).join(' ');
 };
 
-export const ThemedSurface = () => (
-  <FluentProvider customStyleHooks_unstable={customStyleHooks}>
-    <Card appearance='outline' focusMode='off' size='large' orientation='vertical'>
-      <Badge appearance='ghost' color='informative' size='small' shape='rounded'>
-        Beta
-      </Badge>
-      <Text size={300} weight='semibold'>
-        Global overrides, per slot
-      </Text>
-      {/* className remains the right tool for one-off, local adjustments. */}
-      <Button appearance='primary' className='push-to-end' shape='rounded'>
-        Continue
-      </Button>
-    </Card>
-  </FluentProvider>
-);
-```
+export interface BrandedProviderProps {
+  theme?: FluentThemeProp;
+  children: React.ReactNode;
+}
 
-### Accessibility wiring as composition
+export const BrandedProvider: React.FC<BrandedProviderProps> = ({ theme, children }) => {
+  const customStyleHooks_unstable: CustomStyleHooks = {
+    useButtonStyles_unstable: useCompactButtonStyles,
+  };
 
-Uses Field for label/hint/validation wiring, Tooltip.relationship for accessible naming, MessageBar politeness for live-region behavior, and disabledFocusable to keep a control focusable while non-actionable.
-
-```tsx
-import * as React from 'react';
-import { Button, Checkbox, Field, Input, Link, MessageBar, FluentProvider, Select, Switch, Textarea, Tooltip } from '@fluentui/react-components';
-
-export const AccessibleSettingsForm = () => (
-  <FluentProvider dir='ltr'>
-    <Field
-      label='Workspace name'
-      hint='Visible to every member of the workspace.'
-      required
-      validationState='none'
-      orientation='vertical'
+  return (
+    <FluentProvider
+      theme={theme}
+      applyStylesToPortals
+      customStyleHooks_unstable={customStyleHooks_unstable}
     >
-      <Input type='text' appearance='outline' size='medium' placeholder='Contoso' />
-    </Field>
+      {children}
+    </FluentProvider>
+  );
+};
 
-    <Field
-      label='Billing contact'
-      validationState='error'
-      validationMessage='Enter a valid email address.'
-      orientation='vertical'
-    >
-      <Input type='email' />
-    </Field>
-
-    <Field label='Support notes' orientation='vertical'>
-      <Textarea resize='vertical' placeholder='Anything we should know?' />
-    </Field>
-
-    <Field label='Plan' orientation='horizontal'>
-      <Select size='medium' onChange={(ev, data) => console.log(data.value)}>
-        <option value='standard'>Standard</option>
-        <option value='pro'>Pro</option>
-      </Select>
-    </Field>
-
-    <Checkbox label='Send release notes' defaultChecked size='medium' shape='square' />
-
-    {/* Focusable but not actionable - correct inside composite widgets. */}
-    <Switch label='Two-factor authentication' disabledFocusable />
-
-    <Tooltip content='Opens the billing portal in a new tab' relationship='label'>
-      <Link href='https://example.com/billing' inline appearance='subtle'>
-        Manage billing
-      </Link>
-    </Tooltip>
-
-    <MessageBar intent='info' politeness='polite' shape='rounded'>
-      Role changes are audited for 90 days.
-    </MessageBar>
-
-    <Button appearance='primary' shape='rounded' onClick={() => console.log('saved')}>
-      Save changes
-    </Button>
-  </FluentProvider>
+export const Demo: React.FC<{ theme?: FluentThemeProp }> = ({ theme }) => (
+  <BrandedProvider theme={theme}>
+    <Button appearance="primary">Uses the custom button style hook</Button>
+  </BrandedProvider>
 );
 ```
 
 ## Pitfalls
 
-- Trying to reorder slots with JSX. Moving an element earlier or later in children does not move it in the component's render tree; use iconPosition, labelPosition, contentBefore/contentAfter, alignContent or textPosition instead.
-- Passing both a controlled prop and its default counterpart (for example checked and defaultChecked, or open and defaultOpen) for the same state - the default only seeds and the controlled value wins, producing contradictory behavior.
-- Expecting a default* prop to update the component later. Changing defaultOpen/defaultChecked/defaultValue after mount has no effect; switch to the controlled prop plus its handler.
-- Setting open/selected/checked from state but never updating that state in the matching handler, which freezes the component. onOpenChange, onSelectionChange and onToggle must feed state back.
-- Rendering floating surfaces without a Provider above them, or without Provider.applyStylesToPortals when the portal target sits outside the app root, which leaves overlays unthemed and direction-unaware.
-- Using Card.focusMode='off' (or plain disabled) and then expecting selection, focus and keyboard interaction to work. Use tab-only/no-tab for cards, and disabledFocusable on Button, Link and Switch when the control must stay focusable.
-- Styling by reaching into internal DOM with selectors or !important. That bypasses tokens and breaks theming, RTL and high-contrast; use appearance props, then customStyleHooks_unstable at the provider.
-- Forking a component's internals because one slot is missing, instead of composing a new component from Fluent parts and passing content through the documented slots.
-- Building custom overlays by hand instead of using Dialog, Popover, Menu, Portal and Positioning, losing focus containment, Escape handling, anchor positioning and screen-reader wiring.
-- Reading values off the DOM event when handlers supply a typed data object as the second argument (data.value for Input, data.checked for Checkbox/Switch, data.selected for Card, data.value for Select).
-- Assuming a composite will manage shared state for you. Tabs, Table and Overflow require the parent to own the model (onRegister, tableState, id plus onOverflowChange); children only report.
-- Mixing inline and portalled surfaces inconsistently. Popover.inline, Menu.inline and TagPicker.inline exist for layout-bound surfaces - choosing the wrong one produces clipping or detached positioning inside scroll containers.
+- Styling against generated `.fui-*` class names. These are Griffel-generated artifacts that change between versions — use props, slots, or FluentProvider.customStyleHooks_unstable instead.
+- Passing both `defaultX` and `X` (for example `defaultOpen` and `open`, or `defaultValue` and `value`) to the same component. Pick one mode; mixing them produces stale or frozen UI.
+- Forgetting to opt out of trigger enhancement. If the child of MenuTrigger/PopoverTrigger/DialogTrigger/ToastTrigger is already a Fluent Button or a Link, pass `disableButtonEnhancement` so semantics are not applied twice.
+- Trying to author state that context already owns — for example setting `open`/`disabled` on AccordionPanel or expecting NavSubItem to know its own selection. Reading from context is the contract.
+- Deleting or replacing required slots (`NonNullable<Slot<...>>`) such as NavCategoryItem.root, DrawerHeader.heading or AvatarGroupItem.avatar; these carry the component's semantics. Configure them or change their element with `as`.
+- Rendering portals outside the FluentProvider boundary and losing theme/direction/classes — use Portal.mountNode plus applyStylesToPortals instead of hand-managing overlay containers.
+- Hand-rolling keyboard navigation inside compound families (Menus, TabList, Tree, Toolbar) and fighting the built-in roving tab stop and arrow-key handling.
+- Using `disabled` where focus must be preserved inside a composite widget; `disabledFocusable` exists precisely to keep focus in the widget while marking it aria-disabled.
 
 ## Accessibility
 
-Accessibility in Fluent UI v9 is an architectural layer, not a checklist bolted on afterwards. Field is the wiring point for forms: it renders label, validationMessageIcon, validationMessage and hint in a fixed order and connects them to the control, so always build form rows from Field rather than free-floating Label and Text elements. Tooltip.relationship is required precisely so you must state intent - 'label' when the tooltip is the accessible name, 'description' for supplementary help, 'inaccessible' when it is decorative - because guessing produces duplicated or missing announcements. MessageBar.politeness ('polite' or 'assertive') controls live-region urgency, and MessageBar.intent conveys meaning that must not rely on color alone. Rating.itemLabel lets you replace bare numbers with meaningful text for each value. Focus behavior is declared through focusMode (Breadcrumb, SwatchPicker, Card, Table), navigationMode (Tree, List), selectionMode (Tree, List, Table) and disabledFocusable (Button, Link, Switch) - the last one keeps a control focusable and announced while making it non-actionable, which preserves arrow-key traversal in toolbars and menus. Composite keyboard contracts (aria-activedescendant traversal, roving tabindex, focus traps) come from the Tabster infrastructure underneath Dialog, Menu, Popover, Tabs, Tree and Table, and announcements come from Aria; that is why hand-rolled overlays usually regress accessibility. Tree.checkedItems supports a mixed state so tri-state selection is announced correctly. Finally, Provider.dir drives logical CSS and mirroring, so verifying RTL is part of verifying accessibility, not a separate task.
+Because accessibility is implemented inside the components, most a11y work in v9 consists of choosing the right component, the right slots, and the right props rather than writing ARIA by hand.
 
-**Referenced components**: Provider, Button, Field, Input, Textarea, Label, Select, Combobox, Checkbox, Switch, Radio, Slider, Rating, Spinbutton, ColorPicker, Search, Infolabel, Badge, Avatar, Persona, Image, Skeleton, Text, Divider, Card, Link, MessageBar, Spinner, Progress, Portal, Positioning, Aria, Tabster, ContextSelector, Utilities, Tooltip, Dialog, Menu, Popover, Drawer, TeachingPopover, Toast, Accordion, Tabs, Tree, List, Nav, Breadcrumb, TagPicker, SwatchPicker, Table, Carousel, Overflow, Toolbar, Motion, MotionComponentsPreview, MenuGridPreview, HeadlessComponentsPreview, DatepickerCompat, TimepickerCompat, CalendarCompat
+- Required slots encode semantics. Button-like parts are non-nullable (`NavCategoryItem.root`, `MenuButton.root`), `AvatarGroupItem.root` can be `div` or `li` (choose `li` inside a real list), and `DialogTitle.root`/`DrawerHeader.heading` can render `h1`–`h6` or `div` — pick the heading level that matches your page outline before falling back to `div`.
+- Triggers: enhancement converts a non-button child into something with button role, tab stop and keyboard activation; `disableButtonEnhancement` should be used when the child is already a `Button` or a `Link` so semantics and event handling are not duplicated.
+- Focus containment and restoration: `Dialog` exposes `modalType`, `inertTrapFocus` and `unmountOnClose`; `DialogTrigger` with `action="close"` gives every action row a correctly wired dismissal path.
+- Live regions: `AriaLiveAnnouncer` hosts app-level announcements, `MessageBar` takes `politeness` (`polite`/`assertive`), `Toaster` takes `announce`, and `Carousel` accepts an `announcement` function so slide changes are spoken.
+- Keyboard and focus models are declarative: `focusMode` (`Card`, `Breadcrumb`, `SwatchPicker`, `DataGridCell`), `navigationMode` (`Tree`/`FlatTree` tree vs treegrid), `selectionMode`, `TabList.selectTabOnFocus`, and `disabledFocusable` to keep focus inside composite widgets.
+- Labelling: `Field` (with its `label`, `hint`, `validationMessage` slots) and `InfoLabel` keep labels, hints and errors programmatically associated with the control; the `Field` children render function exists to receive those wiring props. Icon-only Buttons and selection cells (for example `TableSelectionCell` checkboxes) still need an `aria-label`.
+- Tooltips require an explicit `relationship` (`label`, `description`, or `inaccessible`) — decide whether the tooltip is the accessible name or the description and never duplicate an existing name.
+- Motion lives in replaceable slots (`collapseMotion`, `backdropMotion`, `surfaceMotion`, `expandIconMotion`, `indeterminateMotion`), which makes it possible to swap in reduced-motion-aware implementations without touching component internals.
+
+**Referenced components**: FluentProvider, Portal, AriaLiveAnnouncer, Toaster, Button, Card, CardHeader, CardPreview, CardFooter, Avatar, Text, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem, MenuItemCheckbox, MenuItemRadio, MenuDivider, Dialog, DialogTrigger, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, Accordion, AccordionItem, AccordionHeader, AccordionPanel, Field, Input, Textarea, InfoLabel, Label, Nav, NavItem, NavCategory, NavCategoryItem, NavSubItem, NavSubItemGroup, NavDivider, NavSectionHeader, NavDrawer, NavDrawerHeader, NavDrawerBody, NavDrawerFooter, SplitNavItem, AppItem, AppItemStatic, Hamburger, Table, TableHeader, TableRow, TableHeaderCell, TableBody, TableCell, TableCellLayout, TableCellActions, TableSelectionCell, TabList, Tree, TreeItem, TreeItemLayout, TreeItemPersonaLayout, TagGroup, Tag, InteractionTag, InteractionTagPrimary, InteractionTagSecondary, Drawer, InlineDrawer, OverlayDrawer, DrawerHeader, DrawerBody, DrawerFooter, DrawerHeaderTitle, DrawerHeaderNavigation, Toast, ToastTitle, ToastBody, ToastFooter, ToastTrigger, Popover, PopoverTrigger, PopoverSurface, Tooltip, Toast, ProgressBar, Carousel, CarouselNav, DataGrid, DataGridBody, DataGridRow, DataGridCell, SwatchPicker, OverflowItem, OverflowDivider, Toolbar, ToolbarGroup, TeachingPopover, TeachingPopoverTrigger, TeachingPopoverCarouselNav, TeachingPopoverCarouselPageCount, Badge, MenuButton, Link
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

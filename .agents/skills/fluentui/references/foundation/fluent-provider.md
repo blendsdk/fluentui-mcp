@@ -2,404 +2,646 @@
 
 > **Category**: foundation
 
-## What the provider is
+## What `FluentProvider` does
 
-Every Fluent UI v9 render tree starts with a provider. In `@fluentui/react-components` it is exported as `FluentProvider`:
+`FluentProvider` is the root component of every Fluent UI v9 application. It is exported from the main package:
 
 ```tsx
 import { FluentProvider } from '@fluentui/react-components';
 ```
 
-It is a context root rather than a visual component. It renders a wrapper element and, for everything below it:
+It has four responsibilities:
 
-1. **Publishes the theme as CSS custom properties** — `--colorBrandBackground`, `--colorNeutralBackground1`, `--colorNeutralForeground1`, `--fontFamilyBase`, `--fontSizeBase300`, `--spacingHorizontalM`, `--borderRadiusMedium` and hundreds more. Fluent UI components consume these variables instead of hard-coded colors, which is why a component rendered outside a provider can end up with transparent backgrounds and missing borders.
-2. **Sets writing direction** through `dir`, so text direction and logical spacing resolve correctly for LTR and RTL locales.
-3. **Creates a styled portal mount node** so content rendered in a portal — `Tooltip`, `Popover`, `Menu`, `Dialog`, `Drawer`, `TeachingPopover`, `TagPicker` — is a DOM sibling of your app but still inherits the active theme.
-4. **Publishes provider-level contexts** used for style and override customisation (`customStyleHooks_unstable`, `overrides_unstable`).
+1. **Publishes the theme.** Components in v9 never hard-code colors, spacing, type ramp, shadows or radii. They resolve those values from CSS custom properties such as `--colorNeutralBackground1`, `--colorBrandBackground` and `--fontSizeBase300`. `FluentProvider` converts a theme object into a style element containing those custom properties, inserts it into the target document, and marks its subtree with a generated theme class (for example `fui-FluentProvider1`) that ties that subtree to the theme.
+2. **Provides context.** Descendants read the theme, the text direction (`dir`), the target document, custom style hooks and component overrides from React context. Context is the channel components use for non-CSS decisions – most importantly *which document a portal should render into*.
+3. **Keeps portaled content themed.** Dialogs, popovers, menus, tooltips and overlay drawers render through portals into `document.body`, outside the provider's DOM subtree. The `applyStylesToPortals` prop (default `true`) makes sure those surfaces still resolve the provider's theme variables.
+4. **Opens escape hatches.** `customStyleHooks_unstable` and `overrides_unstable` allow design systems and component packages built on top of Fluent UI to adjust the last mile without forking components.
 
-## Minimal setup
+If a component renders with transparent backgrounds, wrong colors or collapsed spacing, its CSS custom properties are unresolved – the first thing to verify is whether a `FluentProvider` exists somewhere above it.
 
-Render one provider at the top of the React tree, above every Fluent UI component:
+## Prerequisites and imports
 
-```tsx
-// src/main.tsx
-import * as React from 'react';
-import { createRoot } from 'react-dom/client';
-import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { App } from './App';
-
-const container = document.getElementById('root');
-
-if (!container) {
-  throw new Error('Could not find the #root element to mount the app into.');
-}
-
-createRoot(container).render(
-  <React.StrictMode>
-    <FluentProvider theme={webLightTheme}>
-      <App />
-    </FluentProvider>
-  </React.StrictMode>,
-);
+```bash
+npm install @fluentui/react-components
 ```
 
-If the application has more than one React root — a micro-frontend widget, a second root mounted for an off-screen preview, a host element for a separate dialog surface — give each root its own provider.
+```tsx
+import { FluentProvider, webLightTheme } from '@fluentui/react-components';
+```
 
-## FluentProvider props at a glance
+## Basic setup: one provider at the root
 
-| Prop | Type | Notes |
-| --- | --- | --- |
-| `theme` | `PartialTheme` | Token values for the subtree. Merged over the theme inherited from the closest ancestor provider. |
-| `dir` | `'ltr'` or `'rtl'` | Writing direction for the subtree. |
-| `targetDocument` | `Document` | The document the provider belongs to; used when creating portal mount nodes and applying styles. |
-| `applyStylesToPortals` | `boolean` | Applies the provider's theme class and styles to the portal mount nodes it owns. |
-| `customStyleHooks_unstable` | `FluentProviderCustomStyleHooks` | Per-component style hooks that run for every matching component inside the provider. |
-| `overrides_unstable` | `OverridesContextValue_unstable` | Override context read by components inside the provider. |
+Mount the provider once, as high in the React tree as possible – typically in your entry file wrapping your application component:
 
-## theme
+```tsx
+<FluentProvider theme={webLightTheme}>
+  <App />
+</FluentProvider>
+```
 
-`theme` accepts a `PartialTheme`. A partial theme is merged on top of the theme inherited from the nearest ancestor provider; at the root the base is the default light theme. Two practical consequences:
+Placement rules:
 
-- Passing a **complete** theme (`webLightTheme`, `webDarkTheme`, or a theme built with `createLightTheme`) replaces every token it defines.
-- Passing a **partial** theme — an object holding only the tokens you want to change — overrides just those tokens and inherits everything else, including every non-color token such as typography, spacing and radii.
+- **Wrap the whole app once.** Every Fluent component in the tree is expected to sit under a provider.
+- **`theme` is optional.** When omitted, the provider uses `webLightTheme`.
+- **The provider renders a `<div>` root.** You can pass `className`, `style` and other `<div>` attributes to it, but do not use it *as* your layout container – render your own layout element inside it.
+- **Add nested providers only when a subtree needs different theming or direction** (a dark sidebar, a preview pane, an embedded widget).
 
-Partial themes are ideal for small in-place changes. Complete themes come from the library, or from `createLightTheme` and `createDarkTheme` fed with a brand ramp.
+## Props reference
 
-Themes should be module-level constants or memoised values. The provider reacts to the identity of the object you pass, so building a theme inside render makes it rewrite token variables across the whole subtree on every pass.
+| Prop | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `theme` | `Partial<Theme>` | `webLightTheme` | Theme object. Partial themes are merged with the theme inherited from the closest parent provider, so you only declare tokens you want to change. |
+| `dir` | `'ltr'` or `'rtl'` | Inherited from the parent provider, otherwise `ltr` | Text direction for the subtree. Propagated through context so components mirror correctly, and written to the root element. |
+| `targetDocument` | `Document` | Inherited from the parent provider, otherwise the global `document` | Document used for style injection, portals and focus management. Needed for iframes and popup windows. |
+| `applyStylesToPortals` | `boolean` | `true` | Makes the provider's styling available to portal mount nodes so dialogs, menus, popovers, tooltips and overlay drawers stay themed. |
+| `customStyleHooks_unstable` | `Partial<{ useXxxStyles_unstable: (state) => void }>` | `undefined` | Escape hatch that lets you mutate the component state during style resolution for any Fluent component. |
+| `overrides_unstable` | `OverridesContextValue` | `undefined` | Used by component packages built on top of Fluent UI to change global component defaults. Not intended for app code. |
+| *(root slot)* | `<div>` | – | Standard div attributes (`className`, `style`, `id`, `data-*`, event handlers) are forwarded to the provider's root element. |
 
-## dir
+## Theming
 
-`dir` takes `'ltr'` or `'rtl'`. Set it once at the provider instead of adding direction attributes to individual components: the provider element carries the attribute and both your CSS and Fluent UI's logical properties react to it.
+### Built-in themes and factories
 
-## targetDocument
+`@fluentui/react-components` ships ready-made themes and theme factories:
 
-When a subtree is rendered into a document other than the ambient one — an iframe, a popup window, a detached preview surface — pass that `Document` as `targetDocument`. The provider then creates its portal mount node and applies its styles inside that document instead of the main one.
+- `webLightTheme` – the default, a neutral light theme.
+- `webDarkTheme` – the matching dark theme.
+- `webHighContrastTheme` – an explicit high-contrast theme.
+- `teamsLightTheme`, `teamsDarkTheme`, `teamsHighContrastTheme` – themes aligned with Microsoft Teams visuals.
+- `createLightTheme`, `createDarkTheme` – factories that turn a brand ramp into a full theme.
 
-## applyStylesToPortals
+```tsx
+<FluentProvider theme={webDarkTheme}>{children}</FluentProvider>
+```
 
-This is on by default. It controls whether the provider's theme class and style sheet are applied to the portal mount nodes the provider owns. Leave it on unless you deliberately want portaled content styled by a different provider — for example when you render a `Portal` with a `mountNode` that already sits inside another provider.
+### Partial themes
 
-## customStyleHooks_unstable and overrides_unstable
+`theme` is typed `Partial<Theme>`, which means you can pass just a handful of tokens and inherit everything else from the parent provider:
 
-Both props are escape hatches marked `_unstable`, which means their shape can change in a minor release.
+```tsx
+import type { Theme } from '@fluentui/react-components';
 
-- `customStyleHooks_unstable` registers per-component style hooks (keyed by names such as `useButtonStyles_unstable`) that run for every instance of that component inside the provider. It is the place to bend Fluent UI styling globally when tokens are not enough.
-- `overrides_unstable` supplies context values that components inside the provider read while resolving their defaults, such as default sub-components, icons and generated content.
+const accentOverride: Partial<Theme> = {
+  colorBrandBackground: '#6b2fbf',
+  colorBrandBackgroundHover: '#5a27a3',
+  colorBrandForeground1: '#5a27a3',
+};
+```
 
-Prefer tokens. Reach for these two only when tokens cannot express the change, and expect to revisit the code when you upgrade.
+This is the most convenient way to apply a small brand adjustment to a subtree, because you do not have to re-declare the entire token set.
 
-## Built-in themes and custom brands
+### Custom brand themes
 
-Complete themes ship with the package: `webLightTheme`, `webDarkTheme`, `teamsLightTheme`, `teamsDarkTheme` and `teamsHighContrastTheme`.
+A brand ramp is a `BrandVariants` object with 16 colors keyed `10` through `160`. Feed it to `createLightTheme` or `createDarkTheme` to get a complete, internally consistent theme in which every brand token (backgrounds, foregrounds, borders, focus, subtle states) is derived from your ramp:
 
-For a custom brand, build a brand ramp — a record of sixteen shades of one color, keyed `10` through `160` — and pass it to `createLightTheme` and `createDarkTheme`. Both return complete `Theme` objects that can be handed straight to the provider's `theme` prop.
+```tsx
+import { createDarkTheme, createLightTheme } from '@fluentui/react-components';
+import type { BrandVariants } from '@fluentui/react-components';
 
-## Nested providers and theme islands
+const brandRamp: BrandVariants = { 10: '#061724', /* ... */ 160: '#ffffff' };
+const appLightTheme = createLightTheme(brandRamp);
+const appDarkTheme = createDarkTheme(brandRamp);
+```
 
-Providers nest. A nested provider inherits from its closest ancestor and overrides only what its own `theme` and `dir` specify, so a dark island inside a light application is a two-line change:
+### Theme identity and performance
 
-- A nested provider with a complete theme paints that region with the new palette.
-- A nested provider with a partial theme changes only the tokens listed and inherits the rest.
+The provider regenerates its style element whenever the `theme` object identity changes. Therefore:
 
-Nesting is also how you scope direction, so a locale switcher can wrap just the localisable region.
+- Create themes **at module scope** (`const lightTheme = createLightTheme(brandRamp);`), not inside a component body.
+- When the theme depends on state, wrap it in `React.useMemo` so the same theme reference is reused across renders.
+- Avoid inline object literals such as `theme={{ colorBrandBackground: '#f0f' }}` in JSX.
 
-## Consuming theme tokens from your own CSS
+### How nested scoping works
 
-Because the theme is delivered as CSS custom properties, your own stylesheets participate in the theme without any JavaScript. Read the same variables Fluent UI's own styles consume, and provide fallbacks where a rule might render outside a provider.
+A nested `FluentProvider` with `theme` set declares the theme's custom properties again for its own subtree. Because the inner provider's style element is inserted after the outer one, its declarations win for that subtree, while everything outside the inner provider keeps the outer theme. This makes scoping safe: no global stylesheet is patched, and the outer theme resumes as soon as the inner provider's subtree ends.
 
-## Portals, documents and overlays
+Common scoped-theming scenarios:
 
-Overlay components render their surface through a portal, outside the DOM position of their trigger. The provider is what keeps that content themed: it owns a mount node for portals and applies its theme class and styles to it. Two props matter here:
+- A dark navigation rail inside a light application shell.
+- Theming a light and a dark preview of the same component side by side.
+- Applying a customer brand to one embedded area of a host application.
+- Theming a third-party widget or micro-frontend without touching the host theme.
 
-- `applyStylesToPortals` — keep it on (the default) for normal apps.
-- `targetDocument` — set it when the whole subtree lives in another document.
+## Direction: `dir` and RTL
 
-`Portal` itself accepts a `mountNode`, which may be an element or an object with `element` and `className`. Use it when portaled content needs a specific container instead of the provider's default mount node.
+Set `dir` on the provider and let it flow through context:
 
-## Composition rules of thumb
+```tsx
+<FluentProvider theme={webLightTheme} dir="rtl">
+  {children}
+</FluentProvider>
+```
 
-- One provider per React root, placed above every Fluent UI component in that root.
-- The provider renders a wrapper element, so it participates in layout. Put it where the application shell would otherwise go.
-- Nested providers never reset anything you did not ask for: they inherit the ancestor theme and merge your values on top.
-- Keep providers above portals in the tree so the portal mount node can pick up the theme.
-- Set `dir` at the provider rather than on individual components, so portaled content and logical CSS stay consistent.
+The provider writes the attribute to its root element and propagates the direction to every component below it, so layout mirroring, icon direction and keyboard behaviour are consistent. For full-fidelity RTL, also set `dir` on the document element (`<html dir="rtl">`) so browser-provided UI such as scrollbars follows suit.
 
-## Troubleshooting
+## Portals: `applyStylesToPortals`
 
-**Components look unstyled, transparent, or have no borders.** They are rendering outside a provider. Wrap the root of the tree and verify that no subtree is rendered into a container that has no provider above it.
+Many components render their most visible surface through a portal on `document.body`:
 
-**The app looks right but tooltips, menus and dialogs do not.** Portaled content is not picking up the theme. Check that `applyStylesToPortals` is not disabled and that a custom `Portal` `mountNode` sits inside a provider.
+- `DialogSurface` (from `Dialog`)
+- `PopoverSurface` (from `Popover`)
+- `MenuPopover` (from `Menu`)
+- Tooltip content (from `Tooltip`)
+- `OverlayDrawer`
+- Anything you render yourself with `Portal`
 
-**Theme switching is slow or janky.** A new theme object is being created on every render — for example by calling `createLightTheme` inside a component body, or by spreading a theme inline. Hoist theme creation to module scope or memoise it, then switch between two stable objects.
+Because those nodes leave the provider's DOM subtree, `applyStylesToPortals` defaults to `true` and keeps them themed. Leave it at the default in almost every case.
 
-**Content inside an iframe is unstyled.** Pass the iframe's `Document` to `targetDocument` on the provider that wraps that content.
+Set `applyStylesToPortals={false}` only when you want to control portal styling yourself – for example, when different portals must show different themes. In that case you are responsible for wrapping the portaled content in its own `FluentProvider`:
 
-**Only part of the UI flips for RTL.** `dir` was set on a descendant rather than at the provider, or portaled DOM is being laid out by a different ancestor. Set `dir` on the provider that owns the content, or on the document element, and let the provider inherit it.
+```tsx
+<FluentProvider theme={webLightTheme} applyStylesToPortals={false}>
+  <Portal mountNode={document.body}>
+    <FluentProvider theme={webLightTheme}>{/* themed portal content */}</FluentProvider>
+  </Portal>
+</FluentProvider>
+```
 
-**An `_unstable` prop broke after an upgrade.** `customStyleHooks_unstable` and `overrides_unstable` are explicitly unstable; pin the library version, read the changelog before upgrading, or move the customisation into theme tokens.
+## `targetDocument`: iframes and other documents
 
-## Related building blocks
+`targetDocument` tells the provider which `Document` it belongs to. It is used for style injection, portal rendering and focus management. Reach for it when the Fluent tree is rendered inside:
 
-`Portal` for moving content into another DOM container, the portaled surfaces (`Tooltip`, `Popover`, `Menu`, `Dialog`, `Drawer`, `TeachingPopover`, `TagPicker`, `Toast`), and simple components such as `Text`, `Card` and `Button` for smoke-testing a new theme.
+- an `<iframe>` (embedded editors, previews, low-code canvases),
+- a popup `window` opened with `window.open`,
+- any environment where the global `document` is not the document your UI is mounted in.
+
+The value must be the document that actually contains the app's mount node, otherwise dialogs and menus will render and trap focus in the wrong tree.
+
+## `customStyleHooks_unstable`
+
+`customStyleHooks_unstable` is a map keyed by Fluent's internal style hook names (`useButtonStyles_unstable`, `useInputStyles_unstable`, `useTooltipStyles_unstable`, and so on). Each hook is called with the component's state while its styles are resolved, so you can mutate slot styles as a final step.
+
+Guidelines:
+
+- Treat the prop as **unstable**: the name says it, and the keys track internal hook names that may change between minor releases.
+- Define the object **outside render** (or memoize it) so it is not recreated on every render.
+- Prefer it for last-mile tweaks. For real theming, change design tokens through `theme` instead.
+- Do not use it to build an entire design system without a pinning strategy.
+
+## `overrides_unstable`
+
+`overrides_unstable` is aimed at libraries that wrap Fluent UI (for example a product design system that wants every `Input` to default to a different appearance). It is not part of the stable public API and app code should normally leave it untouched.
+
+## Common composition patterns
+
+- **App shell:** one provider at the top with your brand theme; every route, page and component lives below it.
+- **Theme toggle:** keep a boolean in state and swap between two module-scope theme constants, memoized with `React.useMemo`.
+- **Themed sub-area:** nest a provider with a full theme (dark island) or a partial theme (accent override) around the subtree.
+- **Multiple products in one page:** give each product root its own provider so their themes cannot leak into each other.
+- **Portal-heavy UI:** keep dialogs, menus and popovers under the provider whose theme they should show, or re-provide the theme inside the portal when you opt out of `applyStylesToPortals`.
+
+## Debugging checklist
+
+1. Is there a `FluentProvider` above the component? Missing provider is by far the most common cause of unstyled UI.
+2. Inspect the DOM: an ancestor should carry a generated theme class, and the document head should contain a style element full of `--color*` custom properties.
+3. Theme not applied to a dialog or menu? Check `applyStylesToPortals` and whether another provider with a different theme also styles portal mount nodes.
+4. Rendering into an iframe or popup? Verify `targetDocument` points at that document.
+5. Theme changes lagging or style churn? Check that the theme object is created once and its identity is stable.
+6. RTL looking half-mirrored? Set `dir` on both the provider and the `<html>` element.
+
+## Accessibility checklist
+
+- `FluentProvider` is where text direction is declared, and direction affects reading order for assistive technology. Keep `dir` in sync with the content language.
+- The provider does **not** set `lang`. Set `<html lang>` (and `lang` on mixed-language content) yourself.
+- Theme choice is a contrast decision. Built-in themes meet Fluent's contrast targets; custom brand ramps and partial token overrides are not validated for you.
+- Components support operating-system high-contrast settings through the design tokens. Avoid hard-coding colors that fight forced-colors mode, and test with a high-contrast theme.
+- In embedded documents, a wrong `targetDocument` can place modal focus traps in a document the user is not interacting with.
+- The provider's root `<div>` adds no ARIA roles or landmarks. Keep your own heading and landmark structure intact.
 
 ## Key Takeaways
 
-- A single Provider at the root of each React tree is mandatory: it turns the theme into CSS custom properties, sets writing direction, and keeps portaled overlays themed. Components rendered outside it lose their token values.
-- theme takes a PartialTheme. A partial theme is merged on top of the theme inherited from the closest ancestor provider, so nested providers are cheap, scoped overrides rather than full resets.
-- Create themes once at module scope (webLightTheme, webDarkTheme, createLightTheme(brandRamp)) and switch between stable object references. Building a theme during render rewrites tokens across the entire subtree on every pass.
-- Portaled content (Tooltip, Popover, Menu, Dialog, Drawer, TeachingPopover, TagPicker) is only themed because the provider applies styles to its portal mount nodes — keep applyStylesToPortals on, and set targetDocument when the subtree lives in another document such as an iframe.
-- customStyleHooks_unstable and overrides_unstable are unstable escape hatches. Exhaust token-based theming first and expect to revisit any code that uses them when upgrading.
+- FluentProvider is the mandatory root for Fluent UI v9 apps: it publishes the theme as CSS custom properties and provides the context (direction, target document) that components rely on. Without it, components render unresolved tokens and look broken.
+- theme accepts a Partial<Theme> and defaults to webLightTheme. Nested providers merge their theme over the inherited one, so a nested provider can restyle just its own subtree with a handful of overridden tokens.
+- Portaled surfaces - Dialog, Popover, Menu, Tooltip and OverlayDrawer - stay themed out of the box because applyStylesToPortals defaults to true. Only set it to false if you re-provide the theme inside the portal yourself.
+- Create themes at module scope (createLightTheme/createDarkTheme) or memoize them; a new theme object identity on each render regenerates the provider's style element.
+- Set dir on the provider for RTL and mirror it on the html element, so both component context and native browser UI point the same way.
+- Use targetDocument whenever the Fluent tree lives in a document other than the global document (iframe, popup window) so style injection, portals and focus traps target the right tree.
+- customStyleHooks_unstable and overrides_unstable are escape hatches for last-mile styling and wrapper libraries; they are unstable by contract and should not be the backbone of a design system.
 
 ## Examples
 
-### Minimal app root with Provider
+### Minimal app root setup
 
-Mounts a single provider above the whole application so every Fluent UI component inherits theme tokens, direction and portal styling.
+Mount a single FluentProvider around the application with the default web light theme, then use ordinary Fluent components underneath it.
 
 ```tsx
-// src/main.tsx
+// main.tsx
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
-import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { App } from './App';
+import {
+  Button,
+  Checkbox,
+  Field,
+  FluentProvider,
+  Input,
+  Switch,
+  Text,
+  webLightTheme,
+} from '@fluentui/react-components';
+
+const SettingsPage = () => (
+  <div style={{ padding: 16, display: 'grid', gap: 16, maxWidth: 420 }}>
+    <Text size={500} weight="semibold">
+      Account settings
+    </Text>
+    <Field label="Display name" required>
+      <Input defaultValue="Ada Lovelace" />
+    </Field>
+    <Checkbox label="Send me product updates" defaultChecked />
+    <Switch label="Compact mode" />
+    <Button appearance="primary">Save</Button>
+  </div>
+);
+
+const App = () => (
+  <FluentProvider theme={webLightTheme}>
+    <SettingsPage />
+  </FluentProvider>
+);
 
 const container = document.getElementById('root');
-
-if (!container) {
-  throw new Error('Could not find the #root element to mount the app into.');
+if (container) {
+  createRoot(container).render(<App />);
 }
-
-createRoot(container).render(
-  <React.StrictMode>
-    <FluentProvider theme={webLightTheme}>
-      <App />
-    </FluentProvider>
-  </React.StrictMode>,
-);
 ```
 
-### Switching between light and dark themes
+### Light and dark theme switching
 
-Swaps two module-level theme objects at runtime. Because the theme references are stable, switching is a cheap prop change rather than a rebuild of the token map.
+Swap between two module-scope theme constants, initialised from the user's colour-scheme preference, while keeping the theme object identity stable with useMemo.
 
 ```tsx
 import * as React from 'react';
-import { FluentProvider, Switch, Text, webDarkTheme, webLightTheme } from '@fluentui/react-components';
+import {
+  Button,
+  FluentProvider,
+  Text,
+  webDarkTheme,
+  webLightTheme,
+} from '@fluentui/react-components';
 
-export const App = () => {
-  const [isDark, setIsDark] = React.useState(false);
+const prefersDark = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-  // Both themes are module-level constants, so switching is just a prop change.
-  const theme = isDark ? webDarkTheme : webLightTheme;
+export const ThemeToggle = () => {
+  const [isDark, setIsDark] = React.useState(prefersDark);
+
+  // Memoize so the provider's style element is not regenerated on every render.
+  const theme = React.useMemo(() => (isDark ? webDarkTheme : webLightTheme), [isDark]);
 
   return (
     <FluentProvider theme={theme}>
-      <Switch
-        label="Dark theme"
-        checked={isDark}
-        onChange={(_event, data) => setIsDark(data.checked)}
-      />
-      <Text block size={400}>
-        This text and the switch above read their colors from the active theme.
-      </Text>
+      <div style={{ padding: 16, display: 'grid', gap: 12 }}>
+        <Text size={500} weight="semibold">
+          {isDark ? 'Dark theme' : 'Light theme'}
+        </Text>
+        <Button appearance="primary" onClick={() => setIsDark(value => !value)}>
+          Toggle theme
+        </Button>
+      </div>
     </FluentProvider>
   );
 };
 ```
 
-### Custom brand theme from a BrandVariants ramp
+### Scoped theming with nested providers and a partial theme
 
-Builds light and dark themes from a single sixteen-step brand ramp, created once at module scope and handed to the provider.
+Shows a dark island created with a full theme and an accent override created with a Partial<Theme> that merges with the inherited light theme.
 
 ```tsx
 import * as React from 'react';
-import { Button, Card, FluentProvider, Text, createDarkTheme, createLightTheme } from '@fluentui/react-components';
-import type { BrandVariants } from '@fluentui/react-components';
+import {
+  Button,
+  FluentProvider,
+  Text,
+  webDarkTheme,
+  webLightTheme,
+} from '@fluentui/react-components';
+import type { Theme } from '@fluentui/react-components';
 
-// A brand ramp is sixteen shades of the same color, keyed 10 through 160.
-const brandRamp: BrandVariants = {
-  10: '#020305',
-  20: '#111723',
-  30: '#16263D',
-  40: '#193253',
-  50: '#1B3F6A',
-  60: '#1B4C82',
-  70: '#18599B',
-  80: '#1267B4',
-  90: '#3174C2',
-  100: '#4F82C8',
-  110: '#6790CE',
-  120: '#7B9ED3',
-  130: '#8CADD7',
-  140: '#9CBCDC',
-  150: '#ACCAE0',
-  160: '#BBC9E5',
+// A partial theme only declares what it overrides; everything else is
+// inherited from the closest parent FluentProvider.
+const accentOverride: Partial<Theme> = {
+  colorBrandBackground: '#6b2fbf',
+  colorBrandBackgroundHover: '#5a27a3',
+  colorBrandForeground1: '#5a27a3',
 };
 
-// Build both themes once, at module scope: they are plain token objects.
+export const ScopedTheming = () => (
+  <FluentProvider theme={webLightTheme}>
+    <div style={{ padding: 16 }}>
+      <Button appearance="primary">Primary - default brand</Button>
+    </div>
+
+    {/* Full theme scoped to this subtree only. */}
+    <FluentProvider theme={webDarkTheme}>
+      <div style={{ padding: 16, display: 'grid', gap: 8 }}>
+        <Text weight="semibold">Dark island</Text>
+        <Button appearance="primary">Primary - dark theme</Button>
+      </div>
+    </FluentProvider>
+
+    {/* Partial theme: inherited tokens plus the overridden brand accent. */}
+    <FluentProvider theme={accentOverride}>
+      <div style={{ padding: 16 }}>
+        <Button appearance="primary">Primary - rebranded accent</Button>
+      </div>
+    </FluentProvider>
+  </FluentProvider>
+);
+```
+
+### Right-to-left layout with the dir prop
+
+Toggles the provider direction at runtime, which mirrors layout and keyboard behaviour for every component in the subtree through context.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Field,
+  FluentProvider,
+  Input,
+  Tab,
+  TabList,
+  webLightTheme,
+} from '@fluentui/react-components';
+
+export const DirectionExample = () => {
+  const [dir, setDir] = React.useState<'ltr' | 'rtl'>('ltr');
+
+  return (
+    <FluentProvider theme={webLightTheme} dir={dir}>
+      <div style={{ padding: 16, display: 'grid', gap: 12 }}>
+        <TabList defaultSelectedValue="overview">
+          <Tab value="overview">Overview</Tab>
+          <Tab value="activity">Activity</Tab>
+        </TabList>
+        <Field label="Search" orientation="horizontal">
+          <Input defaultValue="Fluent UI" />
+        </Field>
+        <Button
+          appearance="primary"
+          onClick={() => setDir(current => (current === 'ltr' ? 'rtl' : 'ltr'))}
+        >
+          Switch to {dir === 'ltr' ? 'RTL' : 'LTR'}
+        </Button>
+      </div>
+    </FluentProvider>
+  );
+};
+```
+
+### Portaled surfaces are themed by default
+
+A Dialog renders its surface into a portal on document.body; applyStylesToPortals defaults to true so the surface still resolves the provider's theme variables.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  FluentProvider,
+  Text,
+  webLightTheme,
+} from '@fluentui/react-components';
+
+export const PortalTheming = () => (
+  // applyStylesToPortals defaults to true - no extra work needed for portals.
+  <FluentProvider theme={webLightTheme}>
+    <Dialog>
+      <DialogTrigger disableButtonEnhancement>
+        <Button appearance="primary">Open dialog</Button>
+      </DialogTrigger>
+      <DialogSurface>
+        <DialogBody>
+          <DialogTitle>Portaled surface</DialogTitle>
+          <DialogContent>
+            <Text>
+              This surface lives outside the provider's DOM subtree but is still themed.
+            </Text>
+          </DialogContent>
+          <DialogActions>
+            <DialogTrigger disableButtonEnhancement>
+              <Button appearance="primary">Close</Button>
+            </DialogTrigger>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
+  </FluentProvider>
+);
+```
+
+### Opting out of portal styling and re-providing the theme
+
+With applyStylesToPortals set to false, portal mount nodes are not styled by the provider, so the portaled content wraps itself in its own FluentProvider.
+
+```tsx
+import * as React from 'react';
+import {
+  FluentProvider,
+  Portal,
+  Text,
+  webLightTheme,
+} from '@fluentui/react-components';
+
+export const PortalThemingOptOut = () => (
+  <FluentProvider theme={webLightTheme} applyStylesToPortals={false}>
+    <Portal mountNode={document.body}>
+      {/* The portal mount node is not styled by the outer provider, so the
+          theme is re-provided inside the portal content. */}
+      <FluentProvider theme={webLightTheme}>
+        <div style={{ position: 'fixed', right: 16, bottom: 16, padding: 12 }}>
+          <Text weight="semibold">Themed portal content</Text>
+        </div>
+      </FluentProvider>
+    </Portal>
+  </FluentProvider>
+);
+```
+
+### Custom brand theme from a brand ramp
+
+Builds light and dark themes from a BrandVariants ramp with createLightTheme and createDarkTheme, creating them once at module scope for a stable theme identity.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  FluentProvider,
+  createDarkTheme,
+  createLightTheme,
+} from '@fluentui/react-components';
+import type { BrandVariants } from '@fluentui/react-components';
+
+// A brand ramp is 16 colors keyed 10 through 160. Every brand token in the
+// resulting theme is derived from these values.
+const brandRamp: BrandVariants = {
+  10: '#061724',
+  20: '#082338',
+  30: '#0a2e4a',
+  40: '#0c3b5e',
+  50: '#0e4875',
+  60: '#10568e',
+  70: '#1265a8',
+  80: '#1375c3',
+  90: '#1386df',
+  100: '#3b9bf1',
+  110: '#63adf4',
+  120: '#88bff7',
+  130: '#abd0fa',
+  140: '#cce1fc',
+  150: '#eaf3fe',
+  160: '#ffffff',
+};
+
+// Create the themes once, at module scope. Re-creating them on every render
+// would regenerate the provider's style element on every render.
 const appLightTheme = createLightTheme(brandRamp);
 const appDarkTheme = createDarkTheme(brandRamp);
 
-export const App = () => {
+export const BrandedApp = () => {
   const [isDark, setIsDark] = React.useState(false);
-  const theme = isDark ? appDarkTheme : appLightTheme;
 
   return (
-    <FluentProvider theme={theme}>
-      <Card>
-        <Text block weight="semibold">
-          Contoso dashboard
-        </Text>
-        <Text block>
-          Both themes were generated from the same brand ramp.
-        </Text>
+    <FluentProvider theme={isDark ? appDarkTheme : appLightTheme}>
+      <div style={{ padding: 16 }}>
         <Button appearance="primary" onClick={() => setIsDark(value => !value)}>
-          Switch to {isDark ? 'light' : 'dark'} theme
+          Toggle branded theme
         </Button>
-      </Card>
+      </div>
     </FluentProvider>
   );
 };
-```
-
-### Nested providers for scoped theme islands
-
-Uses a second provider to paint a region with a different theme while the surrounding application keeps the outer theme.
-
-```tsx
-import * as React from 'react';
-import { Card, FluentProvider, Text, webDarkTheme, webLightTheme } from '@fluentui/react-components';
-
-export const App = () => (
-  <FluentProvider theme={webLightTheme} dir="ltr">
-    <Text block size={400} weight="semibold">
-      Light application shell
-    </Text>
-
-    {/* A nested provider creates a theme island: everything inside is dark. */}
-    <FluentProvider theme={webDarkTheme}>
-      <Card appearance="filled-alternative">
-        <Text block weight="semibold">
-          Dark preview
-        </Text>
-        <Text block>
-          Tokens inside this subtree resolve to the dark theme values; the outer
-          shell is unaffected.
-        </Text>
-      </Card>
-    </FluentProvider>
-  </FluentProvider>
-);
-```
-
-### RTL application with a portaled Tooltip
-
-Sets direction once at the provider so the whole subtree — including portaled overlay content — follows the locale, and keeps portal styling enabled.
-
-```tsx
-import * as React from 'react';
-import { Button, FluentProvider, Tooltip, webLightTheme } from '@fluentui/react-components';
-
-export type AppProps = {
-  direction: 'ltr' | 'rtl';
-};
-
-export const App = ({ direction }: AppProps) => (
-  // One place decides the writing direction for the whole subtree.
-  <FluentProvider theme={webLightTheme} dir={direction} applyStylesToPortals>
-    <Tooltip content="Save the current document" relationship="label">
-      <Button appearance="primary">Save</Button>
-    </Tooltip>
-  </FluentProvider>
-);
 ```
 
 ### Rendering into an iframe with targetDocument
 
-Points the provider at a different Document so portal mount nodes and styles are created inside an iframe instead of the host page.
+Mounts a second React root inside an iframe document and points targetDocument at that document so style injection, portals and focus traps stay inside the frame.
 
 ```tsx
 import * as React from 'react';
-import { Button, Portal, FluentProvider, Text, webLightTheme } from '@fluentui/react-components';
+import * as ReactDOM from 'react-dom/client';
+import {
+  Button,
+  FluentProvider,
+  Input,
+  Text,
+  webLightTheme,
+} from '@fluentui/react-components';
 
-export const PreviewFrame = () => {
-  const frameRef = React.useRef<HTMLIFrameElement>(null);
-  const [frameDocument, setFrameDocument] = React.useState<Document | null>(null);
+/**
+ * Renders a second React root inside an iframe.
+ * targetDocument tells FluentProvider which document to inject its style
+ * element into and which document portals and focus traps should target.
+ */
+export const IframeHost = () => {
+  const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
 
-  const handleLoad = React.useCallback(() => {
-    setFrameDocument(frameRef.current?.contentDocument ?? null);
+  React.useEffect(() => {
+    const iframe = iframeRef.current;
+    const doc = iframe?.contentDocument;
+    if (!doc || !doc.body) {
+      return;
+    }
+
+    const mountNode = doc.createElement('div');
+    doc.body.appendChild(mountNode);
+
+    const root = ReactDOM.createRoot(mountNode);
+    root.render(
+      <FluentProvider theme={webLightTheme} targetDocument={doc}>
+        <div style={{ padding: 16, display: 'grid', gap: 12 }}>
+          <Text weight="semibold">Inside the iframe</Text>
+          <Input defaultValue="Fluent UI in another document" />
+          <Button appearance="primary">Action</Button>
+        </div>
+      </FluentProvider>,
+    );
+
+    return () => {
+      root.unmount();
+      mountNode.remove();
+    };
   }, []);
 
   return (
-    <>
-      <iframe ref={frameRef} onLoad={handleLoad} title="Theme preview" />
-
-      {frameDocument && (
-        // targetDocument makes the provider create portal mount nodes and styles
-        // inside the iframe document instead of the parent document.
-        <FluentProvider
-          theme={webLightTheme}
-          targetDocument={frameDocument}
-          applyStylesToPortals
-        >
-          <Portal mountNode={frameDocument.body}>
-            <Text block weight="semibold">
-              Rendered inside the iframe document
-            </Text>
-            <Button appearance="primary">Themed button</Button>
-          </Portal>
-        </FluentProvider>
-      )}
-    </>
+    <iframe
+      ref={iframeRef}
+      title="Fluent UI preview"
+      style={{ width: '100%', height: 240, border: '1px solid #d1d1d1' }}
+    />
   );
 };
 ```
 
-### Consuming theme tokens from plain CSS
+### Last-mile styling with customStyleHooks_unstable
 
-Reads the CSS custom properties the provider writes onto its wrapper element, so hand-written styles participate in the active theme and stay in sync when it changes.
+Mutates component state during style resolution for Button and Input via customStyleHooks_unstable, defined once outside render because the value must be stable.
 
-```css
-/* src/app.css */
-/* The provider writes these variables onto the element it renders, so any
-   descendant — including your own markup — can read the active theme. */
-.appShell {
-  background-color: var(--colorNeutralBackground1);
-  color: var(--colorNeutralForeground1);
-  font-family: var(--fontFamilyBase);
-  font-size: var(--fontSizeBase300);
-  line-height: var(--lineHeightBase300);
-  border: 1px solid var(--colorNeutralStroke1);
-  border-radius: var(--borderRadiusMedium);
-  padding: var(--spacingVerticalM) var(--spacingHorizontalL);
-}
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  FluentProvider,
+  Input,
+  webLightTheme,
+} from '@fluentui/react-components';
 
-.appShell__accent {
-  color: var(--colorNeutralForegroundOnBrand);
-  background-color: var(--colorBrandBackground);
-  box-shadow: var(--shadow4);
-}
+// The hooks receive the component state as `unknown`; cast to the slot shape
+// you want to touch. Slot styles are merged into the rendered element.
+type SlotState = { root: { style: React.CSSProperties } };
 
-/* Provide a fallback so the rule still reads well outside a provider. */
-.appShell__muted {
-  color: var(--colorNeutralForeground3, #616161);
-}
+// Define the object outside of render (or memoize it) so it is not recreated
+// on every render.
+// NOTE: this API is explicitly unstable - hook names track internal style
+// hooks and may change between minor releases.
+const customStyleHooks = {
+  useButtonStyles_unstable: (state: unknown) => {
+    const buttonState = state as SlotState;
+    buttonState.root.style.borderRadius = '0px';
+    buttonState.root.style.textTransform = 'uppercase';
+  },
+  useInputStyles_unstable: (state: unknown) => {
+    const inputState = state as SlotState;
+    inputState.root.style.borderColor = '#6b2fbf';
+  },
+};
+
+export const CustomStyleHooksExample = () => (
+  <FluentProvider theme={webLightTheme} customStyleHooks_unstable={customStyleHooks}>
+    <div style={{ padding: 16, display: 'grid', gap: 12, maxWidth: 360 }}>
+      <Input defaultValue="Restyled input" />
+      <Button appearance="primary">Restyled button</Button>
+    </div>
+  </FluentProvider>
+);
 ```
 
 ## Pitfalls
 
-- Rendering Fluent UI components outside a provider (or into a DOM container that no provider wraps) produces transparent backgrounds, missing borders and unreadable text. Wrap the whole root, and make sure every React root has its own provider.
-- Calling createLightTheme, createDarkTheme or spreading a theme inside a component body creates a new theme object every render, which makes the provider re-apply its variables for the whole tree and causes visible jank when toggling. Hoist or memoise the theme.
-- Assuming a nested provider resets everything: a partial theme only overrides the tokens you list and inherits the rest from the ancestor provider, including typography, spacing and non-brand colors.
-- Forgetting targetDocument when rendering into an iframe or popup window — portal mount nodes and styles then land in the wrong document and the portaled content is unstyled.
-- Setting dir on a single component instead of at the provider, which leaves portaled DOM and logical CSS in a different direction than the rest of the subtree.
-- Turning off applyStylesToPortals and then treating unstyled tooltips, menus or dialogs as a component bug; the provider is what carries the theme to those surfaces.
-- Depending on the exact shape of customStyleHooks_unstable or overrides_unstable across upgrades — they are explicitly unstable and may change in minor releases.
+- Rendering Fluent components with no FluentProvider in the tree. The markup renders, but every CSS custom property is undefined, producing transparent or collapsed visuals. Always wrap the app once at the root.
+- Recreating the theme on every render, for example theme={createLightTheme(brand)} inline or a fresh object literal in JSX. This churns the injected style element - hoist the theme to module scope or memoize it.
+- Setting applyStylesToPortals={false} without re-providing the theme inside the portal, which leaves dialogs, menus and tooltips without theme tokens.
+- Assuming a nested provider also restyles portals. Portal content is not inside the inner provider's DOM subtree; keep portal-heavy UI within the provider whose theme it should show, or wrap the portaled content in its own provider.
+- Pointing targetDocument at the wrong document (for example, leaving it as the outer document while the app is mounted in an iframe). Portals then mount in the wrong tree and modal focus traps move focus where the user is not looking.
+- Treating customStyleHooks_unstable as a public, stable extension point. Hook names mirror internal style hooks and the state shape is untyped (unknown) by design; a minor upgrade can break them.
+- Building a design system only from customStyleHooks_unstable or overrides_unstable instead of overriding design tokens through theme, which is the supported and forward-compatible customisation path.
+- Forgetting the html-level direction attribute: the provider handles component context, but native UI such as scrollbars and browser-provided affordances follow the document's dir attribute.
+- Assuming the provider handles language metadata. FluentProvider sets direction, not lang - screen readers still need lang on the html element (and on mixed-language content).
 
 ## Accessibility
 
-The provider itself is presentation and context, but it drives most of what users perceive. Contrast: theme tokens carry the color contrast of every component, so a custom brand ramp built with createLightTheme/createDarkTheme must be validated for text (4.5:1) and for UI boundaries and large text (3:1) in both the light and the dark theme — a brand color that reads well on white often fails as a dark surface. High contrast and forced colors: users who rely on OS high-contrast settings depend on themes that respect those settings (teamsHighContrastTheme, or the system forced-colors path), so read tokens in your own CSS rather than hard-coding colors. Direction: dir set to 'rtl' on the provider establishes the directionality of the whole subtree so assistive technology and the browser agree on reading order and control traversal; set it at the provider rather than per component, and make sure portaled content inherits the same direction. Portals: tooltips, menus and dialogs are moved elsewhere in the DOM, so the provider's portal styling is what keeps them legible — disabling applyStylesToPortals can yield low-contrast, unreadable overlays. Runtime theme changes should not move focus and any transition should respect prefers-reduced-motion; announce a theme change only when the user must act on it, otherwise keep the switch silent so screen reader output is not interrupted.
+FluentProvider is an accessibility-relevant component even though it renders no interactive UI of its own. It is the place where text direction is declared: the dir prop is written to the provider root and propagated through context, and direction affects reading order and layout mirroring for assistive technology, so keep it in sync with the actual content language. The provider does not set lang, so set <html lang> yourself (plus lang attributes on mixed-language content) or screen readers will guess the pronunciation. Because the provider owns the theme, it also effectively owns contrast: the built-in themes (webLightTheme, webDarkTheme, the Teams themes) are tuned to meet Fluent contrast targets, while custom brand ramps from createLightTheme/createDarkTheme and partial token overrides are not validated - verify at least 4.5:1 for text and 3:1 for UI boundaries. Components respond to operating-system high-contrast settings through design tokens, so avoid hard-coded colors that fight forced-colors mode and test with a high-contrast theme. When the app renders inside an iframe or popup window, passing the correct targetDocument matters for keyboard users: modal components trap focus inside the document the user is actually interacting with, and a wrong targetDocument can send focus into an invisible tree. Finally, the provider's root <div> adds no landmark or ARIA semantics, so page structure (headings, landmarks, skip links) must still come from your own markup.
 
-**Referenced components**: Provider, Portal, Switch, Text, Card, Button, Tooltip
+**Referenced components**: FluentProvider, Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input, Menu, MenuPopover, OverlayDrawer, Popover, PopoverSurface, Portal, Switch, Tab, TabList, Text, Tooltip
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

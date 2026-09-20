@@ -2,560 +2,853 @@
 
 > **Category**: foundation
 
-Fluent UI v9 ships accessibility as a default, not an add-on. Every interactive component implements the matching WAI-ARIA Authoring Practices pattern: correct roles and states, full keyboard interaction, focus management, and support for right-to-left layouts and high-contrast (forced-colors) modes. What is left to you is small but essential: give every control an accessible name, compose components without fighting their built-in behavior, announce what changes on screen, and verify the result with a keyboard and a screen reader.
+Fluent UI React v9 (`@fluentui/react-components`) ships components that already implement WAI-ARIA authoring patterns: roles, states, keyboard interaction, and focus management live inside the components. This guide explains what the library gives you for free, what you still own as an app author, and exactly which v9 props expose accessibility behavior.
 
-## What the library gives you out of the box
+**The golden rule: compose, don't patch.** If a Fluent component already renders a `<button>`, a `<table>`, or a `role="dialog"` surface, do not add your own `role`, `tabIndex`, or state ARIA on top of it. Duplicating or overriding those attributes is the most common way to break an otherwise accessible v9 app.
 
-- **Roles and ARIA state.** Controls render the roles, `aria-*` states and disabled / checked / selected semantics that assistive technology expects.
-- **Keyboard interaction per pattern.** `Accordion`, `Menu`, `Tabs`, `Tree`, `Table`, `Toolbar`, `Carousel`, `Slider`, `Rating`, `SpinButton`, `Breadcrumb` and friends implement arrow-key, Home/End, Escape, Enter and Space behavior for you.
-- **Focus management.** Overlays such as `Dialog`, `Popover`, `Menu`, `Drawer` and `TeachingPopover` move focus into the surface, keep it there while open, and return it to the trigger when closed. The `inertTrapFocus` prop uses the native `inert` attribute instead of manual tab interception. Under the hood this is powered by the `Tabster` utility.
-- **Visible focus.** Components render their focus indicator from design tokens in light, dark and forced-colors themes. Never remove it.
-- **Direction and theming.** `FluentProvider` (`dir`, `theme`, `targetDocument`, `applyStylesToPortals`) applies direction and theme tokens to the entire tree, including portaled content.
-- **Motion primitives.** `Motion` and `MotionComponentsPreview` let you shape animation around user preferences.
+---
 
-## What you own
+## 1. Start at the root: `FluentProvider`
 
-1. An accessible name for every control.
-2. Correct composition - do not add roles or ARIA that conflict with a Fluent component's own behavior.
-3. Announcements for asynchronous changes.
-4. Verification: keyboard-only, screen reader, 200% zoom, high contrast, reduced motion.
+`FluentProvider` is the accessibility root of a v9 application. It supplies:
 
-## Component to pattern quick map
+- **Direction** through `dir` (`"ltr" | "rtl"`).
+- **Theme tokens** (contrast-checked colors, focus indicators, typography) through `theme`.
+- **Portal styling context** through `applyStylesToPortals`: overlay components (Dialog, Popover, Menu, Tooltip, Drawer) render through `Portal` into `document.body`, and the provider keeps those portaled subtrees styled and mirrored correctly.
+- **`targetDocument`** for apps hosted in an iframe or a secondary browser window.
 
-| Component | Behavior you should rely on | Where the accessible name comes from |
+Render exactly one provider around your application shell. If you must render into an unusual mount node with `Portal`'s `mountNode` prop, wrap that subtree in a nested `FluentProvider` (or rely on `applyStylesToPortals`) so theme, direction, and tokens still apply.
+
+### Direction, mirroring, and localization
+
+Setting `dir="rtl"` on `FluentProvider` flips the layout of every Fluent component. To stay direction-safe:
+
+- Never hand-roll `left`/`right` offsets in custom CSS; use logical properties and Fluent spacing tokens.
+- Prefer direction-aware values such as `Text`'s `align="start" | "end"` over `left`/`right`.
+- Do not rebuild label strings by concatenation for announcements; supply full, translated sentences (word order differs by language).
+
+### Portals and reading order
+
+Portaled content lives at the end of the DOM, so visual order and DOM order diverge while an overlay is open. Keep the *closed* document's reading order logical, because that is what assistive technology (AT) traverses by default. When a modal surface opens, contain focus (`Dialog` with `inertTrapFocus`, or `Popover` with `trapFocus`/`inertTrapFocus`) so background content is no longer reachable.
+
+---
+
+## 2. Accessible names: every control needs one
+
+A control without an accessible name is announced as an unlabeled widget. In v9 you have three idiomatic options:
+
+1. **Visible text content** — best for users of all abilities. `Button`, `ToggleButton`, `Tab`, `MenuItem`, `TreeItemLayout`, and `NavItem` all derive their name from children.
+2. **`Field` and `Label`** — `Field` wraps a single form control and exposes `label`, `hint`, `required`, `validationState`, and `validationMessage`. The label text becomes the control's accessible name, and the hint/validation message become its description. `Label` (`required`, `disabled`, `size`, `weight`) is the standalone building block when a controlled layout owns the wrapping. `InfoLabel` places an informational popover next to a label and keeps the help text reachable by keyboard instead of hiding it in a `title` attribute.
+3. **`aria-label` / `aria-labelledby` passed through slot props** — reserved for icon-only controls. Every Fluent component forwards unknown props to its root slot, so `<Button icon={...} aria-label="Delete row" />` is valid and necessary.
+
+### Tooltip relationships are required
+
+`Tooltip`'s `relationship` prop is **required** and has three modes that map directly to ARIA semantics:
+
+| `relationship` | Behavior | When to use |
 | --- | --- | --- |
-| `Button` | native button, Space/Enter activation | visible text, `aria-label`, or a `Tooltip` with `relationship='label'` |
-| `Link` | native link, Enter activation | link text |
-| `Checkbox`, `Switch`, `Radio` | native inputs, Space toggles | the `label` prop, `Label`, or `Field` |
-| `Input`, `Textarea`, `Select`, `Search` | native form controls | `Field`, `Label` or `aria-label` |
-| `Slider`, `SpinButton`, `Rating` | range / value widgets, arrow keys | `Field`, `aria-label`, `Rating.itemLabel` |
-| `Accordion` | disclosure pattern | header text |
-| `Tabs` | tablist / tab / tabpanel with roving tabindex | tab text |
-| `Menu` | menu / menuitem, arrow keys, Escape | item text |
-| `Dialog`, `Drawer` | modal surface, focus trap, Escape | dialog title |
-| `Tooltip` | label or description | decided by the required `relationship` prop |
-| `MessageBar` | live region | message text |
+| `"label"` | The tooltip text becomes the trigger's accessible name. | Icon-only buttons, toolbar buttons, avatar-style triggers. |
+| `"description"` | The tooltip text becomes the trigger's accessible *description*. | Extra context on top of an existing name (shortcuts, caveats). |
+| `"inaccessible"` | Visually shown but not associated with the trigger. | Purely decorative or already-duplicated text. |
 
-## 1. Names, labels and descriptions
+Rules of thumb:
 
-### Prefer `Field` for form controls
+- A tooltip must never be the only place essential information appears — it is unavailable on touch and easy to miss.
+- Do not use a tooltip to compensate for a missing `Field` label on a form control; use `Field`/`Label`.
+- Keep tooltip content short; long prose belongs in `PopoverSurface` or `InfoLabel`.
 
-`Field` is the accessibility-aware wrapper for form controls. It generates ids and wires them together so the control is labelled by its label, described by its hint, and announced together with its validation message:
+---
 
-```tsx
-<Field
-  label='Email address'
-  required
-  hint='We only use this address for account notifications.'
-  validationState={hasError ? 'error' : 'none'}
-  validationMessage={hasError ? 'Enter an address in the format name@example.com.' : undefined}
->
-  <Input type='email' />
-</Field>
-```
+## 3. Forms: labeling, validation, and error recovery
 
-`Field` props: `label`, `hint`, `validationState` (`'error' | 'warning' | 'success' | 'none'`), `validationMessage`, `required`, `orientation` (`'vertical' | 'horizontal'`), `size`. Slots: `root`, `label`, `validationMessage`, `validationMessageIcon`, `hint`.
+`Field` is the single most valuable accessibility component for forms. Its `validationState` (`"error" | "warning" | "success" | "none"`) pairs with `validationMessage` and produces both a visible message and a programmatic description for AT.
 
-Rules that follow from that API:
+Key practices:
 
-- Always set `validationState` and `validationMessage` together - the icon alone is not a message and must not be the only signal.
-- Use `required` on `Field` so both the control and its message communicate the required state.
-- Keep hints short; they are read as part of the field description every time the control receives focus.
+- **Always label.** `label` on `Field` (or an explicit `aria-label`) for `Input`, `Textarea`, `Select`, `Dropdown`, `Combobox`, `SearchBox`, `SpinButton`, `Slider`, and `Rating`. Never rely on placeholder text as a label — it disappears on input and often fails contrast.
+- **Mark optional vs required consistently.** Use `Field`'s `required` (and `Label`'s `required`) rather than a decorative asterisk in the text.
+- **Group related controls.** `RadioGroup` renders a labeled group; for checkbox clusters, wrap them in a plain `<fieldset>`/`<legend>` and pass `RadioGroup`'s `required`/`disabled` where they apply.
+- **Describe mixed states.** `Checkbox` accepts `checked="mixed"`. Screen readers announce the mixed state, but users still need a visible explanation such as a `Text` or `MessageBar` describing which children are selected.
+- **Announce errors.** After a failed submit, either move focus to the first invalid field, or announce a summary with `MessageBar` (`intent="error"`, `politeness="assertive"`). Do not do both for the same message.
+- **Choose the right control.** Use `Checkbox` when the change is applied on submit, and `Switch` when the change takes effect immediately. `Switch` also supports `disabledFocusable` for controls that must remain reachable while inert.
+- **Give numeric controls context.** `SpinButton` (`min`, `max`, `step`, `stepPage`, `precision`), `Slider` (`min`, `max`, `step`), `ColorSlider`, and `ColorArea` expose value semantics; the visible label and unit must come from you.
+- **`Rating`**: pass `name` so the value participates in form submission, `max`/`step` for the scale, and `itemLabel` to name each option (for example `"3 out of 5"`). Half-star values from `step={0.5}` deserve explicit text.
+- **`TagPicker` / `TagGroup` / `InteractionTag`**: dismissible chips need names. `TagGroup`'s `onDismiss` handler fires from a dismiss button — make sure the tag text itself describes the item ("Contoso"), not just an icon.
 
-### `Label` for simple cases
+---
 
-`Label` (`required`, `disabled`, `size`, `weight`) renders a real `<label>` element. Its `required` value renders the visual asterisk indicator only - make sure the control itself also exposes the required state, for example through `Field required` or the native `required` attribute on `Input`. Set `disabled` on the label when its control is disabled so the pair stays visually consistent.
+## 4. Keyboard interaction cheat sheet
 
-### Placeholder text is never a label
+The table below lists the behavior the components provide and what you must add on top of it.
 
-A placeholder disappears as soon as the user types, is not reliably announced, and cannot describe formatting requirements. Keep using `Field`/`Label` for the name and `hint` for the requirement.
+| Components | Keyboard behavior you get | What you still own |
+| --- | --- | --- |
+| `Button`, `ToggleButton`, `CompoundButton`, `SplitButton`, `MenuButton` | Enter/Space activation, visible focus, `disabled` removes the control from the tab order | Accessible names; icon-only buttons need a name (`Tooltip relationship="label"` is the Fluent idiom). Use `disabledFocusable` when a control must stay discoverable in the tab order. |
+| `Link` | Enter activates; `inline` for links inside sentences | Descriptive link text; never "click here". `disabledFocusable` keeps an inert link in the tab order. |
+| `Menu`, `MenuTrigger`, `MenuPopover`, `MenuList`, `MenuItem`, `MenuItemCheckbox`, `MenuItemRadio`, `MenuItemLink`, `MenuDivider`, `MenuGroup` | Arrow keys, Home/End, typeahead, Escape closes and restores focus to the trigger | Menus are for actions only — put form fields in `Popover`/`Dialog`. Provide `name`/`value` for checkbox and radio items. |
+| `Dialog`, `DialogSurface`, `DialogTitle`, `DialogBody`, `DialogContent`, `DialogActions`, `DialogTrigger` | Focus moves into the surface, Tab is contained (or background is made inert with `inertTrapFocus`), Escape closes, focus returns to the trigger | An accessible name via `DialogTitle`, plus a description region when the action is destructive. |
+| `Drawer`, `InlineDrawer`, `OverlayDrawer`, `DrawerHeaderTitle` | `OverlayDrawer` behaves as a modal surface; `InlineDrawer` participates in layout | A heading (`DrawerHeaderTitle`) and a keyboard-reachable close control. |
+| `Popover`, `PopoverTrigger`, `PopoverSurface`, `TeachingPopover` | Non-modal by default; `trapFocus` / `inertTrapFocus` / `legacyTrapFocus` for modal-like content | A real, focusable trigger; avoid putting essential content only inside a hover popover. |
+| `Tooltip` | Opens on hover **and** focus | `relationship` (required) chosen deliberately. |
+| `TabList`, `Tab` | Arrow-key navigation, `vertical` for vertical strips, `selectTabOnFocus` to select on focus | Distinct panel content per tab; visible selection indicator. |
+| `Accordion`, `AccordionItem`, `AccordionHeader`, `AccordionPanel` | `AccordionHeader` renders a real button with expanded state; `navigation="linear" | "circular"` adds arrow-key movement between headers | A unique `value` per `AccordionItem`; panel content that is not itself a heading. |
+| `Tree`, `TreeItem`, `TreeItemLayout`, `FlatTree`, `FlatTreeItem` | Up/Down to move, Right/Left to expand/collapse, Home/End; `navigationMode="tree"` vs `"treegrid"` | `FlatTreeItem` requires you to compute `aria-level`, `aria-setsize`, and `aria-posinset`. Label every `selector` checkbox. |
+| `Table`, `TableHeader`, `TableHeaderCell`, `TableRow`, `TableBody`, `TableCell`, `TableCellLayout`, `TableCellActions`, `TableSelectionCell` | `sortable` + `sortDirection` render a sort button and expose sort state | Persist sort state in React and announce changes; keep hover-only actions visible on focus. |
+| `DataGrid`, `DataGridHeaderCell`, `DataGridCell` | Grid semantics, per-cell `focusMode`, `onSortChange`, `onSelectionChange`, `onColumnResize` (also fires for keyboard resizing) | Labels for selection cells; announcements when row counts change. |
+| `Slider`, `SpinButton`, `ColorSlider`, `ColorArea` | Arrow keys, Home/End, `stepPage` on `SpinButton`, `vertical` variants use Up/Down | Visible labels and formatted values. |
+| `Rating`, `RatingItem` | Radio-group-style keyboard model | `name`, `max`, `step`, and `itemLabel`. |
+| `Carousel`, `CarouselCard`, `CarouselViewport`, `CarouselSlider`, `CarouselNav`, `CarouselNavButton`, `CarouselNavContainer`, `CarouselButton`, `CarouselAutoplayButton` | All controls are real buttons; `CarouselNav` renders a navigable index | `announcement` to describe slide changes, a visible autoplay toggle when `autoplayInterval` is set, and a non-drag way to navigate when `draggable` is enabled. |
+| `SwatchPicker`, `ColorSwatch`, `ImageSwatch` | `focusMode="arrow"` (roving focus) or `"tab"` | An accessible name per swatch ("Brand blue"), never a hex value alone. |
+| `Breadcrumb`, `BreadcrumbItem`, `BreadcrumbButton`, `BreadcrumbDivider` | `focusMode="arrow" | "tab"` moves between crumbs | Mark the last crumb with `current` and label the surrounding `<nav>`. |
+| `Card`, `CardHeader`, `CardFooter`, `CardPreview` | `focusMode` (`"off"`, `"no-tab"`, `"tab-exit"`, `"tab-only"`) decides whether the card is a tab stop; `selected`/`onSelectionChange` drive selection | If the card is selectable, keep `selected` controlled and use `shouldRestrictTriggerAction` to stop card selection when the user activates an inner control. |
+| `Toolbar`, `ToolbarButton`, `ToolbarToggleButton`, `ToolbarRadioButton`, `ToolbarRadioGroup`, `ToolbarGroup`, `ToolbarDivider` | Roving tab index, arrow keys, `vertical` orientation | Names on every toolbar button; `vertical` must match the visual layout. |
+| `List`, `ListItem` | `navigationMode`, `selectionMode`, `selectedItems` | Row content that is understandable out of context. |
 
-### `Tooltip` and the required `relationship` prop
+> **Note:** many components expose a `focusMode` prop (`Card`, `Breadcrumb`, `SwatchPicker`, `DataGridCell`, `DataGridHeaderCell`). It controls whether the component itself participates in the tab order or whether focus moves to its interactive children — it never replaces the need for a name or a visible focus indicator.
 
-`Tooltip` exposes a **required** `relationship` prop that decides how the tooltip content is exposed to assistive technology:
+---
 
-- `relationship='label'` - the tooltip content becomes the control's accessible **name**. Use this for icon-only buttons that have no visible text.
-- `relationship='description'` - the content supplements an existing name and is exposed as a description (for example, explaining why an action is unavailable).
-- `relationship='inaccessible'` - the content duplicates visible text and should not be re-announced.
+## 5. Focus management
 
-`Tooltip` also accepts `showDelay`, `hideDelay`, `appearance`, `withArrow`, `positioning`, `visible` and `onVisibleChange`. A tooltip is a convenience; essential instructions belong in visible (or hint) text.
+### `disabled` vs `disabledFocusable`
 
-### Icon slots are decorative
+`Button`, `Link`, `ToggleButton`, `SplitButton`, and `MenuItem` all accept both. `disabled` removes the element from the tab order; `disabledFocusable` keeps it focusable but inert. Prefer `disabledFocusable` when the user needs to *discover* that an action exists (toolbars, dialog actions, inline commands) and `disabled` when presence in the tab order would be noise.
 
-`Button.icon`, `Badge.icon` and `Avatar.icon` are presentational slots. Never place the only meaning of a control inside an icon - the accessible name must come from text, `aria-label`, or a `Tooltip` label relationship.
+### Do not add tab stops by hand
 
-### Identity and media
+If a card, list row, or tree row should be focusable, use the component's own model (`Card focusMode`, `List navigationMode`, `Tree navigationMode`/`selectionMode`) rather than adding `tabIndex={0}` to a `<div>`. Hand-rolled tab stops lack the key handling that makes them operable.
 
-- `Avatar.name` generates the initials **and** the accessible name; `active`, `activeAppearance` and `color` are visual, so surface presence or status in text as well.
-- `Persona` uses `name` plus its primary / secondary / tertiary text slots.
-- `Image` (`fit`, `shape`, `shadow`, `bordered`, `block`) is a visual element: informative images need a text alternative (set the standard `alt` attribute so it lands on the underlying image element), and purely decorative images should be hidden from assistive technology.
-- `InfoLabel` pairs visible text with an info button and popover; the button's accessible name is supplied through the `info` prop.
+### Overlay focus lifecycle
 
-## 2. Keyboard interaction and focus management
+1. **Opening** — focus must move into the surface, or the surface must be made inert-aware.
+   - `Dialog` with `inertTrapFocus` marks background content inert for both pointer and AT users in supporting browsers.
+   - `Popover` offers `trapFocus`, `inertTrapFocus`/`legacyTrapFocus` (older-browser path), and `unstable_disableAutoFocus` when you want to manage focus yourself.
+2. **While open** — Tab cycles within the surface; Escape closes the topmost surface; background scrolling and clicks are blocked for modal surfaces.
+3. **Closing** — focus must return to the element that opened the surface. Keep the trigger mounted: `Dialog`'s `unmountOnClose` should stay off unless you deliberately restore focus yourself.
 
-### Let composite widgets own the tab stop
+`MenuTrigger` and `MenuPopover` expose an imperative `focusFirst` handle if you need to move focus into a menu programmatically (for example after a context-menu open).
 
-Composite widgets in Fluent UI v9 use a roving tabindex: the whole widget is a single Tab stop and arrow keys move focus inside. Do not add your own `tabIndex` to items. The props that control this behavior are:
+`TeachingPopover` adds a step-based pattern: `initialStepText` and `finalStepText` describe the first and last navigation buttons, and the surface must remain dismissible so users are never trapped in the tour.
 
-- `Tabs` - `selectTabOnFocus` (selection follows focus), `vertical`, `disabled`, `defaultSelectedValue` / `selectedValue`, `size`.
-- `Breadcrumb` - `focusMode='arrow' | 'tab'`.
-- `Card` - `focusMode='off' | 'no-tab' | 'tab-exit' | 'tab-only'`, plus `disabled`, `selected` / `defaultSelected`, `onSelectionChange`, `shouldRestrictTriggerAction`.
-- `SwatchPicker` - `focusMode='arrow' | 'tab'`, `layout='row' | 'grid'`.
-- `Toolbar` - `vertical`, `size`, `checkedValues` / `defaultCheckedValues`; arrow keys move between items.
-- `Accordion` - `navigation='linear' | 'circular'`, `collapsible`, `multiple`, `openItems` / `defaultOpenItems`.
-- `Tree` - `navigationMode`, `selectionMode`, `checkedItems`, `openItems` / `defaultOpenItems`.
-- `List` - `navigationMode`, `selectionMode`, `selectedItems` / `defaultSelectedItems`, `onSelectionChange`.
-- `Table` - `focusMode` (how data-grid cells receive focus), `selectionMode`, `sortable` / `sortDirection` / `onSortChange`.
+---
 
-### Overlay focus management
+## 6. Live regions, status, and asynchronous feedback
 
-- `Dialog` - `inertTrapFocus` (recommended modern trap), `modalType`, `unmountOnClose`, controlled `open` with `onOpenChange`. Keeping `open` controlled makes focus return deterministic.
-- `Popover` - `trapFocus`, `legacyTrapFocus`, `inertTrapFocus`, `unstable_disableAutoFocus`, `openOnHover`, `mouseLeaveDelay`, `closeOnScroll`, `closeOnIframeFocus`, `inline`, `withArrow`, `size`, `appearance`, `positioning`.
-- `Menu` - `openOnContext`, `openOnHover`, `hoverDelay`, `closeOnScroll`, `persistOnItemClick`, `inline`, `positioning`. A context menu must never be the only way to reach an action; add a visible trigger (for example a `Button`) that opens the same menu.
-- `Drawer` - `type='inline' | 'overlay'`. `inline` keeps the panel in the normal flow; `overlay` floats above the page and needs the same modal focus treatment as a dialog.
+Some changes never move focus, so they must be announced in a live region:
 
-In all cases Escape closes the surface and focus returns to the element that opened it - verify this by keyboard only, without a mouse.
+- **`MessageBar`** — `politeness="polite"` (default queue) or `"assertive"` (interrupts). Combine with `intent` so the severity is both visual and semantic. `MessageBarTitle`, `MessageBarBody`, and `MessageBarActions` structure the message; `MessageBarGroup` with `animate` stacks multiple messages and should respect reduced-motion settings.
+- **`Toast` / `Toaster`** — non-blocking, transient feedback composed from `ToastTitle`, `ToastBody`, and `ToastFooter`. `Toaster` accepts an `announce` prop so you can tailor what is read out, which matters because toast text and announcement text often differ. Never let a toast be the only record of an important result.
+- **`AriaLiveAnnouncer`** — the utility Fluent exposes for programmatic announcements that have no corresponding visible UI (sort changes, background-save confirmations, drag-and-drop results).
+- **`ProgressBar`** — use `value`/`max` for determinate progress; pair it with text for indeterminate work so users know what is happening.
+- **`Spinner`** — set `label` with `labelPosition` (`"above" | "below" | "before" | "after"`) so the wait state has visible, associated text. Use it for short waits and `ProgressBar` for measurable ones.
 
-### Tab order and DOM order
+**One event, one announcement.** If you move focus to a message, do not also announce it — screen reader users will hear it twice.
 
-`Portal` (`children`, `mountNode`) moves DOM nodes, not React tree position. Content appended to the end of `<body>` is read last, which is correct for a modal dialog, but keep `mountNode` predictable and never rely on positive `tabIndex` values to fix order.
+---
 
-### `disabled` versus `disabledFocusable`
+## 7. Data-heavy surfaces: tables, grids, trees, navigation
 
-- `disabled` removes the control from the tab order and from the accessibility tree, so users may never learn the action exists.
-- `disabledFocusable` keeps the control focusable and announced, but not activatable.
+- **Sorting.** `TableHeaderCell` accepts `sortable` and `sortDirection`. Keep sort state in React and announce changes with a polite live region, because sorting does not move focus. For `DataGrid`, handle `onSortChange` and reflect the new `SortState`.
+- **Selection.** `DataGrid`'s `selectionMode` and `TableSelectionCell` (`type="checkbox" | "radio"`, `checked`, `subtle`, `hidden`, `invisible`) render selection affordances. Give selection cells a name-per-row ("Select row 3 — Ana Ruiz") and explain `checked="mixed"` in surrounding content.
+- **Resizable columns.** `DataGrid`'s `onColumnResize` receives mouse, touch, **and keyboard** events (`KeyboardEvent | TouchEvent | MouseEvent | undefined`), so column resizing is operable from the keyboard; make sure the resize handle is reachable and that the resulting width change is announced or visually obvious.
+- **Row actions.** `TableCellActions` supports `visible`; hover-only row actions are invisible to keyboard users unless they also appear when focus enters the row.
+- **Trees.** `Tree`/`TreeItem` with `navigationMode="tree"` is the simplest model. Switch to `"treegrid"` when rows carry selectors — `TreeItemLayout`'s `selector` slot accepts a `Checkbox` or `Radio` and each one needs its own name. `FlatTree` is the virtualized variant and requires you to compute `aria-level`, `aria-setsize`, and `aria-posinset` on every `FlatTreeItem`; if you cannot compute them correctly, use `Tree` instead.
+- **Navigation.** `Nav`, `NavItem`, `NavCategory`, `NavCategoryItem`, `NavSubItem`, `NavSectionHeader` implement the disclosure-navigation pattern; render them inside a labeled landmark. `NavDrawer`, `NavDrawerHeader`, `NavDrawerBody`, `NavDrawerFooter`, and `Hamburger` add responsive behavior — keep `tabbable` accurate on `NavDrawer` so hidden navigation is not reachable. `OverflowItem`/`OverflowDivider` move items into an overflow menu; verify the overflowed items remain reachable.
+- **Card surfaces.** A selectable `Card` should have a name from its own heading (via `aria-labelledby` pointing at the header text) and should not swallow clicks on inner `Button`/`Link` elements — use `shouldRestrictTriggerAction` for that.
 
-Both props exist on `Button`, `Link` and `Switch`. Prefer `disabledFocusable` when the user needs to understand *why* an action is unavailable, and pair it with an explanation (a `Tooltip` with `relationship='description'`, or a `MessageBar`).
+---
 
-## 3. Announcing changes with live regions
+## 8. Color, images, and non-text content
 
-### `MessageBar`
+- **Never color alone.** `Badge`, `CounterBadge`, `PresenceBadge`, `Tag`, `InteractionTag`, and `Avatar` use `color`/`appearance` to express state. Add a text label or accessible name alongside; a red badge alone conveys nothing to a screen reader.
+- **Presence.** `PresenceBadge`'s `status` (and `outOfOffice`) is visual; repeat it in text (for example `Persona`'s secondary text) when it carries meaning.
+- **Avatars.** `Avatar` derives initials and labels from `name`; supply `name` instead of shipping an unlabeled image. Use `Persona` when you need name plus secondary text.
+- **Images.** Give `Image` meaningful `alt` text, or `alt=""` when it is decorative.
+- **Skeletons.** `Skeleton`/`SkeletonItem` are decorative. Announce loading with text, or mark the container with `aria-busy` while content loads.
+- **Dividers.** `Divider` (`vertical`, `inset`, `appearance`) is decorative; it does not create a group or a section for AT. Use real landmarks and headings.
+- **Truncation.** `Text`'s `truncate` and `TableCellLayout`'s `truncate` hide content visually. Keep the meaningful part visible or expose the full text another way.
 
-`MessageBar` is the built-in live region: `intent` selects the semantic tone, `politeness` is `'polite' | 'assertive'`, and `shape` is `'square' | 'rounded'`.
+---
 
-- `politeness='polite'` for success and informational messages - announce when the user pauses.
-- `politeness='assertive'` for errors that must interrupt, paired with an error `intent`.
-- Never rely on color alone: the same `MessageBar` carries an icon and text.
+## 9. Motion, timing, and zoom
 
-### Live-region timing
+- Respect the user's reduced-motion preference globally (see the CSS example below) and per component: `Carousel`'s `motion`, `MessageBarGroup`'s `animate`, and the `collapseMotion`/`surfaceMotion`/`backdropMotion` slots on `AccordionPanel`, `Dialog`, `Drawer`, and `NavSubItemGroup`.
+- If you set `Carousel`'s `autoplayInterval`, always render `CarouselAutoplayButton` so users can pause it, and keep `CarouselNav`/`CarouselButton` usable for manual navigation.
+- Avoid timeouts that remove information a user has not finished reading. If a control must time out, warn before it happens and allow extension.
+- Reflow matters: text must remain readable at 400% zoom and with text-spacing overrides. Avoid fixed heights on text containers and layouts that require horizontal scrolling for vertical content.
 
-Assistive technology announces a live region most reliably when the region already exists in the DOM and only its content changes. Where possible, keep an announcement container rendered in your shell and change its content rather than mounting a brand-new region at the same moment as its message.
+---
 
-### The `Aria` utility
+## 10. Testing accessibility
 
-`Aria` is an escape hatch for ARIA-only rendering: it accepts `children` and lets you express ARIA-related content (such as visually hidden announcement text) without adding visible layout.
+**Automated (fast, shallow):**
 
-### `Carousel` announcements
+- Query by role and name in tests (`getByRole('button', { name: /save/i })`). If a query fails, your control likely has no accessible name — the test catches a real bug.
+- Run an automated audit (axe-core via jest-axe or a browser extension) on every page and in every overlay state. Expect it to catch roughly a third of issues.
 
-`Carousel` exposes an `announcement` prop (`CarouselAnnouncerFunction`) so you can control what a screen reader hears when the active slide changes. Related props: `defaultActiveIndex` / `activeIndex` / `onActiveIndexChange`, `autoplayInterval`, `draggable`, `circular`, `groupSize`, `motion`, `whitespace`, `align`, `appearance`. Auto-advancing content must be pausable (WCAG 2.2.2) - when you set `autoplayInterval`, provide a visible pause `Button` as well, and remember that drag interactions always need a keyboard equivalent.
+**Manual (slow, essential):**
 
-### Loading and status
+1. **Keyboard-only pass** — unplug the mouse. Tab through the flow: is focus always visible? Does every interactive element get focus? Can you escape every overlay with Escape? Where does focus land after closing?
+2. **Screen reader pass** — at minimum one desktop pair (NVDA + Firefox/Chrome, or JAWS + Chrome) and one mobile pair (VoiceOver + Safari). Check landmarks, headings, form labels, error announcements, and dynamic updates.
+3. **Zoom and reflow** — 200% and 400% browser zoom plus increased text size; verify nothing overlaps, clips, or disappears.
+4. **Forced colors** — verify focus indicators and icons in Windows high-contrast mode; Fluent tokens map to system colors, but custom CSS may not.
+5. **RTL smoke test** — flip `dir` on `FluentProvider` and confirm layout mirroring and icon direction.
+6. **Touch** — confirm that anything tooltip-only has another path to discovery.
 
-- `Spinner` (`label`, `labelPosition`, `delay`, `size`, `appearance`) - `delay` avoids a flash for quick operations.
-- `ProgressBar` (`value`, `max`, `shape`, `thickness`, `color`).
-- `Skeleton` (`animation`, `appearance`, `shape`, `size`, `width`).
+---
 
-Announce the completion of long operations through a `MessageBar` or another live region rather than only removing the spinner.
+## 11. Accessibility-relevant props quick reference
 
-## 4. Motion, animation and reduced motion
+| Component | Prop | Purpose |
+| --- | --- | --- |
+| `FluentProvider` | `dir`, `theme`, `applyStylesToPortals`, `targetDocument` | Direction, tokens, portal styling |
+| `Button`, `Link`, `MenuItem`, `ToggleButton` | `disabled`, `disabledFocusable` | Remove from tab order vs. stay focusable but inert |
+| `Tooltip` | `relationship` (required), `showDelay`, `hideDelay`, `onVisibleChange` | Label vs. description vs. decorative tooltip |
+| `Field` | `label`, `hint`, `required`, `validationState`, `validationMessage`, `orientation`, `size` | Accessible name, description, and error state |
+| `Label` | `required`, `disabled`, `weight`, `size` | Standalone labeling |
+| `InfoLabel` | `info` | Label plus keyboard-reachable help |
+| `Dialog` | `modalType`, `inertTrapFocus`, `unmountOnClose`, `onOpenChange` | Modal semantics and focus containment |
+| `DialogTrigger` | `action`, `disableButtonEnhancement` | Control over the trigger's DOM element and event |
+| `Popover` | `trapFocus`, `inertTrapFocus`, `legacyTrapFocus`, `unstable_disableAutoFocus`, `openOnHover`, `openOnContext` | Focus handling for non-modal and modal popups |
+| `Card` | `focusMode`, `selected`, `defaultSelected`, `onSelectionChange`, `shouldRestrictTriggerAction` | Tab-stop model and selection semantics |
+| `Breadcrumb`, `SwatchPicker` | `focusMode` | Arrow-key roving focus vs. plain tabbing |
+| `TabList` | `vertical`, `selectTabOnFocus`, `size` | Tab keyboard model |
+| `Accordion` | `navigation` (`"linear"` / `"circular"`) | Arrow-key navigation between headers |
+| `Tree`, `FlatTree` | `navigationMode`, `selectionMode`, `openItems`, `checkedItems` | Tree vs. treegrid semantics and selection |
+| `TableHeaderCell` | `sortable`, `sortDirection`, `button`, `sortIcon` | Sortable header with a real button |
+| `DataGrid` | `selectionMode`, `onSelectionChange`, `onSortChange`, `onColumnResize`, `columnSizingOptions`, `resizableColumnsOptions` | Grid selection, sorting, and keyboard resizing |
+| `MessageBar` | `intent`, `politeness`, `shape` | Live-region severity and urgency |
+| `MessageBarGroup` | `animate` | Stacked message animation (respect reduced motion) |
+| `Toaster` | `announce`, `inline` | Toast announcement text |
+| `Carousel` | `announcement`, `autoplayInterval`, `draggable`, `circular`, `activeIndex`, `onActiveIndexChange` | Slide announcements and autoplay control |
+| `Rating` | `name`, `value`, `max`, `step`, `itemLabel` | Form value and per-option names |
+| `Spinner` | `label`, `labelPosition`, `size` | Named wait state |
+| `ProgressBar` | `value`, `max`, `color` | Determinate progress |
+| `Checkbox` | `checked` (`boolean | "mixed"`), `labelPosition`, `size`, `shape` | Tri-state semantics |
+| `RadioGroup` | `required`, `disabled`, `layout`, `value`, `onChange` | Group semantics |
+| `Switch` | `checked`, `labelPosition`, `disabledFocusable` | Immediate-effect toggle |
+| `NavDrawer` | `tabbable` | Keep hidden navigation unreachable |
+| `Toolbar`, `ToolbarGroup` | `vertical`, `size`, `checkedValues`, `onCheckedValueChange` | Orientation and group state |
 
-- `Motion` - `children`, `appear`, `visible`, `unmountOnExit`, `replayKey`, `direction`, `onMotionStart`, `onMotionFinish`, `onMotionCancel`, `imperativeRef`.
-- `MotionComponentsPreview` - `visible`, `itemDelay`, `itemDuration`, `delayMode`, `hideMode`, `reversed`, `onMotionFinish` for staggered content.
-- Provide a reduced-motion path in your own code by checking `window.matchMedia('(prefers-reduced-motion: reduce)')` and rendering the final state immediately (skip the animated wrapper or start from `visible`).
-- Keep essential interactions free of timing pressure, and never flash content more than three times per second (WCAG 2.3.1).
-- `Skeleton.animation` can be left unset when motion should be minimized.
+---
 
-## 5. Direction, theming and localization
+## 12. Pre-ship checklist
 
-Wrap the application in `FluentProvider` and set `dir` to `'ltr' | 'rtl'`. `applyStylesToPortals` ensures that surfaces rendered through `Portal` receive the same styles and attributes, and `targetDocument` supports rendering into another document (iframes, popouts). `theme` accepts a `PartialTheme` so brand ramps can be adjusted - always re-verify contrast after changing them. Layout mirroring comes from logical CSS direction; icons that imply direction (arrows, back/forward) may need to be mirrored explicitly.
-
-## 6. Color, contrast and high contrast
-
-- Text contrast 4.5:1 (3:1 for large text) and 3:1 for UI components and graphical objects (WCAG 1.4.3 and 1.4.11).
-- `Badge` (`appearance`, `color`) and `MessageBar` (`intent`) carry semantic color - always add text so meaning survives without color.
-- `Field.validationState` renders an icon and a message, never color alone.
-- `Avatar.active` / `Avatar.color` are decorative signals; expose presence in text.
-- Test Windows High Contrast / forced-colors mode: Fluent tokens map to system colors, but custom styles and images may not.
-
-## 7. Form controls in detail
-
-- Text entry: `Input` (`type`, `size`, `appearance`), `Textarea` (`resize`, `size`, `appearance`), `Search`.
-- Choice: `Checkbox` (`checked='mixed'` for partial selection, `labelPosition`), `Radio` (`labelPosition='after' | 'below'`), `Switch` (`labelPosition`, `disabledFocusable`).
-- Value widgets: `Slider` (`min`, `max`, `step`, `vertical`, `disabled`), `SpinButton` (`min`, `max`, `step`, `stepPage`, `precision`, `displayValue`), `Rating` (`max`, `step`, `itemLabel`, `name`).
-- Pickers: `Select`, `Combobox` (`freeform`), `TagPicker`, `ColorPicker`, `SwatchPicker`.
-- Dates and times: `DatepickerCompat` (`allowTextInput`, `openOnClick`, `inlinePopup`, `positioning`, `onValidationResult`, `formatDate`, `parseDateFromString`, `minDate`, `maxDate`, `disableAutoFocus`, `showWeekNumbers`, `firstDayOfWeek`) and `TimepickerCompat` (`startHour`, `endHour`, `increment`, `formatDateToTimeString`, `parseTimeStringToDate`). Keep `allowTextInput` enabled so keyboard-only users can type instead of navigating a grid, and surface format errors through `onValidationResult` plus a `MessageBar` or `Field` message.
-- Groups: a set of related checkboxes or radios is announced as a group only when it has a name - wrap it in `Field` and give the container an accessible name.
-- `Rating` accepts `step={0.5}` but fractional values are hard for screen reader users; prefer whole steps and use `itemLabel` to give each value a meaningful name.
-
-## 8. Structured content
-
-- `Table`: `focusMode`, `selectionMode`, `sortable`, `sortDirection`, `onSortChange`, `columnSizingOptions`, `onSelectionChange`. Sorting must be programmatically exposed, not only visually.
-- `Tree`: `navigationMode`, `selectionMode`, `checkedItems`, `openItems`.
-- `List`: `navigationMode`, `selectionMode`, `selectedItems`, `onSelectionChange`.
-- `Tags`: `hasSecondaryAction` renders a dismiss action - it must be reachable by keyboard and correctly named.
-- `Accordion`: `navigation`, `collapsible`, `multiple`, `openItems`.
-- `Divider`: purely presentational - never the only separator between semantically distinct regions.
-
-## 9. Overlays and teaching surfaces
-
-Beyond the focus rules above, `TeachingPopover` supplies onboarding primitives: `dismissButton`, `footerLayout`, `altText` (required for media), `initialStepText`, `finalStepText` and `mediaLength`. Always provide a dismiss path, make sure the media's `altText` is meaningful, and never trap a user in a tour without a way out.
-
-## 10. Verification checklist
-
-1. **Keyboard only.** Complete every task with Tab, Shift+Tab, arrows, Enter, Space and Escape. Focus must never be lost and must return to the trigger after overlays close.
-2. **Screen reader.** Narrator, VoiceOver or NVDA. Check names, roles, states, group context and dynamic announcements.
-3. **Zoom and reflow.** 200% zoom, 320px width, and increased text spacing without loss of content or function.
-4. **High contrast / forced colors.**
-5. **Reduced motion.** Toggle the OS setting and confirm essential content is still reachable.
-6. **Contrast of custom themes.** Recheck any `FluentProvider theme` overrides.
-7. **Automated checks** (axe, Accessibility Insights) as a floor, never the whole story.
+- [ ] Every interactive element has an accessible name (text, `Field`/`Label`, or `aria-label`).
+- [ ] Icon-only buttons use `Tooltip relationship="label"`.
+- [ ] App is wrapped in a single `FluentProvider`; `dir` is correct for the locale.
+- [ ] All pointer paths have keyboard equivalents (menus, carousels, table sorting, column resize, drag-only interactions).
+- [ ] Overlays move focus in, contain it, close on Escape, and return focus to the trigger.
+- [ ] `disabledFocusable` is used where an inert control must remain discoverable.
+- [ ] Errors and async results are announced (`Field` validation, `MessageBar politeness`, `Toaster announce`, `AriaLiveAnnouncer`).
+- [ ] No state is conveyed by color alone; custom colors pass contrast checks.
+- [ ] Reduced-motion and forced-colors modes verified.
+- [ ] Keyboard-only and screen reader passes completed on the primary flow.
 
 ## Key Takeaways
 
-- Fluent UI v9 components already implement the WAI-ARIA pattern, keyboard model and focus management for their widget type - your main job is naming controls, composing correctly, and announcing changes.
-- Always label inputs through Field (label, hint, validationState, validationMessage) or Label; placeholder text is never an accessible name.
-- An icon-only Button relies on an accessible name you supply: use Tooltip with relationship='label', or pass aria-label directly. The icon slot is decorative.
-- Let composite widgets own their keyboard behavior and roving tabindex (Tabs selectTabOnFocus, Breadcrumb/SwatchPicker/Card focusMode, Accordion navigation, Tree/List navigationMode). Do not inject roles or tabIndex into them.
-- Prefer disabledFocusable over disabled when users need to discover and understand an unavailable action; it stays focusable and announced.
-- Announce dynamic content: MessageBar politician='polite' for success and 'assertive' for errors, Carousel announcement for slide changes, and a live region for completed long-running operations.
-- Respect user settings: Provider dir for RTL, a reduced-motion path for Motion and Carousel, and re-verify contrast whenever Provider theme overrides are applied.
+- v9 components already implement WAI-ARIA patterns, keyboard interaction, and focus behavior. Compose them and give them names instead of adding your own roles or tab stops — duplicated ARIA is the most common way to break an accessible v9 app.
+- Every interactive control needs an accessible name. Use visible text, Field/Label for form controls, and Tooltip with relationship="label" for icon-only buttons. Tooltip's relationship prop is required and must be chosen deliberately (label vs. description vs. inaccessible).
+- Focus is the primary navigation mechanism for keyboard and screen reader users: use disabledFocusable where an inert control must stay discoverable, focusMode (Card, Breadcrumb, SwatchPicker, DataGrid cells) instead of hand-rolled tab stops, and inertTrapFocus/trapFocus for modal surfaces with focus returning to the trigger on close.
+- Changes that do not move focus must be announced: Field validationState/validationMessage, MessageBar politeness, Toaster announce, AriaLiveAnnouncer, and ProgressBar/Spinner labels. Announce one event once — never move focus and announce the same message.
+- Every pointer path needs a keyboard path: table sorting and column resizing, carousel navigation and autoplay pause, tree expansion, menu actions, and drag interactions.
+- Wrap the app in a single FluentProvider to set dir, theme tokens, and portal styling (applyStylesToPortals), and keep your own landmarks and headings coherent around the components.
+- Never convey state with color alone (Badge, CounterBadge, PresenceBadge, Tag, Avatar), and pair visual-only affordances with text or accessible names.
+- Automated tools catch only part of the problem — finish with a keyboard-only pass, a screen reader pass, zoom/reflow, forced-colors, and an RTL smoke test.
 
 ## Examples
 
-### Labeled form field with validation
+### Application shell: FluentProvider, direction, and a skip link
 
-Field wires the label, hint and validation message to the control through generated ids, so the input is named and described without manual aria attributes. validationState plus validationMessage keeps the error out of color-only territory.
+A minimal accessible shell. FluentProvider supplies theme tokens and text direction for the whole app, a Link provides a keyboard skip link to the main region, and the main region is programmatically focusable so the skip link actually moves focus.
 
 ```tsx
 import * as React from 'react';
-import { Button, Field, Input } from '@fluentui/react-components';
+import { Button, FluentProvider, Link, Text } from '@fluentui/react-components';
 
-const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+export const AppShell = () => {
+  const [dir, setDir] = React.useState<'ltr' | 'rtl'>('ltr');
 
-export const SignUpForm = () => {
-  const [email, setEmail] = React.useState('');
+  return (
+    <FluentProvider dir={dir}>
+      {/* A skip link is the first focusable element on the page. */}
+      <Link href="#main-content" inline>
+        Skip to main content
+      </Link>
+
+      <Button onClick={() => setDir(dir === 'ltr' ? 'rtl' : 'ltr')}>
+        Direction: {dir.toUpperCase()}
+      </Button>
+
+      {/* tabIndex={-1} lets the skip link move focus here without adding a tab stop. */}
+      <main id="main-content" tabIndex={-1}>
+        <h1>Dashboard</h1>
+        <Text block>
+          Main content lives in a real landmark so screen reader users can jump straight to it.
+        </Text>
+      </main>
+    </FluentProvider>
+  );
+};
+```
+
+### Accessible form with Field, RadioGroup, Checkbox, and Switch
+
+Shows how Field ties a visible label, a hint, and a validation message to a control, how RadioGroup and Checkbox get their names, and how Switch differs from Checkbox (immediate effect vs. applied on submit).
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Checkbox,
+  Field,
+  Input,
+  Radio,
+  RadioGroup,
+  Select,
+  Switch,
+} from '@fluentui/react-components';
+
+interface FormState {
+  email: string;
+  digest: string;
+  timezone: string;
+  marketing: boolean;
+  compact: boolean;
+}
+
+export const NotificationSettingsForm = () => {
+  const [form, setForm] = React.useState<FormState>({
+    email: '',
+    digest: 'daily',
+    timezone: 'utc',
+    marketing: false,
+    compact: false,
+  });
   const [submitted, setSubmitted] = React.useState(false);
-  const showError = submitted && !isValidEmail(email);
+
+  const emailError = submitted && !form.email.includes('@') ? 'Enter a valid email address.' : undefined;
 
   return (
     <form
-      onSubmit={event => {
+      aria-label="Notification settings"
+      noValidate
+      onSubmit={(event) => {
         event.preventDefault();
         setSubmitted(true);
+        // In a real form, move focus to the first invalid control here,
+        // or announce a summary with MessageBar instead of doing both.
       }}
     >
+      {/* Field owns the accessible name, hint, and validation message. */}
       <Field
-        label='Email address'
+        label="Email address"
         required
-        hint='We only use this address for account notifications.'
-        validationState={showError ? 'error' : 'none'}
-        validationMessage={
-          showError ? 'Enter an address in the format name@example.com.' : undefined
-        }
+        hint="Used for account recovery and notifications."
+        validationState={emailError ? 'error' : 'none'}
+        validationMessage={emailError}
       >
         <Input
-          type='email'
-          value={email}
-          onChange={(_, data) => setEmail(data.value)}
+          type="email"
+          autoComplete="email"
+          value={form.email}
+          onChange={(_, data) => setForm((prev) => ({ ...prev, email: data.value }))}
         />
       </Field>
 
-      <Button type='submit' appearance='primary'>
-        Create account
+      {/* RadioGroup is a labeled group; each Radio carries its own visible label. */}
+      <Field label="Email digest" required>
+        <RadioGroup
+          value={form.digest}
+          layout="horizontal"
+          onChange={(_, data) => setForm((prev) => ({ ...prev, digest: data.value }))}
+        >
+          <Radio value="daily" label="Daily" />
+          <Radio value="weekly" label="Weekly" />
+          <Radio value="never" label="Never" />
+        </RadioGroup>
+      </Field>
+
+      <Field label="Timezone">
+        <Select
+          value={form.timezone}
+          onChange={(_, data) => setForm((prev) => ({ ...prev, timezone: data.value }))}
+        >
+          <option value="utc">UTC</option>
+          <option value="pst">Pacific Time</option>
+          <option value="cet">Central European Time</option>
+        </Select>
+      </Field>
+
+      {/* Checkbox: applied when the form is submitted. */}
+      <Checkbox
+        label="Send me occasional product news (you can unsubscribe at any time)"
+        checked={form.marketing}
+        onChange={(_, data) => setForm((prev) => ({ ...prev, marketing: data.checked === true }))}
+      />
+
+      {/* Switch: takes effect immediately, so it is not part of the submitted payload. */}
+      <Switch
+        label="Use compact density"
+        checked={form.compact}
+        onChange={(_, data) => setForm((prev) => ({ ...prev, compact: data.checked }))}
+      />
+
+      <Button type="submit" appearance="primary">
+        Save settings
       </Button>
     </form>
   );
 };
 ```
 
-### Icon-only buttons with an accessible name
+### Rating with per-option labels and a form value
 
-The icon slot is decorative, so an icon-only Button must be named. relationship='label' turns the tooltip content into the accessible name; when no tooltip is present, pass aria-label directly.
-
-```tsx
-import * as React from 'react';
-import { Button, Tooltip } from '@fluentui/react-components';
-
-const DeleteGlyph = () => (
-  <svg viewBox='0 0 20 20' width='20' height='20' aria-hidden='true' focusable='false'>
-    <path
-      d='M7 2h6l1 2h4v2H2V4h4l1-2zM4 8h12l-1 9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1L4 8z'
-      fill='currentColor'
-    />
-  </svg>
-);
-
-export const ItemActions = () => (
-  <div role='toolbar' aria-label='Item actions'>
-    {/* relationship='label' makes the tooltip content the accessible name,
-        so a separate aria-label would be redundant. */}
-    <Tooltip content='Delete item' relationship='label'>
-      <Button appearance='subtle' icon={<DeleteGlyph />} />
-    </Tooltip>
-
-    {/* Without a tooltip, name the control explicitly. */}
-    <Button appearance='subtle' aria-label='Duplicate item' icon={<DeleteGlyph />} />
-  </div>
-);
-```
-
-### Announcing status changes with MessageBar
-
-MessageBar is a live region. Success and informational messages use politeness='polite'; errors use politeness='assertive' so they interrupt. disabledFocusable keeps the Save button focusable while the request is in flight.
+Rating needs an accessible name for the group, a name so it participates in form submission, and itemLabel so each option is announced meaningfully instead of as a bare number.
 
 ```tsx
 import * as React from 'react';
-import { Button, MessageBar } from '@fluentui/react-components';
+import { Rating, Text } from '@fluentui/react-components';
 
-type Status = { intent: 'success' | 'error'; text: string } | null;
-
-const save = () =>
-  new Promise<void>((resolve, reject) => {
-    window.setTimeout(
-      () => (Math.random() > 0.5 ? resolve() : reject(new Error('offline'))),
-      600,
-    );
-  });
-
-export const SavePanel = () => {
-  const [status, setStatus] = React.useState<Status>(null);
-  const [saving, setSaving] = React.useState(false);
-
-  const onSave = async () => {
-    setSaving(true);
-    try {
-      await save();
-      setStatus({ intent: 'success', text: 'Your changes were saved.' });
-    } catch {
-      setStatus({ intent: 'error', text: 'We could not save your changes. Try again.' });
-    } finally {
-      setSaving(false);
-    }
-  };
+export const SatisfactionSurvey = () => {
+  const [value, setValue] = React.useState(0);
 
   return (
     <div>
-      <Button appearance='primary' onClick={onSave} disabledFocusable={saving}>
-        {saving ? 'Saving…' : 'Save'}
-      </Button>
+      {/* A visible prompt is better than relying only on aria-label. */}
+      <Text id="satisfaction-prompt" block weight="semibold">
+        How satisfied are you with the new dashboard?
+      </Text>
 
-      {status && (
-        <MessageBar
-          intent={status.intent}
-          politeness={status.intent === 'error' ? 'assertive' : 'polite'}
-        >
-          {status.text}
-        </MessageBar>
-      )}
+      <Rating
+        aria-labelledby="satisfaction-prompt"
+        name="satisfaction"
+        value={value}
+        max={5}
+        step={1}
+        onChange={(_, data) => setValue(data.value)}
+        itemLabel={(rating) => `${rating} out of 5`}
+      />
+
+      <Text block size={200}>
+        {value === 0 ? 'No rating selected yet.' : `You selected ${value} out of 5.`}
+      </Text>
     </div>
   );
 };
 ```
 
-### disabledFocusable versus disabled
+### Tooltip relationships and InfoLabel
 
-disabledFocusable keeps a temporarily unavailable control in the tab order so keyboard and screen reader users can discover it and hear why it is unavailable. disabled removes it from the tab order and the accessibility tree entirely.
+Tooltip's relationship prop is required and decides whether the tooltip names the trigger, describes it, or is purely visual. InfoLabel keeps longer help text reachable by keyboard instead of hiding it in a title attribute.
 
 ```tsx
 import * as React from 'react';
-import { Button, Link, Switch, Tooltip } from '@fluentui/react-components';
+import { Button, InfoLabel, Tooltip } from '@fluentui/react-components';
 
-export const PublishingControls = () => {
-  const [documentSelected, setDocumentSelected] = React.useState(false);
-  const [scheduled, setScheduled] = React.useState(false);
+export const TooltipPatterns = () => (
+  <>
+    {/* relationship="label": the tooltip text IS the accessible name. */}
+    <Tooltip content="Delete selected items" relationship="label">
+      <Button appearance="subtle" icon={<span aria-hidden="true">x</span>} />
+    </Tooltip>
+
+    {/* relationship="description": the button keeps its own name, the tooltip adds context. */}
+    <Tooltip content="Copies the current filter set to the clipboard" relationship="description">
+      <Button>Copy filters</Button>
+    </Tooltip>
+
+    {/* relationship="inaccessible": visible only; do not put unique information here. */}
+    <Tooltip content="Just a hint" relationship="inaccessible">
+      <Button appearance="outline">Hover me</Button>
+    </Tooltip>
+
+    {/* InfoLabel keeps help text available to keyboard and screen reader users. */}
+    <div>
+      <InfoLabel info="Trial accounts keep audit logs for 30 days.">
+        Audit log retention
+      </InfoLabel>
+    </div>
+  </>
+);
+```
+
+### Modal Dialog with inert background and focus return
+
+A destructive confirmation dialog: DialogTitle names the surface, a described DialogContent region explains the consequence, inertTrapFocus makes the rest of the page inert, and the trigger keeps focus restoration working.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+} from '@fluentui/react-components';
+
+export const DeleteProjectDialog = ({ onConfirm }: { onConfirm: () => void }) => {
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(_, data) => setOpen(data.open)}
+      modalType="modal"
+      inertTrapFocus
+    >
+      {/* disableButtonEnhancement keeps the Button as the trigger element. */}
+      <DialogTrigger disableButtonEnhancement>
+        <Button appearance="primary">Delete project</Button>
+      </DialogTrigger>
+
+      <DialogSurface aria-labelledby="delete-dialog-title" aria-describedby="delete-dialog-body">
+        <DialogBody>
+          <DialogTitle id="delete-dialog-title">Delete this project?</DialogTitle>
+          <DialogContent id="delete-dialog-body">
+            This permanently removes the project, its files, and its history. This action cannot be undone.
+          </DialogContent>
+          <DialogActions>
+            <DialogTrigger disableButtonEnhancement>
+              <Button appearance="secondary">Cancel</Button>
+            </DialogTrigger>
+            <DialogTrigger disableButtonEnhancement>
+              <Button
+                appearance="primary"
+                onClick={() => {
+                  onConfirm();
+                }}
+              >
+                Delete project
+              </Button>
+            </DialogTrigger>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
+  );
+};
+```
+
+### Sortable table headers plus a live announcement
+
+TableHeaderCell's sortable/sortDirection props render a real sort button and expose sort state. Because sorting does not move focus, the new state is announced in a polite live region instead.
+
+```tsx
+import * as React from 'react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableCellLayout,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
+} from '@fluentui/react-components';
+
+type SortDirection = 'ascending' | 'descending';
+type ColumnId = 'name' | 'role';
+
+interface Member {
+  name: string;
+  role: string;
+}
+
+const members: Member[] = [
+  { name: 'Ana Ruiz', role: 'Designer' },
+  { name: 'Ben Okafor', role: 'Engineer' },
+  { name: 'Chen Wu', role: 'Engineer' },
+];
+
+export const SortableMembersTable = () => {
+  const [sort, setSort] = React.useState<{ columnId: ColumnId; direction: SortDirection }>({
+    columnId: 'name',
+    direction: 'ascending',
+  });
+  const [announcement, setAnnouncement] = React.useState('');
+
+  const toggleSort = (columnId: ColumnId) => {
+    const direction: SortDirection =
+      sort.columnId === columnId && sort.direction === 'ascending' ? 'descending' : 'ascending';
+    setSort({ columnId, direction });
+    // Sorting does not move focus, so announce the new state for screen readers.
+    setAnnouncement(`Table sorted by ${columnId}, ${direction}`);
+  };
+
+  const rows = React.useMemo(() => {
+    const sorted = [...members].sort((a, b) => a[sort.columnId].localeCompare(b[sort.columnId]));
+    return sort.direction === 'ascending' ? sorted : sorted.reverse();
+  }, [sort]);
 
   return (
     <>
-      {/* Focusable, announced, not activatable - with an explanation attached. */}
-      <Tooltip content='Select a document before publishing' relationship='description'>
-        <Button appearance='primary' disabledFocusable={!documentSelected}>
-          Publish
-        </Button>
-      </Tooltip>
+      <Table aria-label="Team members">
+        <TableHeader>
+          <TableRow>
+            <TableHeaderCell
+              sortable
+              sortDirection={sort.columnId === 'name' ? sort.direction : undefined}
+              button={{ onClick: () => toggleSort('name') }}
+            >
+              Name
+            </TableHeaderCell>
+            <TableHeaderCell
+              sortable
+              sortDirection={sort.columnId === 'role' ? sort.direction : undefined}
+              button={{ onClick: () => toggleSort('role') }}
+            >
+              Role
+            </TableHeaderCell>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((member) => (
+            <TableRow key={member.name}>
+              <TableCell>
+                <TableCellLayout>{member.name}</TableCellLayout>
+              </TableCell>
+              <TableCell>
+                <TableCellLayout>{member.role}</TableCellLayout>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
 
-      {/* Removed from the tab order and from the accessibility tree. */}
-      <Button disabled>Archive</Button>
-
-      <Link href='/docs' disabledFocusable>
-        Read the documentation
-      </Link>
-
-      <Switch
-        label='Schedule the publish for later'
-        labelPosition='after'
-        checked={scheduled}
-        disabledFocusable={!documentSelected}
-        onChange={(_, data) => setScheduled(data.checked)}
-      />
-
-      <Button onClick={() => setDocumentSelected(value => !value)}>
-        Toggle document
-      </Button>
+      {/* Visually hidden live region; see the .sr-only CSS example. */}
+      <div className="sr-only" aria-live="polite">
+        {announcement}
+      </div>
     </>
   );
 };
 ```
 
-### Named checkbox group with a mixed state
+### Selectable Card with a controlled focusMode
 
-Checkbox supports checked='mixed' for a partial parent state. The group is wrapped in Field for the visible label and hint, and given its own accessible name so assistive technology announces it as a group.
-
-```tsx
-import * as React from 'react';
-import { Checkbox, Field } from '@fluentui/react-components';
-
-const channels = ['Email', 'SMS', 'Push'];
-
-export const NotificationPreferences = () => {
-  const [selected, setSelected] = React.useState<string[]>(['Email']);
-  const allSelected = selected.length === channels.length;
-  const someSelected = selected.length > 0 && !allSelected;
-
-  return (
-    <Field label='Notification channels' hint='Choose at least one channel.'>
-      {/* A set of checkboxes is announced as a group only when it has a name. */}
-      <div role='group' aria-label='Notification channels'>
-        <Checkbox
-          label='Select all'
-          checked={allSelected ? true : someSelected ? 'mixed' : false}
-          onChange={(_, data) => setSelected(data.checked ? [...channels] : [])}
-        />
-
-        {channels.map(channel => (
-          <Checkbox
-            key={channel}
-            label={channel}
-            checked={selected.includes(channel)}
-            onChange={(_, data) =>
-              setSelected(previous =>
-                data.checked
-                  ? [...previous, channel]
-                  : previous.filter(item => item !== channel),
-              )
-            }
-          />
-        ))}
-      </div>
-    </Field>
-  );
-};
-```
-
-### Rating with meaningful value labels
-
-itemLabel gives every rating value an accessible name, and whole-number steps are easier to operate than fractional ones. Field supplies the visible label, hint and validation message.
+Card's focusMode decides whether the card itself is a tab stop or focus lives on its inner controls. The card is named by its own heading and inner actions keep their own accessible names.
 
 ```tsx
 import * as React from 'react';
-import { Field, Rating } from '@fluentui/react-components';
+import {
+  Button,
+  Card,
+  CardFooter,
+  CardHeader,
+  Text,
+} from '@fluentui/react-components';
 
-const labels = ['Very poor', 'Poor', 'Fair', 'Good', 'Excellent'];
+interface Scenario {
+  id: string;
+  title: string;
+  description: string;
+}
 
-export const SatisfactionRating = () => {
-  const [value, setValue] = React.useState(0);
+export const SelectableScenarioCard = ({
+  scenario,
+  onRun,
+}: {
+  scenario: Scenario;
+  onRun: (id: string) => void;
+}) => {
+  const [selected, setSelected] = React.useState(false);
+  const titleId = `${scenario.id}-title`;
 
   return (
-    <Field
-      label='How satisfied are you with this release?'
-      hint='Use the arrow keys to change the rating, then press Tab to continue.'
-      validationState={value === 0 ? 'warning' : 'none'}
-      validationMessage={value === 0 ? 'Choose a rating between 1 and 5.' : undefined}
+    <Card
+      appearance="outline"
+      // tab-exit keeps the card in the tab order while allowing Tab to move on.
+      focusMode="tab-exit"
+      selected={selected}
+      onSelectionChange={(_, data) => setSelected(data.selected)}
+      aria-labelledby={titleId}
     >
-      <Rating
-        value={value}
-        max={5}
-        step={1}
-        itemLabel={rating => `${labels[rating - 1] ?? ''} (${rating} of 5)`}
-        onChange={(_, data) => setValue(data.value)}
-      />
-    </Field>
-  );
-};
-```
-
-### Right-to-left support with Provider and Portal
-
-Provider's dir prop applies direction to the whole tree. applyStylesToPortals makes sure content rendered through Portal inherits the same direction, theme and focus behavior instead of falling back to LTR.
-
-```tsx
-import * as React from 'react';
-import { Button, Portal, FluentProvider } from '@fluentui/react-components';
-
-export const BidirectionalApp = () => {
-  const [dir, setDir] = React.useState<'ltr' | 'rtl'>('rtl');
-
-  return (
-    <FluentProvider dir={dir} applyStylesToPortals>
-      <Button
-        appearance='primary'
-        onClick={() => setDir(dir === 'rtl' ? 'ltr' : 'rtl')}
-      >
-        {dir === 'rtl' ? 'Switch to left-to-right' : 'Switch to right-to-left'}
-      </Button>
-
-      {/* Portaled content stays inside the Provider tree, so it inherits
-          direction, theme and Tabster focus management. */}
-      <Portal>
-        <div>{dir === 'rtl' ? 'المحتوى بالعربية' : 'Content in English'}</div>
-      </Portal>
-    </FluentProvider>
-  );
-};
-```
-
-### Numeric input with an accessible range and error state
-
-Spinbutton exposes min/max/step/precision so keyboard and screen reader users can adjust a bounded value predictably, while Field supplies the name, hint and validation message.
-
-```tsx
-import * as React from 'react';
-import { Field, SpinButton } from '@fluentui/react-components';
-
-export const SeatCountField = () => {
-  const [seats, setSeats] = React.useState<number | null>(1);
-  const invalid = seats === null || seats < 1;
-
-  return (
-    <Field
-      label='Seats'
-      required
-      hint='Choose between 1 and 25 seats.'
-      validationState={invalid ? 'error' : 'none'}
-      validationMessage={invalid ? 'Enter a number of seats greater than zero.' : undefined}
-    >
-      <SpinButton
-        value={seats}
-        min={1}
-        max={25}
-        step={1}
-        stepPage={5}
-        precision={0}
-        onChange={(_, data) =>
-          setSeats(typeof data.value === 'number' ? data.value : null)
+      <CardHeader
+        header={
+          <div id={titleId}>
+            <Text weight="semibold">{scenario.title}</Text>
+          </div>
         }
+        description={<div>{scenario.description}</div>}
       />
-    </Field>
+      <CardFooter>
+        <Button appearance="primary" onClick={() => onRun(scenario.id)}>
+          Run scenario
+        </Button>
+      </CardFooter>
+    </Card>
   );
 };
+```
+
+### Tree with treegrid semantics and labeled selectors
+
+TreeItemLayout's selector slot renders a Checkbox or Radio per row. In treegrid mode every selector needs its own accessible name, and each TreeItem needs a unique value.
+
+```tsx
+import * as React from 'react';
+import {
+  Checkbox,
+  Tree,
+  TreeItem,
+  TreeItemLayout,
+} from '@fluentui/react-components';
+
+export const ProjectFileTree = () => (
+  <Tree
+    aria-label="Project files"
+    navigationMode="treegrid"
+    selectionMode="multiselect"
+    defaultOpenItems={['src']}
+  >
+    <TreeItem itemType="branch" value="src">
+      <TreeItemLayout selector={<Checkbox aria-label="Select the src folder" />}>
+        src
+      </TreeItemLayout>
+      <Tree>
+        <TreeItem itemType="leaf" value="src/app.tsx">
+          <TreeItemLayout selector={<Checkbox aria-label="Select app.tsx" />}>
+            app.tsx
+          </TreeItemLayout>
+        </TreeItem>
+        <TreeItem itemType="leaf" value="src/index.tsx">
+          <TreeItemLayout selector={<Checkbox aria-label="Select index.tsx" />}>
+            index.tsx
+          </TreeItemLayout>
+        </TreeItem>
+      </Tree>
+    </TreeItem>
+
+    <TreeItem itemType="leaf" value="package.json">
+      <TreeItemLayout selector={<Checkbox aria-label="Select package.json" />}>
+        package.json
+      </TreeItemLayout>
+    </TreeItem>
+  </Tree>
+);
+```
+
+### Menu with checkbox and radio items
+
+MenuList holds checkedValues and reports changes through onCheckedValueChange. MenuItemCheckbox and MenuItemRadio group items by name, giving the menu proper checkable semantics.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Menu,
+  MenuDivider,
+  MenuItemCheckbox,
+  MenuItemRadio,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+} from '@fluentui/react-components';
+
+export const ViewOptionsMenu = () => {
+  const [checkedValues, setCheckedValues] = React.useState<Record<string, string[]>>({
+    view: ['grid'],
+    columns: ['name'],
+  });
+
+  const onCheckedValueChange = (
+    _event: unknown,
+    data: { name: string; checkedItems: string[] },
+  ) => {
+    setCheckedValues((previous) => ({ ...previous, [data.name]: data.checkedItems }));
+  };
+
+  return (
+    <Menu>
+      <MenuTrigger disableButtonEnhancement>
+        <Button>View options</Button>
+      </MenuTrigger>
+
+      <MenuPopover>
+        <MenuList
+          hasCheckmarks
+          checkedValues={checkedValues}
+          onCheckedValueChange={onCheckedValueChange}
+        >
+          <MenuItemCheckbox name="view" value="grid">
+            Grid layout
+          </MenuItemCheckbox>
+          <MenuItemCheckbox name="view" value="list">
+            List layout
+          </MenuItemCheckbox>
+
+          <MenuDivider />
+
+          <MenuItemRadio name="columns" value="name">
+            Show name column
+          </MenuItemRadio>
+          <MenuItemRadio name="columns" value="role">
+            Show role column
+          </MenuItemRadio>
+        </MenuList>
+      </MenuPopover>
+    </Menu>
+  );
+};
+```
+
+### Visually hidden utility CSS and reduced-motion defaults
+
+The sr-only class powers the visually hidden live regions used by the examples, and the reduced-motion block is a safe global default that respects the user's motion preference.
+
+```css
+/* Keeps content available to assistive technology while removing it from the visual layout.
+   Used for the aria-live announcements in the examples. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Global reduced-motion default. Fluent components also expose per-component
+   motion props (Carousel motion, MessageBarGroup animate, collapseMotion /
+   surfaceMotion / backdropMotion slots). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 ```
 
 ## Pitfalls
 
-- Icon-only buttons with no accessible name - the Button or Badge icon slot is decorative, so screen reader users hear 'button' with no purpose. Fix with Tooltip relationship='label' or aria-label.
-- Using placeholder or title text as the only label. Both vanish or are announced inconsistently; use Field/Label for the name and Field hint for requirements.
-- Reaching for disabled by default. disabled removes a control from the tab order and the accessibility tree, so keyboard and screen reader users may never discover it - use disabledFocusable plus an explanation.
-- Adding ARIA or keyboard handlers on top of Fluent behavior, such as role='tab' on Tabs content or tabIndex on items inside a roving-tabindex composite. This breaks the built-in focus model.
-- Mounting a live region at the same moment as its message. Screen readers announce reliably only when the region already exists in the DOM and its content changes.
-- Conveying meaning with color alone - Badge color, MessageBar intent, Avatar.active, or Field validationState without a message.
-- Auto-advancing Carousel content without a pause control, or relying on drag (draggable) as the only way to change slides.
-- Setting direction through CSS instead of Provider dir, which leaves Portal content rendering left-to-right and can misplace positioned overlays.
-- Omitting the required relationship prop on Tooltip, so the content is neither a label nor a description and is effectively lost to assistive technology.
-- Testing only with a mouse. Every flow must be completable with a keyboard alone, including closing overlays and returning focus to the trigger.
+- Adding ARIA to components that already manage it — role="button" on a Button, tabIndex={0} on a div row, or aria-pressed on a ToggleButton. This overrides the component's internal state and usually makes it less accessible, not more.
+- Using disabled instead of disabledFocusable for actions users must be able to discover (toolbar commands, dialog actions, inline controls). disabled removes the element from the tab order, so keyboard users never learn the action exists.
+- Leaving icon-only buttons unlabeled. Without an accessible name a screen reader announces only "button"; the Fluent idiom is a Tooltip with relationship="label".
+- Using a Tooltip as the only source of essential information, or setting relationship="inaccessible" on content that is not duplicated elsewhere. Tooltips do not exist on touch devices.
+- Relying on placeholder text instead of Field/Label. Placeholders disappear on input, are often too low-contrast, and are inconsistently announced.
+- Forgetting to restore focus when closing overlays, or unmounting the trigger so focus falls back to <body>. Keep the trigger mounted and let Dialog/Menu/Popover return focus; use inertTrapFocus or trapFocus so background content is not reachable while a modal is open.
+- Rendering portaled content (Dialog, Menu, Popover, Tooltip) outside the FluentProvider's portal styling, so the surface loses direction and theme tokens — use applyStylesToPortals or a nested FluentProvider.
+- Conveying selection or state only through color: a colored Badge, CounterBadge, PresenceBadge, Tag, or Avatar without text leaves non-visual users with no information.
+- Relying on hover-only affordances such as TableCellActions that appear on hover but not on keyboard focus.
+- Truncating meaningful text with Text's truncate or TableCellLayout's truncate without any other way to reach the full value.
+- Using Checkbox's checked="mixed" tri-state without explaining what the partial selection means, or using Switch for a value that only applies after submitting a form.
+- Setting Carousel's autoplayInterval without a visible pause control (CarouselAutoplayButton) and without honoring reduced-motion preferences.
+- Building a virtualized tree with FlatTree without computing aria-level, aria-setsize, and aria-posinset for every FlatTreeItem, which breaks tree navigation announcements.
 
 ## Accessibility
 
-Fluent UI v9 is engineered against the WAI-ARIA Authoring Practices: components expose the expected roles, states and properties, implement their pattern's keyboard interaction (arrow keys, Home/End, Escape, Enter/Space), and manage focus through the Tabster-based focus system. Overlays (Dialog, Popover, Menu, Drawer, TeachingPopover) move focus into the surface, keep it there while open and restore it to the trigger on close; inertTrapFocus uses the native inert attribute for the most robust trap. Providers apply dir and theme to the entire tree, including portaled surfaces, which keeps RTL layouts and contrast-covered tokens consistent. Your responsibilities are the parts no library can infer: supply an accessible name for every control (Field, Label, aria-label or Tooltip relationship='label'), keep validation and status messages textual rather than color-only, announce asynchronous changes through MessageBar politeness or a persistent live region, and offer a reduced-motion path for anything you animate with Motion or Carousel. Verify with a keyboard-only pass, at least one screen reader (Narrator, VoiceOver or NVDA), 200% zoom, Windows High Contrast / forced-colors mode, the OS reduced-motion setting, and a contrast check of any Provider theme overrides.
+Fluent UI React v9 is designed around WAI-ARIA authoring patterns, so accessibility work is mostly composition and content rather than adding ARIA. The library's accessibility surface is exposed through a small set of props you should know: FormField labeling (Field with label, hint, required, validationState, validationMessage; Label with required/disabled; InfoLabel for keyboard-reachable help), naming (Tooltip's required relationship prop with "label", "description", and "inaccessible" modes; aria-label passed through slot props for icon-only controls), focus control (disabled vs disabledFocusable on Button/Link/MenuItem/ToggleButton, focusMode on Card/Breadcrumb/SwatchPicker/DataGrid cells, inertTrapFocus on Dialog, trapFocus/inertTrapFocus/legacyTrapFocus/unstable_disableAutoFocus on Popover, navigation/focusMode on Accordion, TabList, Tree and FlatTree), announcements (MessageBar intent/politeness, MessageBarGroup animate, Toaster announce, AriaLiveAnnouncer, ProgressBar, Spinner's label/labelPosition, Carousel's announcement), and data-grid semantics (DataGrid selectionMode/onSelectionChange/onSortChange/onColumnResize — keyboard resize events are reported alongside mouse and touch — plus TableHeaderCell sortable/sortDirection and TableSelectionCell). Because FluentProvider supplies direction (dir), contrast-checked theme tokens, and portal styling (applyStylesToPortals), wrap the entire app in one provider and verify that portaled surfaces stay inside its context. Finally, prove the result manually: keyboard-only traversal with visible focus and working Escape/focus-return, at least one desktop and one mobile screen reader, 400% zoom and reflow, Windows forced-colors mode, reduced-motion, and a right-to-left smoke test.
 
-**Referenced components**: Accordion, Aria, Avatar, Badge, Breadcrumb, Button, Card, Carousel, Checkbox, ColorPicker, Combobox, DatepickerCompat, Dialog, Divider, Drawer, Field, Image, Infolabel, Input, Label, Link, List, Menu, MessageBar, Motion, MotionComponentsPreview, Persona, Popover, Portal, Progress, Provider, Radio, Rating, Search, Select, Skeleton, Slider, Spinbutton, Spinner, SwatchPicker, Switch, Table, Tabs, Tags, Tabster, TagPicker, TeachingPopover, Textarea, TimepickerCompat, Toolbar, Tooltip, Tree
+**Referenced components**: Accordion, AccordionHeader, AccordionItem, AccordionPanel, AriaLiveAnnouncer, Avatar, Badge, Breadcrumb, BreadcrumbButton, BreadcrumbDivider, BreadcrumbItem, Button, Card, CardFooter, CardHeader, CardPreview, Carousel, CarouselAutoplayButton, CarouselButton, CarouselCard, CarouselNav, CarouselNavButton, CarouselNavContainer, CarouselSlider, CarouselViewport, Checkbox, ColorArea, ColorSlider, ColorSwatch, Combobox, CompoundButton, CounterBadge, DataGrid, DataGridCell, DataGridHeaderCell, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Divider, Drawer, DrawerHeaderTitle, Dropdown, Field, FlatTree, FlatTreeItem, FluentProvider, Hamburger, Image, ImageSwatch, InfoLabel, InlineDrawer, Input, InteractionTag, Label, Link, List, ListItem, Listbox, Menu, MenuDivider, MenuGroup, MenuItem, MenuItemCheckbox, MenuItemLink, MenuItemRadio, MenuList, MenuPopover, MenuTrigger, MessageBar, MessageBarActions, MessageBarBody, MessageBarGroup, MessageBarTitle, Nav, NavCategory, NavCategoryItem, NavDrawer, NavDrawerBody, NavDrawerFooter, NavDrawerHeader, NavItem, NavSectionHeader, NavSubItem, NavSubItemGroup, Option, OverflowDivider, OverflowItem, OverlayDrawer, Persona, Popover, PopoverSurface, PopoverTrigger, Portal, PresenceBadge, ProgressBar, Radio, RadioGroup, Rating, RatingItem, Select, Skeleton, SkeletonItem, Slider, SpinButton, Spinner, SplitButton, SwatchPicker, Switch, Tab, Table, TableBody, TableCell, TableCellActions, TableCellLayout, TableHeader, TableHeaderCell, TableRow, TableSelectionCell, TabList, Tag, TagGroup, TagPicker, TeachingPopover, Text, Textarea, Toast, ToastBody, ToastFooter, ToastTitle, Toaster, ToggleButton, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, ToolbarRadioButton, ToolbarRadioGroup, ToolbarToggleButton, Tooltip, Tree, TreeItem, TreeItemLayout
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

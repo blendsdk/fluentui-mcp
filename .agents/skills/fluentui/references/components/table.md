@@ -7,9 +7,9 @@
 
 ## Overview
 
-Table is a family of composable, unopinionated table primitives for Fluent UI React v9: Table itself plus TableHeader, TableBody, TableRow, TableHeaderCell, TableCell, TableCellLayout, TableCellActions and TableSelectionCell. By default the primitives render native semantic table elements (thead, tbody, tr, th, td) so that the browser and assistive technology understand the data relationships, and the noNativeElements option swaps that markup for div-based flexbox layout when you need virtualization or overflow behavior. Cell content is composed rather than configured: TableCellLayout provides a media slot, a description line, truncation and a primary appearance, while TableCellActions holds hover- and focus-revealed actions such as icon buttons, and TableSelectionCell renders a Checkbox or Radio indicator for row selection. Feature behavior lives in the useTableFeatures hook and its plugins: useTableSelection manages single and multiselect state (controlled or uncontrolled), useTableSort manages sort state and column sort direction with onSortChange, and useTableColumnSizing_unstable adds resizable columns with columnSizingOptions, minimum, default and ideal widths. Keyboard navigation is deliberately not built into the primitives; the stories show the recommended patterns using useArrowNavigationGroup with a grid axis, useFocusableGroup with limited-trap-focus for cells that contain several focusable elements, and useTableCompositeNavigation together with the focusMode prop for composite row-and-cell navigation. Because the primitives are unopinionated, the same building blocks scale from a simple static read-only table to a selectable, sortable, resizable and virtualized data grid.
+Table is a composable set of data-display primitives for rendering tabular data in Fluent UI React v9: Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell, TableSelectionCell, TableCellLayout, TableCellActions and TableResizeHandle all cooperate to render either native semantic table elements or a flexbox-based div layout. By itself, Table is intentionally unopinionated: it renders accessible markup and styling but carries no data logic. Behavior such as sorting, selection, column resizing and keyboard navigation is layered on through hooks such as useTableFeatures, useTableSelection, useTableSort and useTableColumnSizing_unstable, or through utilities such as useArrowNavigationGroup, useFocusableGroup and useTableCompositeNavigation. The typical composition pairs a Table with a TableHeader containing a TableRow of TableHeaderCells, and a TableBody containing TableRows whose TableCells hold TableCellLayout content (media, description, primary emphasis) and optional TableCellActions that reveal on hover or focus. Because the primitives are headless with respect to state, the same markup supports simple read-only tables, fully interactive data grids, resizable columns and virtualized row rendering.
 
-**When to use**: Use Table when you need to present dense, multi-attribute data that users must compare across rows and columns: file and document lists, user directories, resource inventories, billing line items or any grid where aligned columns make scanning faster than a list. Reach for Table together with useTableFeatures and its plugins when users must select rows, sort by column, resize columns or work with a large virtualized data set, because the hooks keep that state consistent across row mount and unmount. Choose the default native elements whenever semantics and accessibility support are the priority, and switch to noNativeElements only when virtualization or horizontal overflow forces a flexbox layout. Prefer lighter components when the data is not genuinely tabular: List or a stack of Persona rows reads better for shallow, single-column activity feeds, Tree is the right choice for hierarchical structures, Card suits summary content, and Text or Label handles simple label-value pairs without the layout cost of a table. If you only need to display a small fixed set of read-only values, a styled list is simpler and easier to make responsive than a full table.
+**When to use**: Use Table when you need to present structured, multi-column data where users compare values across rows, sort or filter the set, select one or many rows, or act on individual cells. Reach for the Table primitives when you want full control over markup, state management and rendering strategy; reach for a composition built on the same primitives (the DataGrid pattern shown in the stories, which wires useTableFeatures, useTableSelection and useTableSort into accessible markup and event handlers) when you want the common behaviors wired up for you. Choose it over List or a stack of Cards when the relationships between columns matter and column headers carry meaning, and over Tree or FlatTree when the data is flat rather than hierarchical. Table is not a data-fetching, paging or filtering component; supply already-shaped items through the useTableFeatures hook or your own state, and avoid Table when a small amount of key-value content can be expressed more simply with descriptions or a definition-style layout.
 
 ## Props Reference
 
@@ -43,31 +43,27 @@ Table is a family of composable, unopinionated table primitives for Fluent UI Re
 
 ### Prop Guidance
 
-- **sortable**: Enables sorting presentation on the table; header cells render as buttons and gain the affordance styles. Pair it with useTableSort so the data actually reorders. `sortable`
-- **sortDirection**: Set on TableHeaderCell to indicate whether that column is currently sorted ascending, descending or not at all; the hook returns it per column id. `ascending`
-- **onSortChange**: Sort plugin callback used when you control sortState yourself; update your external state with the next sort state supplied by the callback. `(event, nextSortState) => setSortState(nextSortState)`
-- **selectionMode**: Selection plugin option that switches between single-row and multi-row selection; choose single for radio-style picking and multiselect for checkbox-style batch operations. `multiselect`
-- **onSelectionChange**: Selection plugin callback used in controlled mode; receive the change event and a data object containing the resulting selected items so you can store them in your own state. `(event, data) => setSelectedRows(data.selectedItems)`
-- **checked**: Set on TableSelectionCell to drive the checkbox or radio indicator; use a mixed value when only some rows are selected so the header communicates a partial selection. `mixed`
-- **type**: Set on TableSelectionCell to render either a checkbox or a radio indicator; the design guidance is checkbox for multiselect and radio for single select. `radio`
-- **subtle**: On TableSelectionCell, keeps the selection indicator hidden until the row is hovered, focused within or checked, reducing visual noise in dense tables. `subtle`
-- **hidden**: On TableSelectionCell, removes the cell from rendering when no selection affordance should exist at all. `hidden`
-- **invisible**: On TableSelectionCell, keeps the cell occupying layout space while hiding its indicator, which is how the single-select header cell aligns with the body rows. `invisible`
-- **visible**: Boolean visibility flag for the associated sub-element or state; leave the element rendered and rely on hidden or invisible when you need stronger concealment. `true`
-- **appearance (TableRow)**: Controls the row background emphasis; use brand while a row is selected and none for normal rows, with neutral available for a neutral emphasis. `brand`
-- **appearance (TableCellLayout)**: Set to primary to create emphasis in a cell by enlarging the media and strengthening the main label; normally applied to the first column. `primary`
-- **truncate**: On TableCellLayout, truncates overflowing text instead of letting it wrap or expand the column, which pairs well with fixed column widths. `truncate`
-- **columnSizingOptions**: Passed to the column sizing plugin to define per-column minimum, default and ideal widths, keyed by column id; in controlled usage you also update idealWidth from the resize callback. `{ file: { minWidth: 190, idealWidth: 300 } }`
-- **columnId**: Identifier for a column definition, used to look up sort direction, sizing options and cell props across the table. `file`
-- **width**: Numeric width reported to and from the column sizing feature; the resize callback supplies the new width so the parent can store it. `300`
-- **containerWidthOffset**: Column sizing option that compensates for surrounding chrome such as scrollbars or padding when the table measures available container width. `16`
-- **autoFitColumns**: Column sizing option that fits columns to available container width by default; set it to false when you want columns to keep their widths and overflow horizontally instead. `false`
-- **focusMode**: Selects the keyboard navigation strategy for the table, such as composite navigation that combines row focus with cell focus; use it together with the table composite navigation utilities. `composite`
-- **tableState**: The state object returned by useTableFeatures and handed to the feature plugins and helper utilities; it is the single source of truth for rows, selection, sort and column sizing. `useTableFeatures result`
-- **checked (header selection)**: On the header TableSelectionCell, combine the all-selected, some-selected and checked values so the control shows true, mixed or false correctly. `mixed`
-- **size**: Controls row density through the size options demonstrated in the size stories, with small and extra-small tightening vertical padding for dense data. `small`
-- **noNativeElements**: Renders div-based flexbox layout instead of table elements; required for virtualization and useful when you need the table to overflow a scroll parent. `noNativeElements`
-- **root**: Slot present on each primitive, mapping to the underlying tbody, td, thead or div element; use it to attach refs, classes or event handlers to the rendered host element. `root`
+- **sortable**: Set on Table to configure header cells as buttons and apply the additional sort styling; the actual sort state still comes from useTableSort and is passed down per header cell. `sortable`
+- **sortDirection**: Set on TableHeaderCell to signal whether the column is sorted ascending or descending, and in a controlled sort scenario driven by the app's own sort state. `ascending`
+- **onSortChange**: Supply to the sort plugin when you want controlled sorting; it receives the event and the next sort state, which the parent stores and feeds back in. `(event, sortState) => setSortState(sortState)`
+- **selectionMode**: Passed to useTableSelection to choose single or multiselect behavior; single selection pairs naturally with a radio selection cell and multiselect with checkboxes. `multiselect`
+- **onSelectionChange**: Use for controlled selection; it receives the originating mouse or keyboard event and data whose selected items should be written to your own state. `(event, data) => setSelectedRows(data.selectedItems)`
+- **checked**: Set on TableSelectionCell: true or false for individual rows, and mixed for a select-all header cell when only some rows are selected. `mixed`
+- **type**: Set on TableSelectionCell to render either a checkbox or a radio indicator; use radio for single selection so semantics match the behavior. `radio`
+- **subtle**: Set on TableSelectionCell so the indicator appears only when the row is hovered, contains focus, or is checked, reducing visual noise in dense tables. `true`
+- **hidden**: Set on TableSelectionCell to omit the selection cell from layout while keeping selection state; use it when a mode is temporarily disabled rather than unmounting the cell. `true`
+- **invisible**: Set on TableSelectionCell to keep the selection column in the layout without rendering an interactive indicator; commonly used on the header radio cell in single-select tables. `true`
+- **appearance**: On TableRow and TableSelectionCell, accepts brand, neutral or none and is the primary way to reflect selection state visually; on TableCellLayout, accepts primary to increase icon size and font weight for the row-identifying value. `brand`
+- **truncate**: Set on TableCellLayout when cell content may exceed the column width so text is clipped with an ellipsis instead of forcing the column wider. `true`
+- **focusMode**: Controls how focus moves through the table when composite navigation is used; the composite strategy focuses rows first and switches to cells of the current row when the right arrow key is pressed. `composite`
+- **tableState**: The state object produced by useTableFeatures with its plugins; it carries rows, selection, sort and column sizing state and is what makes features persist across virtualization mount and unmount cycles. `state returned from useTableFeatures`
+- **columnSizingOptions**: Per-column resizing configuration keyed by columnId, each entry accepting minWidth, defaultWidth and idealWidth; supply it to the column sizing plugin and read it back from onColumnResize when controlled. `minWidth 150, defaultWidth 250, idealWidth 300`
+- **columnId**: The identifier of a column, used by the sizing plugin to match configuration, header cell props, cell props, setColumnWidth and enableKeyboardMode calls. `file`
+- **width**: The measured or resized width of a column reported through the resize callback; persist it into columnSizingOptions as idealWidth for a fully controlled resizing experience. `300`
+- **autoFitColumns**: When true (the default) the sizing feature fits columns to the container; set it to false to keep fixed widths and allow horizontal overflow, and pair it with noNativeElements. `false`
+- **containerWidthOffset**: Adjusts the width used when fitting columns to their container, useful when surrounding chrome such as a scrollbar or padding would otherwise cause columns to be mis-measured. `17`
+- **visible**: Boolean visibility toggle for the element it is set on (for example a cell actions container); prefer it over conditional mounting when you want layout to remain stable. `true`
+- **root**: The root slot of each primitive, typed against the native element it renders (tbody or div for TableBody, td or div for TableCell, thead or div for TableHeader, div for the non-native containers); use it to pass className, style, ref, event handlers and role or aria attributes. `root with className and aria attributes`
 
 ### Slots
 
@@ -268,114 +264,114 @@ CellNavigation.parameters = {
 
 ### Do's
 
-- Give every table an accessible name with aria-label (or an equivalent labelling attribute) describing the data set, as every Storybook example does.
-- Keep the default native semantic elements unless you have a concrete reason such as virtualization; add noNativeElements only when native table layouting blocks the feature you need.
-- Drive sorting, selection and column sizing through useTableFeatures and its plugins (useTableSelection, useTableSort, useTableColumnSizing_unstable) so that state survives row mounting and unmounting during virtualization.
-- Label the selection controls: pass an aria-label such as 'Select row' through checkboxIndicator or radioIndicator on body cells and an equivalent 'Select all rows' label on the header selection cell.
-- Use TableCellLayout for consistent vertical alignment, media slots, descriptions and truncation instead of hand-building layout inside TableCell.
-- Reflect selection state consistently: set aria-selected on the row and on the selection and data cells, and switch the TableRow appearance between 'brand' when selected and 'none' otherwise.
-- Implement keyboard navigation explicitly and then adopt the matching ARIA roles: useArrowNavigationGroup with a grid axis plus role grid and role gridcell, or useTableCompositeNavigation with focusMode for row and cell focus.
-- Manage cells that contain several focusable controls with useFocusableGroup and a limited-trap-focus behavior, and keep icon-only Buttons labelled with aria-label.
-- Memoize row components when a table has many rows and selection or sorting causes frequent re-renders, following the memoization example that re-renders only the affected row.
-- Control state externally where it must be shared (sortState, selectedItems, columnSizingOptions) so routing, persistence or server data can synchronize with the table.
+- Give every Table an accessible name with aria-label (or an equivalent named region) so the table is distinguishable from other tables on the page.
+- Keep the default native semantic elements for read-only and lightly interactive tables, since semantic table markup gives the best screen reader support; switch to noNativeElements only when virtualization or horizontal overflow demands a flexbox layout.
+- Mirror selection state in three places: the TableSelectionCell checked value, the aria-selected attribute on the TableRow, and the row appearance of brand versus none.
+- Use TableCellLayout for cell content so media, main text and a description line up consistently across rows, and reserve its primary appearance for the column that identifies the row, usually the first column.
+- Add keyboard navigation deliberately: use useArrowNavigationGroup with a grid axis for plain cell navigation, or useTableCompositeNavigation when you want row focus that switches into cell focus on the right arrow key.
+- Provide aria-label values on checkboxIndicator and radioIndicator so the select-all control in the header and the per-row controls announce their purpose.
+- Prevent default on the Space key whenever a row toggles selection, so the page does not scroll while the selection changes.
+- Set aria-rowcount on the Table and aria-rowindex on header and body rows when rows are virtualized, so assistive technology can report position within the full data set.
+- Use columnSizingOptions with minWidth, defaultWidth and idealWidth rather than hard-coded pixel widths, and disable auto-fit with autoFitColumns set to false only alongside noNativeElements.
+- Memoize row components with React.memo and keep click and key handlers stable when rendering large data sets, following the memoization story so only the affected row re-renders on selection change.
 
 ### Don'ts
 
-- Do not assume the primitives provide keyboard navigation, focus management or grid semantics; they ship none of that and screen reader users will be stuck if you do not add it.
-- Do not add role grid and role gridcell to a table that has no keyboard navigation or focusable cells; the ARIA grid pattern obligates you to implement the behavior that goes with the role.
-- Do not let cell action buttons bubble their click or key press into the row, or invoking an action will also toggle row selection.
-- Do not hand-roll cell padding, borders and typography with inline styles; use the built-in size options, TableCellLayout properties and theme tokens so the table matches the rest of your surface.
-- Do not use the brand row appearance as decoration; reserve it for the selected state so the visual language stays unambiguous.
-- Do not set fixed pixel widths on columns when column resizing is enabled; configure minimum, default and ideal widths through columnSizingOptions instead.
-- Do not substitute hidden for invisible in single-select layouts when you want the placeholder cell to keep occupying layout space.
-- Do not virtualize rows with native table elements; strict browser table layouting conflicts with windowing libraries, so use noNativeElements for those cases.
-- Do not memoize every row by default; memoization is not free and should target identified bottlenecks.
-- Do not leave the default story-style typo attributes in place; an accessible name only takes effect with the correct attribute spelling.
+- Do not spread the attributes returned by useArrowNavigationGroup onto a Table without also switching the role to grid; keyboard navigation on the component obligates the aria role grid pattern.
+- Do not put multiple interactive controls in a cell without applying the limited-trap-focus behavior from useFocusableGroup to that TableCell, which leaves users tabbing through every control in every row.
+- Do not virtualize or horizontally scroll a table that renders native semantic elements; browser table layout resists it, so the rows will not overflow the parent as expected.
+- Do not let a row-level selection handler fire when the user clicks a TableCellActions button; stop the event with preventDefault and check defaultPrevented in the row handler.
+- Do not rely on background color alone to communicate selection; combine row appearance with aria-selected and the visible selection cell.
+- Do not mix controlled and uncontrolled state for the same feature; if selectionMode is driven by selectedItems with an onSelectionChange callback, do not also expect uncontrolled defaultSelectedItems behavior.
+- Do not omit the accessible name on TableSelectionCell indicators, and do not use an invisible header selection cell for multiselect headers where a select-all checkbox belongs.
+- Do not build ad-hoc layout wrappers inside cells to align icons and text; TableCellLayout already handles media, description and truncation.
+- Do not assume screen reader users will hear the sort direction change; the sortable pattern is correct but announcement is unreliable in some screen readers.
+- Do not place focusable header content without making the header cell focusable; context menus attached to TableHeaderCell require the cell itself to receive tabIndex.
 
 ## Anti-Patterns
 
-### Assuming the table navigates itself
+### Keyboard navigation without the grid role
 
-❌ The primitives contain no keyboard navigation, so arrow keys and Tab do nothing useful and keyboard users cannot reach cells or rows.
+❌ Spreading the attributes from useArrowNavigationGroup onto a Table without changing the role leaves assistive technology with a static table while the component behaves as a composite widget, so row and cell context is lost and the interaction does not match any ARIA pattern.
 
-✅ Add navigation explicitly with useArrowNavigationGroup configured for a grid axis, or useTableCompositeNavigation with the focusMode prop, and adopt role grid plus role gridcell once navigation exists.
+✅ Whenever any keyboard navigation is added, set the role to grid on the Table, give every navigable TableCell the gridcell role and a tabIndex, and follow the WAI-ARIA grid pattern for data grids.
 
-### Using grid roles without grid behavior
+### Virtualizing or overflowing native table elements
 
-❌ Applying role grid and role gridcell without keyboard navigation or focusable cells breaks the obligations of the ARIA grid pattern and misleads assistive technology about what users can do.
+❌ Native table layout is strictly managed by the browser, so rows will not overflow the parent and a virtualized list rendered inside a real table body breaks column alignment and scroll behavior.
 
-✅ Either keep the native table semantics and simple tab order, or implement full grid navigation and focus management before adding the grid roles.
+✅ Render with noNativeElements so every element becomes a div with flexbox layout, set aria-rowcount on the Table and aria-rowindex on rows, and add only a decorative presentational element for scrollbar alignment in the header.
 
-### Cell actions that also select the row
+### Cell actions that also trigger row selection
 
-❌ Clicks and key presses on buttons inside TableCellActions bubble up to the row handler, so pressing Edit also toggles the row selection.
+❌ When a row has an onClick or onKeyDown selection handler, pressing a button or the Space key inside TableCellActions bubbles up and toggles the row, confusing users who only wanted to run the cell action.
 
-✅ Stop the event at the cell actions level, for example by calling preventDefault in the action handlers and checking defaultPrevented in the row handlers before toggling selection.
+✅ Stop the event inside the cell actions container with preventDefault and check defaultPrevented in the row handler before toggling selection; this event coordination is intentionally left to the consuming app.
 
-### Virtualizing native table markup
+### Every row re-rendering on a single selection change
 
-❌ Native table elements are subject to strict browser layouting and do not behave well when rows are mounted and unmounted by a windowing library or when the table must overflow its container.
+❌ Recreating row objects, handlers and cell content on every render makes large tables re-render wholesale each time one row's selection changes, which causes visible lag in data-heavy screens.
 
-✅ Switch to noNativeElements for a flexbox layout, expose aria-rowcount and aria-rowindex, and use role presentation for decorative alignment elements such as the scrollbar spacer.
+✅ Follow the memoization story: extract the row into its own component wrapped in React.memo, pass stable callbacks created with useCallback, and give each row a stable key such as its rowId.
 
-### Keeping selection state inside rows
+### Uncontrolled focus traversal through interactive cells
 
-❌ Storing selection locally in each row component loses state whenever rows unmount, which happens constantly under virtualization and can also desynchronize select-all behavior.
+❌ Placing buttons, links or menus inside every cell without special handling makes Tab step through every control in every row, making the table effectively unnavigable for keyboard users.
 
-✅ Hoist selection into useTableFeatures with useTableSelection in controlled or uncontrolled mode so the hook owns the selected item set and the header select-all control.
+✅ Make the cell the focus target, add arrow-key navigation with useArrowNavigationGroup, and apply useFocusableGroup with the limited-trap-focus tab behavior to cells that contain multiple focusable elements so Enter enters the cell and Escape leaves it.
 
-### Hard-coding column widths in inline styles
+### Hard-coded column widths with the sizing feature
 
-❌ Fixed pixel widths bypass the column sizing feature, break auto-fit behavior and produce inconsistent layouts across container sizes.
+❌ Setting pixel widths directly on cells fights the column sizing plugin, producing columns that jump, overlap or fail to respect minimum widths when the container resizes.
 
-✅ Define widths through columnSizingOptions with minimum, default and ideal values, apply the sizing props returned for the table, header cells and cells, and wrap the table in a horizontal scroll container when auto-fit is disabled.
+✅ Configure width constraints through columnSizingOptions with minWidth, defaultWidth and idealWidth, spread the header cell and cell props returned by the sizing object, and persist measured widths back through the resize callback when controlling the feature.
 
 ## Accessibility
 
-**Requirements**: The Table must satisfy WCAG 1.3.1 by exposing real header and data relationships, which the default native elements provide; if you switch to noNativeElements you must supply equivalent roles yourself. Keyboard access (WCAG 2.1.1) is not automatic: you must add grid navigation and a visible focus indicator that meets 2.4.7, because the primitives never move focus. Provide a programmatic name for the table (WCAG 4.1.2) and, when selection or sort state changes, ensure the change is perceivable (WCAG 4.1.3) since the sort status is a known announcement gap. Interactive elements placed inside cells must meet target size and contrast requirements, and empty header cells used only for alignment must not introduce confusing semantics.
+**Requirements**: Table should satisfy WCAG 1.3.1 Info and Relationships by exposing real table structure (native table elements, or role grid with role row and role gridcell when non-native elements are used), WCAG 4.1.2 Name Role Value by giving the table an accessible name through aria-label and by labelling every selection control, WCAG 2.1.1 Keyboard by making every sortable header, selectable row and cell action reachable and operable from the keyboard, and WCAG 2.4.7 Focus Visible by keeping the Fluent focus indicator intact on rows, headers, cells and actions. Selection conveyed by color must additionally be conveyed by aria-selected, aria-checked (including the mixed value for partially selected sets) and the visible checkbox or radio. Interactive tables that support arrow-key navigation must follow the WAI-ARIA grid pattern, and sortable headers must follow the WAI sortable-table pattern.
 
 | Key | Action |
 | --- | --- |
-| `Tab` | Moves focus into and out of the table, or steps between focusable elements when no grid navigation is implemented |
-| `Shift+Tab` | Moves focus in the reverse direction, out of the table or to the previously focusable element |
-| `Arrow keys` | With useArrowNavigationGroup configured for a grid axis, move focus between grid cells in the corresponding direction |
-| `Right Arrow` | In composite navigation, moves from row focus into the cells of the current row |
-| `Enter` | On a cell that contains multiple focusable elements, moves focus inside the cell so its controls can be reached |
-| `Escape` | From inside a cell with trapped focus, returns focus to the cell itself |
-| `Space` | Toggles selection of the focused row, and toggles the select-all control in the header selection cell |
-| `Enter or Space on a sortable header` | Sortable header cells are rendered as buttons, so activating them with Enter or Space applies the column sort |
-| `Context menu on a header cell` | The Menu opened on a header cell exposes advanced features such as keyboard column resizing |
+| `Tab` | Moves focus into the table and, when grid navigation is enabled, to the single focusable cell; Shift+Tab moves focus out to the previous control. |
+| `ArrowDown / ArrowUp` | Moves focus between rows when grid navigation from useArrowNavigationGroup is applied with a grid axis. |
+| `ArrowLeft / ArrowRight` | Moves focus between cells in the current row under grid navigation. |
+| `ArrowRight` | In composite navigation, switches focus mode from the current row into the individual cells of that row. |
+| `Space` | Toggles selection of the focused row or the select-all control when row selection handlers are attached; must call preventDefault to avoid page scrolling. |
+| `Enter` | Moves focus into a cell that contains multiple focusable elements when the cell uses limited-trap-focus from useFocusableGroup; also activates a sortable header button. |
+| `Escape` | Returns focus from within a trapped focus group back to the containing cell. |
+| `Tab / Shift+Tab inside a focus trap` | Cycles through the focusable controls inside the cell rather than leaving it, because the group uses limited trap focus. |
 
-**ARIA**: aria-label, role grid, role gridcell, role checkbox, role presentation, aria-checked, aria-selected, aria-rowcount, aria-rowindex, aria-label on checkboxIndicator and radioIndicator, tabIndex on navigable rows and cells
+**ARIA**: aria-label (accessible name for the Table and for TableCellActions buttons), aria-selected (applied to TableRow and TableSelectionCell to convey row selection), aria-checked (true, false or mixed on the select-all and per-row selection controls), aria-rowcount (set on the Table when rows are virtualized or lazily rendered), aria-rowindex (set on header and body rows to report row position in virtualized tables), role="grid" (required once keyboard navigation is added to the table), role="gridcell" (applied to TableCell when a non-native grid is used), role="checkbox" (used on the select-all header selection cell), role="presentation" (used for decorative scrollbar-alignment elements inside header rows), aria-label on checkboxIndicator and radioIndicator (names the select-all and per-row selection inputs)
 
-**Screen Reader**: With native elements, screen readers announce the table as a table with row and column counts and read column headers in context for each cell, which is why native markup is the recommended default. Once keyboard navigation is added and role grid plus role gridcell are applied, the component is announced as a grid instead, and cells are read as grid cells with their coordinates and selection state; selected rows and cells are announced through aria-selected, and header selection controls through aria-checked with a mixed value when some but not all rows are selected. Sortable headers behave as buttons, and although the design follows the WAI sortable-table pattern, the newly sorted column state may not always be announced after activation, which is a known screen reader limitation. Virtualized tables should expose aria-rowcount and per-row aria-rowindex so assistive technology can describe position within the full data set even though only a window of rows exists in the DOM. Decorative spacer elements, such as the scrollbar alignment div used above a virtualized list, should be hidden with role presentation.
+**Screen Reader**: With default native elements, screen readers enter a table reading mode and announce column headers as users navigate cells, which is why native markup is preferred for non-virtualized tables. Once the table is given role grid, assistive technology treats it as a composite widget: users move between rows and cells with arrow keys and hear row and column context as focus moves, and a single Tab press enters or leaves the widget rather than stepping through every cell. Selection state is announced from aria-selected on rows and aria-checked on the checkbox or radio, including the mixed state when only some rows are selected; a row rendered with brand appearance but no aria-selected will be announced as unselected. Row position in virtualized tables is announced from aria-rowcount and aria-rowindex. Sort state follows the WAI sortable-table pattern driven by the sortDirection prop on TableHeaderCell, but be aware that some screen readers, notably NVDA, may not announce the sort status after a sortable header is invoked.
 
 ## Styling
 
-Table styling is done with Griffel makeStyles and Fluent design tokens rather than component-level style props. Row backgrounds, hover and selected states should use tokens.colorNeutralBackground1, tokens.colorNeutralBackground1Hover and tokens.colorNeutralBackground1Selected, while the TableRow brand appearance resolves to brand selection tokens such as tokens.colorBrandBackground2 with text in tokens.colorBrandForeground1. Subtle selection cells are meant to stay quiet until interaction, so they lean on tokens.colorSubtleBackgroundHover and tokens.colorSubtleBackgroundSelected instead of a persistent selection color. Separators and outlines typically use tokens.colorNeutralStroke2 and tokens.strokeWidthThin, and the focus ring uses tokens.colorStrokeFocus2 so it stays visible against both neutral and brand backgrounds. Typography hierarchy inside cells maps to tokens.fontSizeBase300 and tokens.fontWeightRegular for body text, tokens.fontSizeBase200 and tokens.colorNeutralForeground3 for the secondary description line, and the primary cell appearance bumps the main label to a larger size with tokens.fontWeightSemibold and expands the media size. Spacing uses tokens.spacingHorizontalS and tokens.spacingHorizontalM for inner padding and tokens.spacingVerticalSNudge or similar vertical spacing tokens for row height; the small and extra-small size options simply reduce those paddings. Use tokens.borderRadiusMedium for rounded cell groupings and tokens.shadow2 if you make a header sticky, and always truncate long values through the TableCellLayout truncate option rather than clipping text yourself.
+Most visual customization should be applied through the root slot, which is the first-class styling hook of every Table primitive (Table, TableHeader, TableRow, TableCell, TableHeaderCell, TableSelectionCell, TableCellLayout, TableCellActions), and through Griffel classes composed with mergeClasses rather than inline pixel styling. Row emphasis uses the appearance prop: brand tints selected rows with tokens.colorBrandBackground2 while none leaves the row transparent, and hover feedback comes from tokens.colorSubtleBackgroundHover and tokens.colorSubtleBackgroundPressed, with pressed rows using tokens.colorNeutralBackground1Pressed. Header cells inherit tokens.colorNeutralBackground2 with token-driven borders from tokens.colorNeutralStroke2, and body text uses tokens.colorNeutralForeground1 with secondary or description text in tokens.colorNeutralForeground2 and tokens.colorNeutralForeground3. Selection indicators and other interactive cells rely on tokens.colorNeutralStroke1 and tokens.colorNeutralStrokeAccessible for the control outline and tokens.colorStrokeFocus2 for focus rings. Density is controlled with the size prop values small and extra-small, so avoid overriding cell padding manually; if you must, prefer tokens.spacingVerticalS, tokens.spacingVerticalXS, tokens.spacingHorizontalS and tokens.spacingHorizontalMNudge. Emphasis in TableCellLayout comes from the primary appearance, which increases icon size and applies tokens.fontWeightSemibold with tokens.fontSizeBase300 and tokens.lineHeightBase300 for the main line. TableCellLayout truncate keeps long values inside the column instead of widening it, which is essential when columns are resizable. When columns are resizable you must also wrap the table in an overflow container and render with noNativeElements, because native table layout will not overflow its parent.
 
 ## Performance
 
-Row rendering dominates Table performance. The features example shows the intended pattern: keep business logic in useTableFeatures, map rows from the hook, and memoize the row component with React.memo plus useCallback handlers so that a selection change re-renders only the affected row rather than the entire table. Column definitions and item arrays should be stable between renders, since new array identities invalidate memoized rows. For very large data sets use noNativeElements with a windowing library so only visible rows exist in the DOM, and rely on the feature state hook to preserve selection and sort state across the mounting and unmounting of rows; pair this with aria-rowcount and aria-rowindex so the model stays complete for assistive technology. Column resizing recomputes widths across the table, so debounce or batch width updates when dragging, and prefer the imperative setColumnWidth path over forcing a full controlled re-render for every pointer move. Avoid heavy cell content such as nested tables, and prefer lightweight media such as icons or avatars inside TableCellLayout for large grids.
+Because Table primitives are stateless, rendering cost is dominated by the row and cell subtrees you author. Hoisting selection, sort and column sizing into useTableFeatures keeps feature state outside the render tree, so it survives the mounting and unmounting that occurs during virtualization. For large data sets, memoize each row component with React.memo, stabilize the click and keydown handlers with useCallback, and key rows by a stable identity such as rowId so a selection change re-renders only the affected row. Row rendering in virtualized scenarios should be delegated to a virtualization library, combined with noNativeElements so layout is flexbox-based and inexpensive to reposition, and with aria-rowcount and aria-rowindex so the virtualized subset is still announced correctly. Column resizing and auto-fit perform layout measurement, so prefer autoFitColumns set to false when you already control the widths, and avoid re-creating the sizing options object on every render. Cell actions that appear on hover should be rendered as part of the row rather than mounted on demand, since hover-triggered mounting causes layout thrash inside cells.
 
 ## Theming & Tokens
 
-Table consumes the Fluent theme provided by FluentProvider, so every color, radius, spacing and typography value comes from theme tokens rather than hard-coded values. Neutral rows and headers draw from tokens.colorNeutralBackground1 with tokens.colorNeutralBackground1Hover and tokens.colorNeutralBackground1Selected for interaction states, borders use tokens.colorNeutralStroke2 with tokens.strokeWidthThin, and text hierarchy uses tokens.colorNeutralForeground1, tokens.colorNeutralForeground2 and tokens.colorNeutralForeground3. The brand row appearance and brand selection accents resolve through tokens.colorBrandBackground2, tokens.colorBrandForeground1 and tokens.colorBrandStroke1, while subtle selection cells rely on tokens.colorSubtleBackgroundHover and tokens.colorSubtleBackgroundSelected. Focus indicators use tokens.colorStrokeFocus2 so they remain visible in both light and dark themes, and elevated or sticky headers can use tokens.shadow2. Density is expressed with spacing tokens such as tokens.spacingHorizontalS, tokens.spacingHorizontalM and tokens.spacingVerticalSNudge, and the size options map to the same token scale, so changing theme or density in the provider updates the table without component-level overrides.
+Table reads all of its color, typography and spacing from the Fluent theme provided by FluentProvider, so switching themes swaps the underlying CSS custom properties without changing table markup. Body surfaces use tokens.colorNeutralBackground1, header surfaces use tokens.colorNeutralBackground2, and separators and control outlines come from tokens.colorNeutralStroke2 and tokens.colorNeutralStroke1. Hover and press feedback on rows use tokens.colorSubtleBackgroundHover, tokens.colorSubtleBackgroundPressed and tokens.colorNeutralBackground1Pressed, focus rings use tokens.colorStrokeFocus2, and selected rows rendered with appearance brand pull from the brand ramp through tokens.colorBrandBackground2 while selected neutral rows use tokens.colorNeutralBackground1Selected. Text colors follow tokens.colorNeutralForeground1 for cell content, tokens.colorNeutralForeground2 for descriptions and secondary metadata, and tokens.colorNeutralForeground3 for the quietest supporting text. Density and typography scale with the Table size prop, which adjusts padding and uses tokens.fontSizeBase300, tokens.lineHeightBase300 and tokens.fontWeightSemibold for emphasized primary cell content. Custom styling should compose Griffel classes on the root slot with mergeClasses rather than overriding internal class names, so token-based values continue to respond correctly to theme and density changes.
 
 ## Migration Notes
 
-Older generations of Fluent exposed a single monolithic table or details-list component with sorting, selection and column sizing baked in; in v9 those behaviors are opt-in and distributed across useTableFeatures and its plugins, so equivalent tables must be assembled from primitives plus hooks. Column resizing is still shipped as a preview feature through the useTableColumnSizing_unstable plugin, which is why the resize stories are labelled preview and why the accessing methods are named with the unstable suffix. Virtualization is no longer an internal table concern: use noNativeElements for flexbox layout and combine the primitives with a windowing library, relying on the feature state hook to keep selection and sorting stable across the mounting and unmounting of rows. Keyboard navigation also moved from implicit behavior to explicit utilities such as useArrowNavigationGroup, useFocusableGroup and useTableCompositeNavigation.
+The Table primitives are the successor to both the older v8-style declarative table and the DataGrid component family (DataGrid, DataGridHeader, DataGridRow, DataGridCell and friends), which are themselves compositions of these primitives. The modern approach is to build the markup from Table, TableHeader, TableBody, TableRow, TableCell and TableHeaderCell and to obtain state from useTableFeatures combined with plugins such as useTableSelection, useTableSort and useTableColumnSizing_unstable; any feature available in a prebuilt data grid is achievable with the primitives and the hook. Feature logic lives in the hook rather than in the components, so selection and sort state survive mounting and unmounting during virtualization. Column resizing remains a preview API (the unstable hook) and is opt-in: it requires columnSizingOptions, the tableRef returned by useTableFeatures, the getTableProps, getTableHeaderCellProps and getTableCellProps methods, and optionally onColumnResize for controlled widths, setColumnWidth for imperative widths and enableKeyboardMode for keyboard resizing. Layout migration matters too: containers that previously fought native table layout should switch to noNativeElements, where every element renders as a div with flexbox-based layout approximating the native table experience.
 
 ## Edge Cases
 
-- The default story passes a misspelled arial-label attribute, which does nothing; an accessible name only applies when the attribute is spelled correctly, so double-check this when copying examples.
-- Sort status may not be announced by some screen readers after a sortable header is activated, which is a documented limitation even though the implementation follows the WAI sortable-table pattern.
-- When auto-fit is disabled, columns no longer compress to the container, so the table must be wrapped in a horizontally scrollable element or content will be clipped.
-- Column resizing is a preview feature exposed through the useTableColumnSizing_unstable plugin, and keyboard-driven resizing requires opening a Menu on the header cell to reach the resizing action.
-- In single-selection tables the header selection cell should render as a radio type indicator with invisible set, otherwise the header shows a control that users cannot meaningfully activate.
-- The DataGrid-style example mixes a header selection cell announced as a checkbox with body cells exposed as grid cells, so role assignments must be kept consistent between header and body for valid semantics.
-- Under virtualization, row components unmount frequently, so any state not held by useTableFeatures (such as local expanded rows) will be lost unless you lift it out of the row.
-- The focusMode and tableState values are consumed by the feature and navigation utilities rather than rendering directly, so changing them without wiring the corresponding hooks has no visible effect.
+- Sort status may not be announced by screen readers after a sortable header is invoked; the implementation follows the WAI sortable-table pattern, but this remains a known screen reader limitation rather than a markup defect.
+- Column resizing is a preview API exposed through useTableColumnSizing_unstable, and it requires the table ref, the table props and header/cell props from the sizing object; keyboard resizing must be enabled explicitly per column, typically through a context menu on the header cell.
+- Native table elements will not overflow their parent, so horizontal scrolling and virtualization require noNativeElements; without it, wide or virtualized content is clipped instead of scrollable.
+- Disabled auto-fit keeps fixed column widths, but content can then be clipped, so combine it with TableCellLayout truncate to preserve readable cells.
+- A select-all header cell must communicate the mixed state with both the checked value of mixed and a matching aria-checked value, otherwise partially selected sets are announced as fully selected or unselected.
+- Rows with a selection handler must call preventDefault on the Space key, or the page scrolls while the selection toggles.
+- Virtualized tables must declare aria-rowcount on the Table and aria-rowindex on mounted rows, and typically need a presentational element in the header row to keep the header aligned with the scrollbar.
+- Header cells that host a context menu for advanced features must themselves be focusable, since the menu trigger alone does not make the header reachable by keyboard in a grid-navigated table.
+- Cell actions are hidden until the row is hovered or contains focus, so any action exposed only there must still be reachable by keyboard and must carry an accessible name.
 
 ## See Also
 

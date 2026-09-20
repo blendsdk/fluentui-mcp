@@ -4,142 +4,195 @@
 
 ## Goal
 
-Build a Fluent UI React v9 data surface that explicitly renders every async state — initial loading, refreshing, empty, error, and success — with skeletons that mirror the final layout, an accessible status region, a retryable error MessageBar, and a distinct actionable empty state.
+Render every phase of an async request — first load, background refresh, failure, stale data, empty result, and success — with Fluent UI v9 components so the UI never jumps, never loses the user's context, and never mis-announces state to assistive technology.
 
 ## When to Use
 
-Use this recipe whenever a component depends on data fetched at runtime (REST/GraphQL calls, FileReader, IndexedDB, dynamic imports) and that data can be slow, fail, or come back empty. It is the right choice for lists, detail panes, dashboards, and search results that users will retry or refresh.
+Use this recipe for any surface whose content comes from a remote source: lists, feeds, detail panes, dashboards, tables, and infinite/`load more` views. It is the right choice whenever the UI must distinguish 'still loading', 'refreshing', 'failed', 'empty' and 'ready', or must keep previously loaded data visible while a new request is in flight.
 
 ## When Not to Use
 
-Do not use it for data that is already available synchronously at render time, or for purely local UI state (open/closed, selection) — those need no loading or error branches. For one-shot destructive confirmations use a Dialog instead; for transient background notifications that must not block the view, use the Toast pattern (Toast + a toaster/controller) instead of an inline MessageBar.
+Do not use it for synchronous, purely client-side state (if there is no request, there is nothing to load — just render). Do not use a full content skeleton for a fast mutation such as a save or delete; disable the triggering Button and/or update optimistically. Do not replace content with a spinner for a blocking decision that must prevent interaction — use a modal Dialog with a Spinner inside. For non-blocking failures that happen while the user is doing something else, prefer Toaster/Toast over a MessageBar that takes over the layout.
 
-A data view is never one state. Decide up front how each of the five states renders, and the component writes itself:
+A single remote read produces more than two UI phases. Most applications implement *loading* and *success* well and then handle *error* with a raw exception and *empty* with a blank screen. This recipe models the phases explicitly and maps each one to a Fluent UI v9 component.
 
-| State | What the user sees | Fluent UI building blocks |
+## The phase map
+
+| Phase | Trigger | Component |
 | --- | --- | --- |
-| Initial loading | A placeholder that matches the final layout | `Skeleton` (+ `Spinner size="extra-tiny" delay={500}`) |
-| Refreshing | Existing content, plus a quiet progress hint | `Spinner` beside the section title, or in `Input`'s `contentAfter` |
-| Empty | "Nothing here yet" and the next useful action | `Text` + `Button` |
-| Error | What failed, why, and how to retry | `MessageBar intent="error"` + `Button` |
-| Success | The data itself | `Card`, `Avatar`, `Badge`, `Text`, `Divider` |
+| **First load** | no data yet, request in flight | `Skeleton` (content-shaped) or `Spinner` (inline) |
+| **Refreshing** | data already on screen, new request in flight | inline `Spinner` + `aria-busy` on the region |
+| **Determinate progress** | the server reports a percentage | `ProgressBar value={n}` |
+| **Failure** | request rejected and there is nothing to show | `MessageBar intent="error"` with a retry `Button` in `MessageBarActions` |
+| **Degraded / stale** | refresh failed but the last good payload still applies | `MessageBar intent="warning"` above the untouched content |
+| **Empty** | request succeeded with zero items | `MessageBar intent="info"` or a `Card` empty state with a primary action |
+| **Success** | request succeeded with data | your content, inside an `aria-busy={false}` region |
 
-The recipe is: one state machine, one hook that owns the request, one render branch per state, and a container whose size does not jump between them.
+## 1. Model the phases as a discriminated union
 
-## 1. Model the states as a discriminated union
-
-Never keep `loading`, `data`, and `error` as three independent `useState` values — that permits impossible combinations (a spinner and an error at once, or "empty" and "success" at once). One union deletes the whole bug class and gives you narrowing for free:
+Do not scatter `isLoading`, `isError`, `data` and `error` booleans — they allow impossible combinations (`isLoading && isError`). Use one union and let TypeScript prove which branch you are in:
 
 ```tsx
 type AsyncState<T> =
-  | { status: 'idle' }
   | { status: 'loading' }
+  | { status: 'refreshing'; data: T } // keep the last good result on screen
   | { status: 'error'; error: Error }
   | { status: 'success'; data: T };
 ```
 
-`status` is the discriminant, so `switch (state.status)` narrows `state.error` and `state.data` without casts. Note that **empty is not a status**: it is `status === 'success'` with `data.length === 0`. Treating empty as an error produces a retry button that can never succeed, which is one of the fastest ways to lose a user's trust.
+Note that **empty is not a status**. It is a property of a successful payload (`data.length === 0`), so it should be derived — usually with an `isEmpty` predicate. Mixing it into the union means you have to reset it correctly on every refresh.
 
-## 2. One hook owns the request
+Rendering then becomes a `switch` (or a sequence of early returns) with no nullable checks. Pair the union with a hook that owns an `AbortController` so a slow first response can never overwrite a fast second one.
 
-Keep the request lifecycle in a single hook so every consumer gets the same guarantees:
+## 2. First load: skeletons beat spinners
 
-1. **Cancel on change or unmount** with `new AbortController()` and `return () => controller.abort()`.
-2. **Ignore stale responses.** After the promise settles, check `controller.signal.aborted` before calling `setState`. This is what prevents an older, slower request from overwriting newer results, and it prevents the "set state on unmounted component" warning.
-3. **Expose a `reload`.** A monotonically increasing `nonce` in the effect dependencies re-runs the fetch without duplicating logic. Pass it straight to the retry `Button` in the error branch and to the "Refresh" `Button` in the header.
-4. **Normalize errors** to an `Error` instance (`cause instanceof Error ? cause : new Error(String(cause))`) so the error branch never renders `[object Object]`.
+A skeleton reserves the same space the real content will occupy, so the page does not reflow when data lands. Mirror the real structure with `Card` + `CardHeader` and give every line its own `Skeleton`:
 
-The hook returns `{ state, reload }`. Everything else in this recipe is presentation.
+```tsx
+<Card appearance="outline">
+  <CardHeader
+    image={<Skeleton animation="wave" shape="circle" size={32} />}
+    header={<Skeleton animation="wave" width="180px" />}
+    description={<Skeleton animation="wave" width="120px" />}
+  />
+  <Skeleton animation="wave" width="100%" />
+  <Skeleton animation="wave" width="64%" />
+</Card>
+```
 
-## 3. Initial loading: skeleton first, spinner second
+`Skeleton` accepts `animation` (`wave` or `pulse`), `appearance`, `width`, `size` and `shape`, which is enough to mock avatars (`shape="circle"`), badges (`shape="rectangle"`), and text lines. Wrap the group in a single `role="status"` element with an `aria-label` such as `Loading deployments` so the wait is announced once rather than per placeholder.
 
-- Prefer `Skeleton` whose shapes mirror the real content — a `shape="circle"` block of the same diameter as the incoming `Avatar`, a `width="45%"` line where the name goes, a `width="70%"` line for the subtitle. The real content then *assembles* instead of jumping.
-- Use `Spinner delay={300}`–`500` so a fast response never flashes a spinner. For a list, pair a tiny spinner with an invisible-until-delayed appearance and skeleton rows.
-- Wrap the loading branch in `role="status"` with `aria-live="polite"` **and real text** ("Loading team members…"). A `Spinner` on its own has no accessible name and exposes nothing to screen readers.
-- Mark the skeleton markup `aria-hidden="true"` so the decorative placeholder is not announced; the status text carries the message.
+Use `Spinner` for inline or sub-second waits — never for a first page load of a large surface. `Spinner` takes its label from its children, so give it real text: `<Spinner size="small" labelPosition="after">Refreshing…</Spinner>`. Its `delay` prop lets you suppress the indicator entirely for fast responses, which removes the flicker that makes fast apps feel slow.
 
-## 4. Refreshing: never unmount the content
+## 3. Refreshing: keep the data, mark the region busy
 
-For refresh and polling, keep the last successful data on screen (stale-while-revalidate) instead of falling back to the loading branch:
+Replacing content with a skeleton on every refresh destroys scroll position, focus, text selection, and the user's reading context. Instead:
 
-- Track `isInitialLoading` (true only until the first success) separately from `isFetching` (true while any request is in flight).
-- While `isFetching && !isInitialLoading`, show a small `Spinner` (or an `Input` `contentAfter` spinner for searches) next to the title, and disable the Refresh `Button`.
-- If the refresh fails while data exists, show a **warning** `MessageBar` that says the values are the last known ones, rather than replacing the content with a full-page error.
+1. Keep rendering the previous `data` (that is why `refreshing` carries `data`).
+2. Set `aria-busy` on the region that is re-fetching.
+3. Show a small `Spinner` next to the refresh `Button` and disable that button while the request is in flight.
 
-This also preserves focus and scroll position, which a full unmount destroys.
+```tsx
+{state.status === 'refreshing' && (
+  <Spinner size="extra-tiny" labelPosition="after">Refreshing…</Spinner>
+)}
+```
 
-## 5. Empty: distinct, actionable, never a spinner
+When the refresh succeeds, update the count/summary text in the same commit so the change is perceivable without a visual flash.
 
-The empty branch is a success branch with zero rows. It should answer two questions: *why is this empty* and *what can I do next*. Render `Text` for the explanation, `Text size={200}` for the detail, and a single `Button` for the next action ("Invite a teammate", "Clear search", "Check again"). Make the copy context-sensitive — echo the search term ("No people match “priya”") so users understand the empty state is a filter result and not a broken page.
-
-## 6. Error: MessageBar + retry
+## 4. Failure: one MessageBar with one obvious recovery
 
 ```tsx
 <MessageBar intent="error" politeness="assertive">
-  {/* title, message, retry Button */}
+  <MessageBarBody>
+    <MessageBarTitle>Couldn't load projects</MessageBarTitle>
+    {error.message}
+  </MessageBarBody>
+  <MessageBarActions>
+    <Button appearance="primary" onClick={onRetry}>Try again</Button>
+  </MessageBarActions>
 </MessageBar>
 ```
 
-- `intent="error"` for failures the user is waiting on; use `intent="warning"` when stale data is still on screen.
-- `politeness="assertive"` is reserved for an error directly caused by a user action (they just pressed Retry/Refresh). Background poll failures should use `politeness="polite"` so they do not interrupt.
-- Always include the underlying `error.message`; "Something went wrong" without a reason is unactionable.
-- The retry `Button` must call the hook's `reload`, which flips the state back to `loading` so the user sees the retry happen.
+Guidelines:
 
-## 7. Retry and refresh semantics
+- `intent="error"` for the blocking case where the content is gone; `intent="warning"` when the user can keep working with stale content.
+- `politeness="assertive"` interrupts the screen reader, so reserve it for failures that removed the content the user was interacting with. Polite announcements that arrive after the fact are usually ignored.
+- `MessageBarActions` accepts a `containerAction` slot for a low-emphasis button (Dismiss, View details) that should sit apart from the primary recovery action.
+- Move focus to the recovery button **only** when the error surface replaced the content the user was on. Never move focus for a background refresh failure.
+- Write human copy: what failed, and what the user can do. Do not print a stack trace.
 
-- Disable the retry/refresh `Button` while `isFetching` so double clicks cannot queue duplicate requests.
-- Keep the button mounted after the click (it becomes `disabled`) rather than unmounting it, otherwise keyboard focus is dropped to `<body>` and screen-reader users lose their place. If you must replace the branch, move focus deliberately to the status region.
-- A retry should reuse the exact same request parameters — do not silently change filters or page.
-- Give the container a stable `min-height` or keep one skeleton row visible so the page does not collapse between states.
+## 5. Empty: a success with zero results
 
-## 8. Announcements, focus, and structure
+Zero results is a successful request. Render it as information, plus a path forward:
 
-- Loading: `role="status"` + `aria-live="polite"` + visible text.
-- Errors: `MessageBar` with the right `politeness` (see above).
-- Results: label the list (`aria-label` on the `<ul>`), and give each row a stable `key` that is the entity id, not the array index — indices shift when data is revalidated and cause wrong rows to be reused.
-- Add `aria-busy="true"` on the container while a refresh is in flight.
-- Never encode status with color alone: the `Badge` in the examples always carries a text label in addition to `color`.
+```tsx
+<MessageBar intent="info">
+  <MessageBarBody>No deployments yet. Push to your default branch and they will show up here.</MessageBarBody>
+</MessageBar>
+```
 
-## Checklist
+For first-run experiences where you want to push a single action, use a `Card` with `CardHeader` (title + description) and a `Button appearance="primary"` such as *New project*. Do not use `intent="warning"` or `intent="error"` — nothing went wrong.
 
-- [ ] `AsyncState<T>` union exists; no independent `loading`/`error`/`data` booleans.
-- [ ] `AbortController` cancels on unmount and on dependency change; `signal.aborted` is checked before `setState`.
-- [ ] Loading branch renders skeleton shapes that match the real content, plus a text-based status message.
-- [ ] Empty branch is separate from error and offers a next action.
-- [ ] Error branch renders a MessageBar with the real message and a retry that calls `reload`.
-- [ ] Refresh keeps existing content mounted; refresh failures are warnings, not full-page errors.
-- [ ] Retry/refresh buttons are disabled while `isFetching`.
+## 6. Stale data and partial failure
+
+If a background refresh fails while the last payload is still useful, do **not** trade good data for an error card. Keep the data, keep the scroll position, and add a warning above it with a Retry affordance. Example 2 implements exactly this with a reducer: a `failure` action only becomes `status: 'error'` when there is no data to fall back on; otherwise it sets a `staleWarning` string and stays `ready`.
+
+## 7. Compose it once: an async boundary
+
+The `AsyncResourceView` in example 1 is a tiny generic boundary. Callers pass the union, a retry callback, and a render function for the success branch:
+
+```tsx
+<AsyncResourceView
+  state={state}
+  onRetry={reload}
+  errorTitle="Couldn't load projects"
+  isEmpty={(projects) => projects.length === 0}
+  emptyFallback={<EmptyState title="No projects yet" description="Projects you create will appear here." />}
+>
+  {(projects) => <ProjectGrid projects={projects} />}
+</AsyncResourceView>
+```
+
+Rules of thumb:
+
+- One hook owns the request lifecycle (fetch, abort on unmount, abort superseded requests, expose `reload`).
+- One boundary component owns the phase switch. Feature code only writes the success branch.
+- Allow per-surface fallbacks (`loadingFallback`, `emptyFallback`) so a table can pass skeleton rows while a card passes a card skeleton.
+- Never fire side effects (navigation, toasts, analytics) from the render switch — fire them from the data hook.
+
+## Accessibility checklist
+
+- `role="status"` (polite) for first-load skeletons and spinners; `aria-busy` on the region that re-fetches.
+- `MessageBar` is already a live region — pick `politeness` there instead of adding your own `aria-live` wrapper, or the message will be announced twice.
+- Give `ProgressBar` an accessible name when it is not described by adjacent text (for example `aria-label="Deploying identity service"`).
+- Announce results, not just work: updating the `CardHeader` description to `24 services` after a refresh tells the user what changed.
+- Focus discipline: move focus to the retry button for content-replacing errors; never move it for refreshes or warnings.
+- Wrap the application in `FluentProvider` (with your theme) so skeletons, spinners, and message bars pick up the design tokens; all examples below assume that provider is already at the app root.
 
 ## Examples
 
-### Full async state machine with skeleton, empty, error, and retry
+### AsyncResourceView: a reusable boundary for loading, error, empty and success
 
-A reusable useAsyncData hook (AbortController + stale-response guard + reload nonce) and a render function that switches on a discriminated union to produce skeleton loading, an actionable empty state, a retryable MessageBar error, and the success list.
+A generic boundary component plus the data hook that feeds it. It models loading/error/success as a discriminated union, aborts superseded requests, renders a content-shaped Skeleton for the first load, a MessageBar with a focused retry button for failures, and a Card empty state for zero results. The usage section wires it to a real fetch call.
 
 ```tsx
+// AsyncResourceView.tsx
+// Renders inside your app's <FluentProvider> root.
 import * as React from 'react';
-import { Button, Card, Divider, MessageBar, Skeleton, Spinner, Text } from '@fluentui/react-components';
+import {
+  Button,
+  Card,
+  CardHeader,
+  MessageBar,
+  MessageBarActions,
+  MessageBarBody,
+  MessageBarTitle,
+  Skeleton,
+  Text,
+} from '@fluentui/react-components';
 
 /* ------------------------------------------------------------------ *
- * 1. One discriminated union covers every state the view can be in.
+ * 1. Model every outcome of the request as a discriminated union.
+ *    "Empty" is deliberately NOT a status - it is derived from data.
  * ------------------------------------------------------------------ */
+
 export type AsyncState<T> =
-  | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'error'; error: Error }
   | { status: 'success'; data: T };
 
 /* ------------------------------------------------------------------ *
- * 2. A hook that owns the request: cancel, retry, drop stale answers.
+ * 2. One hook owns the request lifecycle: it aborts superseded and
+ *    unmounted requests and exposes `reload` for the retry button.
  * ------------------------------------------------------------------ */
+
 export function useAsyncData<T>(
   fetcher: (signal: AbortSignal) => Promise<T>,
   deps: React.DependencyList = [],
-) {
-  const [state, setState] = React.useState<AsyncState<T>>({ status: 'idle' });
-  const [nonce, setNonce] = React.useState(0);
-
-  const reload = React.useCallback(() => setNonce((n) => n + 1), []);
+): { state: AsyncState<T>; reload: () => void } {
+  const [reloadToken, setReloadToken] = React.useState(0);
+  const [state, setState] = React.useState<AsyncState<T>>({ status: 'loading' });
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -147,15 +200,316 @@ export function useAsyncData<T>(
 
     fetcher(controller.signal).then(
       (data) => {
-        // A newer request (or an unmount) already happened: drop this response.
+        // Ignore a response that has been superseded or unmounted.
         if (!controller.signal.aborted) {
           setState({ status: 'success', data });
         }
       },
       (cause: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setState({
+          status: 'error',
+          error: cause instanceof Error ? cause : new Error(String(cause)),
+        });
+      },
+    );
+
+    return () => controller.abort();
+    // `fetcher` is intentionally not a dependency - callers pass `deps`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadToken, ...deps]);
+
+  const reload = React.useCallback(() => setReloadToken((token) => token + 1), []);
+
+  return { state, reload };
+}
+
+/* ------------------------------------------------------------------ *
+ * 3. One fallback per phase. Content-shaped, so nothing jumps.
+ * ------------------------------------------------------------------ */
+
+export function ContentSkeleton({ label = 'Loading' }: { label?: string }) {
+  return (
+    <div role="status" aria-label={label}>
+      <Card appearance="outline">
+        <CardHeader
+          image={<Skeleton animation="wave" shape="circle" size={32} />}
+          header={<Skeleton animation="wave" width="180px" />}
+          description={<Skeleton animation="wave" width="120px" />}
+        />
+        <div style={{ display: 'grid', rowGap: '8px' }}>
+          <Skeleton animation="wave" width="100%" />
+          <Skeleton animation="wave" width="88%" />
+          <Skeleton animation="wave" width="64%" />
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/** Blocking failure: announced assertively, focus moves to the recovery action. */
+export function ErrorState({
+  title,
+  error,
+  onRetry,
+}: {
+  title: string;
+  error: Error;
+  onRetry: () => void;
+}) {
+  const retryRef = React.useRef<HTMLButtonElement>(null);
+
+  React.useEffect(() => {
+    retryRef.current?.focus();
+  }, []);
+
+  return (
+    <MessageBar intent="error" politeness="assertive">
+      <MessageBarBody>
+        <MessageBarTitle>{title}</MessageBarTitle>
+        {error.message}
+      </MessageBarBody>
+      <MessageBarActions>
+        <Button ref={retryRef} appearance="primary" onClick={onRetry}>
+          Try again
+        </Button>
+      </MessageBarActions>
+    </MessageBar>
+  );
+}
+
+/** Empty is a successful outcome: explain it, do not alarm the user. */
+export function EmptyState({ title, description }: { title: string; description: string }) {
+  return (
+    <Card appearance="filled-alternative">
+      <CardHeader
+        header={<Text weight="semibold">{title}</Text>}
+        description={<Text size={200}>{description}</Text>}
+      />
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * 4. The boundary: a switch over the union, nothing more.
+ * ------------------------------------------------------------------ */
+
+export type AsyncResourceViewProps<T> = {
+  state: AsyncState<T>;
+  onRetry: () => void;
+  errorTitle?: string;
+  loadingFallback?: React.ReactNode;
+  /** Return true when the successful payload represents "no results". */
+  isEmpty?: (data: T) => boolean;
+  emptyFallback?: React.ReactNode;
+  children: (data: T) => React.ReactNode;
+};
+
+export function AsyncResourceView<T>({
+  state,
+  onRetry,
+  errorTitle = 'Something went wrong',
+  loadingFallback,
+  isEmpty,
+  emptyFallback,
+  children,
+}: AsyncResourceViewProps<T>) {
+  if (state.status === 'loading') {
+    return <>{loadingFallback ?? <ContentSkeleton />}</>;
+  }
+
+  if (state.status === 'error') {
+    return <ErrorState title={errorTitle} error={state.error} onRetry={onRetry} />;
+  }
+
+  // TypeScript has narrowed `state` to the success branch here.
+  if (isEmpty?.(state.data)) {
+    return (
+      <>
+        {emptyFallback ?? (
+          <EmptyState title="Nothing here yet" description="Create your first item to get started." />
+        )}
+      </>
+    );
+  }
+
+  return <>{children(state.data)}</>;
+}
+
+/* ------------------------------------------------------------------ *
+ * 5. Usage with a real request.
+ * ------------------------------------------------------------------ */
+
+type Project = { id: string; name: string; owner: string };
+
+export function ProjectList() {
+  const { state, reload } = useAsyncData<Project[]>(
+    async (signal) => {
+      const response = await fetch('/api/projects', { signal });
+      if (!response.ok) {
+        throw new Error(`The server responded with ${response.status}.`);
+      }
+      return (await response.json()) as Project[];
+    },
+    [], // re-fetch when these change, e.g. [teamId, page]
+  );
+
+  return (
+    <AsyncResourceView
+      state={state}
+      onRetry={reload}
+      errorTitle="Couldn't load projects"
+      isEmpty={(projects) => projects.length === 0}
+      emptyFallback={
+        <EmptyState title="No projects yet" description="Projects you create will appear here." />
+      }
+    >
+      {(projects) => (
+        <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+          {projects.map((project) => (
+            <li key={project.id}>
+              {project.name} — {project.owner}
+            </li>
+          ))}
+        </ul>
+      )}
+    </AsyncResourceView>
+  );
+}
+```
+
+### DeploymentsPanel: first load, refresh, stale warning, empty and error in one card
+
+A self-contained panel backed by a simulated API. It uses a reducer so the last good payload survives a failed refresh (degrading to a warning MessageBar instead of an error screen), shows a determinate ProgressBar for running deployments, keeps an inline Spinner plus aria-busy during refresh, and only steals focus when an error replaces the content.
+
+```tsx
+// DeploymentsPanel.tsx
+// Renders inside your app's <FluentProvider> root.
+import * as React from 'react';
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  Divider,
+  MessageBar,
+  MessageBarActions,
+  MessageBarBody,
+  MessageBarTitle,
+  ProgressBar,
+  Skeleton,
+  Spinner,
+  Text,
+} from '@fluentui/react-components';
+
+/* ------------------------------------------------------------------ *
+ * Simulated API. Replace `fetchDeployments` with your real call:
+ * it fails ~25% of the time purely so you can exercise the error path.
+ * ------------------------------------------------------------------ */
+
+type DeploymentStatus = 'succeeded' | 'failed' | 'running';
+
+type Deployment = {
+  id: string;
+  service: string;
+  status: DeploymentStatus;
+  /** 0-100. Only meaningful while the deployment is still running. */
+  progress: number;
+};
+
+function fetchDeployments(signal: AbortSignal): Promise<Deployment[]> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      if (Math.random() < 0.25) {
+        reject(new Error('The deployments service did not respond in time.'));
+        return;
+      }
+      resolve([
+        { id: 'checkout', service: 'checkout', status: 'succeeded', progress: 100 },
+        { id: 'search', service: 'search', status: 'failed', progress: 100 },
+        { id: 'identity', service: 'identity', status: 'running', progress: 62 },
+      ]);
+    }, 900);
+
+    signal.addEventListener('abort', () => {
+      window.clearTimeout(timer);
+      reject(new Error('Request aborted'));
+    });
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * State machine. `data` is kept across refreshes so the panel never
+ * flashes back to a skeleton, and a failed refresh keeps the content.
+ * ------------------------------------------------------------------ */
+
+type State = {
+  data: Deployment[] | null;
+  status: 'loading' | 'refreshing' | 'ready' | 'error';
+  error: Error | null;
+  /** Set when a refresh failed but the previous payload is still usable. */
+  staleWarning: string | null;
+};
+
+type Action =
+  | { type: 'load' }
+  | { type: 'success'; data: Deployment[] }
+  | { type: 'failure'; error: Error };
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'load':
+      return state.data
+        ? { ...state, status: 'refreshing', staleWarning: null }
+        : { ...state, status: 'loading', error: null };
+    case 'success':
+      return { data: action.data, status: 'ready', error: null, staleWarning: null };
+    case 'failure':
+      // No data to fall back on -> hard error. Otherwise keep the data and warn.
+      return state.data
+        ? {
+            ...state,
+            status: 'ready',
+            staleWarning: `${action.error.message} Showing the last results.`,
+          }
+        : { ...state, status: 'error', error: action.error };
+  }
+}
+
+const STATUS_COLOR = {
+  succeeded: 'success',
+  failed: 'danger',
+  running: 'informative',
+} as const;
+
+/* ------------------------------------------------------------------ */
+
+export function DeploymentsPanel() {
+  const [state, dispatch] = React.useReducer(reducer, {
+    data: null,
+    status: 'loading',
+    error: null,
+    staleWarning: null,
+  });
+  const [reloadToken, setReloadToken] = React.useState(0);
+  const retryRef = React.useRef<HTMLButtonElement>(null);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    dispatch({ type: 'load' });
+
+    fetchDeployments(controller.signal).then(
+      (data) => {
         if (!controller.signal.aborted) {
-          setState({
-            status: 'error',
+          dispatch({ type: 'success', data });
+        }
+      },
+      (cause: unknown) => {
+        if (!controller.signal.aborted) {
+          dispatch({
+            type: 'failure',
             error: cause instanceof Error ? cause : new Error(String(cause)),
           });
         }
@@ -163,546 +517,252 @@ export function useAsyncData<T>(
     );
 
     return () => controller.abort();
-    // `fetcher` is deliberately excluded: callers pass a fresh closure each render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, nonce]);
+  }, [reloadToken]);
 
-  return { state, reload };
-}
+  // Move focus only when the content was replaced by the error surface.
+  React.useEffect(() => {
+    if (state.status === 'error') {
+      retryRef.current?.focus();
+    }
+  }, [state.status]);
 
-/* ------------------------------------------------------------------ *
- * 3. A fake API so this file runs standalone. Swap it for `fetch`.
- * ------------------------------------------------------------------ */
-type User = { id: string; name: string; role: string };
+  const reload = React.useCallback(() => setReloadToken((token) => token + 1), []);
 
-const USERS: User[] = [
-  { id: 'u1', name: 'Priya Raman', role: 'Principal Engineer' },
-  { id: 'u2', name: 'Diego Alvarez', role: 'Design Systems Engineer' },
-  { id: 'u3', name: 'Mei Lin', role: 'Product Manager' },
-];
+  const deployments = state.data;
+  const isBusy = state.status === 'loading' || state.status === 'refreshing';
 
-function fetchUsers(signal: AbortSignal): Promise<User[]> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => resolve(USERS), 1200);
-    signal.addEventListener('abort', () => {
-      window.clearTimeout(timer);
-      reject(new DOMException('Aborted', 'AbortError'));
-    });
-  });
-}
-
-/* ------------------------------------------------------------------ *
- * 4. Loading branch: skeleton shapes that match the final content.
- * ------------------------------------------------------------------ */
-function LoadingRows(): React.ReactElement {
   return (
-    <div role="status" aria-live="polite" style={{ display: 'grid', gap: 12 }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-        <Spinner size="extra-tiny" delay={500} />
-        <Text size={200}>Loading team members…</Text>
-      </span>
-      <div aria-hidden="true" style={{ display: 'grid', gap: 12 }}>
-        {[0, 1, 2].map((i) => (
-          <div key={i} style={{ display: 'grid', gap: 6 }}>
-            <Skeleton animation="wave" width="40%" size={16} />
-            <Skeleton animation="wave" width="70%" size={12} />
+    <Card appearance="outline" aria-busy={isBusy} style={{ maxWidth: 480 }}>
+      <CardHeader
+        header={
+          <Text weight="semibold" size={400}>
+            Deployments
+          </Text>
+        }
+        description={
+          deployments ? (
+            <Text size={200}>{`${deployments.length} services`}</Text>
+          ) : (
+            <Skeleton animation="wave" width="72px" />
+          )
+        }
+        action={
+          <div style={{ display: 'flex', alignItems: 'center', columnGap: 8 }}>
+            {state.status === 'refreshing' && (
+              <Spinner size="extra-tiny" labelPosition="after">
+                Refreshing…
+              </Spinner>
+            )}
+            <Button appearance="subtle" disabled={isBusy} onClick={reload}>
+              Refresh
+            </Button>
           </div>
-        ))}
-      </div>
+        }
+      />
+
+      {state.status === 'loading' && <DeploymentsSkeleton />}
+
+      {state.status === 'error' && state.error && (
+        <MessageBar intent="error" politeness="assertive">
+          <MessageBarBody>
+            <MessageBarTitle>Couldn't load deployments</MessageBarTitle>
+            {state.error.message}
+          </MessageBarBody>
+          <MessageBarActions>
+            <Button ref={retryRef} appearance="primary" onClick={reload}>
+              Try again
+            </Button>
+          </MessageBarActions>
+        </MessageBar>
+      )}
+
+      {state.staleWarning && (
+        <MessageBar intent="warning">
+          <MessageBarBody>{state.staleWarning}</MessageBarBody>
+          <MessageBarActions>
+            <Button appearance="primary" onClick={reload}>
+              Retry
+            </Button>
+          </MessageBarActions>
+        </MessageBar>
+      )}
+
+      {deployments && deployments.length === 0 && (
+        <MessageBar intent="info">
+          <MessageBarBody>
+            No deployments yet. Push to your default branch and they will show up here.
+          </MessageBarBody>
+        </MessageBar>
+      )}
+
+      {deployments && deployments.length > 0 && (
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          {deployments.map((deployment) => (
+            <li key={deployment.id} style={{ paddingBlockStart: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', columnGap: 8 }}>
+                <Text weight="medium" style={{ flexGrow: 1 }}>
+                  {deployment.service}
+                </Text>
+                <Badge appearance="tint" color={STATUS_COLOR[deployment.status]}>
+                  {deployment.status}
+                </Badge>
+              </div>
+              {deployment.status === 'running' && (
+                <ProgressBar value={deployment.progress} max={100} thickness="medium" />
+              )}
+              <Divider appearance="subtle" style={{ marginBlockStart: 8 }} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function DeploymentsSkeleton() {
+  return (
+    <div role="status" aria-label="Loading deployments" style={{ display: 'grid', rowGap: 12 }}>
+      {[0, 1, 2].map((row) => (
+        <div key={row} style={{ display: 'flex', alignItems: 'center', columnGap: 8 }}>
+          <Skeleton animation="wave" width="120px" />
+          <Skeleton animation="wave" shape="rectangle" width="64px" />
+        </div>
+      ))}
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ *
- * 5. One render branch per state — exhaustively narrowed by `status`.
- * ------------------------------------------------------------------ */
-function renderState(state: AsyncState<User[]>, reload: () => void): React.ReactElement {
-  switch (state.status) {
-    case 'idle':
-    case 'loading':
-      return <LoadingRows />;
-
-    case 'error':
-      return (
-        <MessageBar intent="error" politeness="assertive">
-          <div style={{ display: 'grid', gap: 8, justifyItems: 'start' }}>
-            <Text weight="semibold">We couldn’t load the team</Text>
-            <Text size={200}>{state.error.message}</Text>
-            <Button appearance="primary" onClick={reload}>
-              Try again
-            </Button>
-          </div>
-        </MessageBar>
-      );
-
-    case 'success':
-      // Empty is a success with zero rows — never an error.
-      if (state.data.length === 0) {
-        return (
-          <div style={{ display: 'grid', gap: 8, justifyItems: 'start' }}>
-            <Text weight="semibold">No team members yet</Text>
-            <Text size={200}>Invite someone to get started — they show up here.</Text>
-            <Button appearance="primary">Invite a teammate</Button>
-          </div>
-        );
-      }
-
-      return (
-        <ul
-          aria-label="Team members"
-          style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}
-        >
-          {state.data.map((user) => (
-            <li key={user.id}>
-              <Card appearance="outline" size="small">
-                <Text block weight="semibold">
-                  {user.name}
-                </Text>
-                <Text block size={200}>
-                  {user.role}
-                </Text>
-              </Card>
-            </li>
-          ))}
-        </ul>
-      );
-  }
-}
-
-/* ------------------------------------------------------------------ *
- * 6. The consumer: stable shell + swapped state region.
- * ------------------------------------------------------------------ */
-export function AsyncDataStates(): React.ReactElement {
-  const { state, reload } = useAsyncData((signal) => fetchUsers(signal), []);
-
-  return (
-    <Card style={{ maxWidth: 480, padding: 16, display: 'grid', gap: 12 }}>
-      <div
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
-      >
-        <Text size={500} weight="semibold">
-          Team members
-        </Text>
-        <Button appearance="subtle" onClick={reload} disabled={state.status === 'loading'}>
-          Refresh
-        </Button>
-      </div>
-
-      <Divider />
-
-      {renderState(state, reload)}
-    </Card>
-  );
-}
 ```
 
-### Debounced async search with empty, error, and loading states
+### Load more: an inline footer instead of a full-surface swap
 
-A search field that debounces keystrokes, aborts superseded requests, and renders skeleton rows, an inline spinner in Input contentAfter, a term-aware empty state, and a retryable error MessageBar.
+Pagination and infinite feeds should never replace the list with a skeleton. This example keeps the loaded items mounted and swaps only the footer control through idle -> loading (Spinner) -> error (MessageBar with retry) -> complete (disabled Button).
 
 ```tsx
+// ActivityFeed.tsx
+// Renders inside your app's <FluentProvider> root.
 import * as React from 'react';
-import { Avatar, Badge, Button, Card, Field, Input, MessageBar, Skeleton, Spinner, Text } from '@fluentui/react-components';
+import {
+  Button,
+  MessageBar,
+  MessageBarActions,
+  MessageBarBody,
+  Spinner,
+  Text,
+} from '@fluentui/react-components';
 
-type Person = { id: string; name: string; jobTitle: string; presence: 'active' | 'away' };
+type ActivityItem = { id: string; summary: string };
 
-const DIRECTORY: Person[] = [
-  { id: 'p1', name: 'Priya Raman', jobTitle: 'Principal Engineer', presence: 'active' },
-  { id: 'p2', name: 'Diego Alvarez', jobTitle: 'Design Systems Engineer', presence: 'away' },
-  { id: 'p3', name: 'Mei Lin', jobTitle: 'Product Manager', presence: 'active' },
-  { id: 'p4', name: 'Sam Okafor', jobTitle: 'Support Engineer', presence: 'active' },
-];
+type FooterState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'complete' };
 
-/** Stand-in for `fetch('/api/directory?q=…', { signal })`. */
-function searchDirectory(query: string, signal: AbortSignal): Promise<Person[]> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      const q = query.trim().toLowerCase();
-      resolve(
-        q === ''
-          ? DIRECTORY
-          : DIRECTORY.filter(
-              (p) =>
-                p.name.toLowerCase().includes(q) || p.jobTitle.toLowerCase().includes(q),
-            ),
-      );
-    }, 600);
-
-    signal.addEventListener('abort', () => {
-      window.clearTimeout(timer);
-      reject(new DOMException('Aborted', 'AbortError'));
-    });
-  });
+/** Replace with your data layer - e.g. a cursor based `fetch`. */
+async function loadNextPage(cursor: string): Promise<ActivityItem[]> {
+  await new Promise((resolve) => window.setTimeout(resolve, 800));
+  if (Math.random() < 0.3) {
+    throw new Error('The activity service timed out.');
+  }
+  return [{ id: `${cursor}-1`, summary: 'Deployment finished for checkout' }];
 }
 
-type SearchState =
-  | { status: 'loading' }
-  | { status: 'error'; error: Error }
-  | { status: 'success'; results: Person[] };
+export function ActivityFeed({
+  initialItems,
+  cursor,
+}: {
+  initialItems: ActivityItem[];
+  cursor: string;
+}) {
+  const [items, setItems] = React.useState<ActivityItem[]>(initialItems);
+  const [footer, setFooter] = React.useState<FooterState>({ status: 'idle' });
 
-export function DirectorySearch(): React.ReactElement {
-  const [query, setQuery] = React.useState('');
-  const [state, setState] = React.useState<SearchState>({ status: 'loading' });
-  const [attempt, setAttempt] = React.useState(0);
-
-  React.useEffect(() => {
-    const controller = new AbortController();
-
-    // Debounce keystrokes, then fetch. The cleanup aborts the in-flight request,
-    // so a slow response can never overwrite results for a newer query.
-    const timer = window.setTimeout(() => {
-      searchDirectory(query, controller.signal).then(
-        (results) => {
-          if (!controller.signal.aborted) {
-            setState({ status: 'success', results });
-          }
-        },
-        (cause: unknown) => {
-          if (controller.signal.aborted) {
-            return;
-          }
-          setState({
-            status: 'error',
-            error: cause instanceof Error ? cause : new Error(String(cause)),
-          });
-        },
-      );
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query, attempt]);
-
-  const retry = () => {
-    setState({ status: 'loading' });
-    setAttempt((a) => a + 1);
+  const loadMore = async () => {
+    setFooter({ status: 'loading' });
+    try {
+      const page = await loadNextPage(cursor);
+      setItems((current) => [...current, ...page]);
+      setFooter(page.length === 0 ? { status: 'complete' } : { status: 'idle' });
+    } catch (cause: unknown) {
+      setFooter({
+        status: 'error',
+        message: cause instanceof Error ? cause.message : String(cause),
+      });
+    }
   };
 
   return (
-    <Card style={{ maxWidth: 480, padding: 16, display: 'grid', gap: 12 }}>
-      <Field label="Search the directory" hint="Try a name or a job title">
-        <Input
-          value={query}
-          placeholder="e.g. engineer"
-          onChange={(_, data) => {
-            // Flip to loading immediately so the previous results never look current.
-            setState({ status: 'loading' });
-            setQuery(data.value);
-          }}
-          contentAfter={state.status === 'loading' ? <Spinner size="extra-tiny" /> : undefined}
-        />
-      </Field>
+    <div>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        {items.map((item) => (
+          <li key={item.id} style={{ padding: '8px 0' }}>
+            <Text>{item.summary}</Text>
+          </li>
+        ))}
+      </ul>
 
-      {state.status === 'loading' && (
-        <div role="status" aria-live="polite" style={{ display: 'grid', gap: 12 }}>
-          <Text size={200}>Searching…</Text>
-          <div aria-hidden="true" style={{ display: 'grid', gap: 12 }}>
-            {[0, 1, 2].map((i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Skeleton animation="wave" shape="circle" width={40} size={40} />
-                <div style={{ display: 'grid', gap: 6, flex: 1 }}>
-                  <Skeleton animation="wave" width="45%" size={16} />
-                  <Skeleton animation="wave" width="70%" size={12} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'center', paddingBlockStart: 12 }}>
+        {footer.status === 'loading' && (
+          <Spinner size="small" labelPosition="after">
+            Loading more…
+          </Spinner>
+        )}
 
-      {state.status === 'error' && (
-        <MessageBar intent="error" politeness="assertive">
-          <div style={{ display: 'grid', gap: 8, justifyItems: 'start' }}>
-            <Text weight="semibold">We couldn’t search the directory</Text>
-            <Text size={200}>{state.error.message}</Text>
-            <Button appearance="primary" onClick={retry}>
-              Try again
-            </Button>
-          </div>
-        </MessageBar>
-      )}
-
-      {state.status === 'success' && state.results.length === 0 && (
-        <div style={{ display: 'grid', gap: 6, justifyItems: 'start' }}>
-          <Text weight="semibold">No people match “{query}”</Text>
-          <Text size={200}>Try a broader term, or clear the search to see everyone.</Text>
-          <Button
-            appearance="secondary"
-            onClick={() => {
-              setState({ status: 'loading' });
-              setQuery('');
-            }}
-          >
-            Clear search
-          </Button>
-        </div>
-      )}
-
-      {state.status === 'success' && state.results.length > 0 && (
-        <ul
-          aria-label="Directory results"
-          style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 4 }}
-        >
-          {state.results.map((person) => (
-            <li key={person.id}>
-              <Card
-                appearance="outline"
-                size="small"
-                style={{ display: 'flex', alignItems: 'center', gap: 12 }}
-              >
-                <Avatar
-                  name={person.name}
-                  idForColor={person.id}
-                  color="colorful"
-                  size={40}
-                />
-                <div style={{ display: 'grid', flex: 1 }}>
-                  <Text weight="semibold">{person.name}</Text>
-                  <Text size={200}>{person.jobTitle}</Text>
-                </div>
-                <Badge
-                  appearance="tint"
-                  color={person.presence === 'active' ? 'success' : 'warning'}
-                >
-                  {person.presence === 'active' ? 'Active' : 'Away'}
-                </Badge>
-              </Card>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
-```
-
-### Stale-while-revalidate dashboard card with background refresh
-
-A useResource hook that keeps the last successful data mounted, distinguishes isInitialLoading from isFetching, shows a small inline spinner while polling, and downgrades a failed refresh to a warning MessageBar instead of unmounting the content.
-
-```tsx
-import * as React from 'react';
-import { Button, Card, Divider, MessageBar, Skeleton, Spinner, Text } from '@fluentui/react-components';
-
-export interface ResourceState<T> {
-  /** Last successful value — stays populated while a refresh is in flight. */
-  data: T | undefined;
-  /** Most recent failure — may coexist with `data` from an earlier success. */
-  error: Error | undefined;
-  /** True only until the first successful load. */
-  isInitialLoading: boolean;
-  /** True while any request is in flight. */
-  isFetching: boolean;
-  reload: () => void;
-}
-
-/**
- * Stale-while-revalidate: previous data is never thrown away on refresh,
- * and failures become warnings when we already have something to show.
- * `load` must be referentially stable (module scope or useCallback).
- */
-export function useResource<T>(
-  load: (signal: AbortSignal) => Promise<T>,
-  options: { refreshIntervalMs?: number } = {},
-): ResourceState<T> {
-  const { refreshIntervalMs } = options;
-  const [data, setData] = React.useState<T>();
-  const [error, setError] = React.useState<Error>();
-  const [isInitialLoading, setIsInitialLoading] = React.useState(true);
-  const [isFetching, setIsFetching] = React.useState(true);
-  const [nonce, setNonce] = React.useState(0);
-
-  React.useEffect(() => {
-    const controller = new AbortController();
-    setIsFetching(true);
-
-    load(controller.signal)
-      .then((value) => {
-        if (controller.signal.aborted) {
-          return;
-        }
-        setData(value);
-        setError(undefined);
-      })
-      .catch((cause: unknown) => {
-        if (controller.signal.aborted) {
-          return;
-        }
-        setError(cause instanceof Error ? cause : new Error(String(cause)));
-      })
-      .finally(() => {
-        if (controller.signal.aborted) {
-          return;
-        }
-        setIsFetching(false);
-        setIsInitialLoading(false);
-      });
-
-    return () => controller.abort();
-  }, [load, nonce]);
-
-  // Optional background polling; each tick just bumps the retry nonce.
-  React.useEffect(() => {
-    if (!refreshIntervalMs) {
-      return;
-    }
-    const id = window.setInterval(() => setNonce((n) => n + 1), refreshIntervalMs);
-    return () => window.clearInterval(id);
-  }, [refreshIntervalMs]);
-
-  const reload = React.useCallback(() => setNonce((n) => n + 1), []);
-
-  return { data, error, isInitialLoading, isFetching, reload };
-}
-
-/* ------------------------------------------------------------------ */
-
-type Metric = { id: string; label: string; value: string; delta: string };
-
-const METRICS: Metric[] = [
-  { id: 'm1', label: 'Requests / min', value: '12,480', delta: '+4.1%' },
-  { id: 'm2', label: 'p95 latency', value: '184 ms', delta: '-12 ms' },
-  { id: 'm3', label: 'Error rate', value: '0.03%', delta: '+0.01%' },
-];
-
-/** Module-scope loader keeps `useResource`'s effect dependency stable. */
-function loadMetrics(signal: AbortSignal): Promise<Metric[]> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => resolve(METRICS), 900);
-    signal.addEventListener('abort', () => {
-      window.clearTimeout(timer);
-      reject(new DOMException('Aborted', 'AbortError'));
-    });
-  });
-}
-
-export function ServiceHealthCard(): React.ReactElement {
-  const { data, error, isInitialLoading, isFetching, reload } = useResource(loadMetrics, {
-    refreshIntervalMs: 15000,
-  });
-
-  return (
-    <Card style={{ maxWidth: 480, padding: 16, display: 'grid', gap: 12 }}>
-      <div
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
-      >
-        <Text size={500} weight="semibold">
-          Service health
-        </Text>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {isFetching && !isInitialLoading ? (
-            <span
-              role="status"
-              aria-live="polite"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <Spinner size="extra-tiny" />
-              <Text size={200}>Refreshing…</Text>
-            </span>
-          ) : null}
-          <Button appearance="subtle" onClick={reload} disabled={isFetching}>
-            Refresh
-          </Button>
-        </div>
-      </div>
-
-      <Divider />
-
-      {isInitialLoading ? (
-        <div role="status" aria-live="polite" style={{ display: 'grid', gap: 12 }}>
-          <Text size={200}>Loading health data…</Text>
-          <div aria-hidden="true" style={{ display: 'grid', gap: 12 }}>
-            {[0, 1, 2].map((i) => (
-              <div key={i} style={{ display: 'grid', gap: 6 }}>
-                <Skeleton animation="wave" width="35%" size={12} />
-                <Skeleton animation="wave" width="55%" size={24} />
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gap: 12 }}>
-          {error ? (
-            <MessageBar intent="warning" politeness="polite">
-              <div style={{ display: 'grid', gap: 8, justifyItems: 'start' }}>
-                <Text weight="semibold">
-                  {data ? 'Showing the last known values' : 'Health data is unavailable'}
-                </Text>
-                <Text size={200}>{error.message}</Text>
-                <Button appearance="secondary" onClick={reload} disabled={isFetching}>
-                  Retry
-                </Button>
-              </div>
-            </MessageBar>
-          ) : null}
-
-          {data && data.length > 0 ? (
-            <ul
-              aria-label="Service metrics"
-              style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}
-            >
-              {data.map((metric) => (
-                <li
-                  key={metric.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'baseline',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                  }}
-                >
-                  <Text size={200}>{metric.label}</Text>
-                  <Text font="numeric" weight="semibold">
-                    {metric.value}
-                  </Text>
-                  <Text size={200}>{metric.delta}</Text>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div style={{ display: 'grid', gap: 6, justifyItems: 'start' }}>
-              <Text weight="semibold">No metrics reported yet</Text>
-              <Text size={200}>
-                Metrics appear once the service has served at least one request.
-              </Text>
-              <Button appearance="primary" onClick={reload} disabled={isFetching}>
-                Check again
+        {footer.status === 'error' && (
+          <MessageBar intent="error">
+            <MessageBarBody>{footer.message}</MessageBarBody>
+            <MessageBarActions>
+              <Button appearance="primary" onClick={loadMore}>
+                Retry
               </Button>
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
+            </MessageBarActions>
+          </MessageBar>
+        )}
+
+        {(footer.status === 'idle' || footer.status === 'complete') && (
+          <Button
+            appearance="subtle"
+            disabled={footer.status === 'complete'}
+            onClick={loadMore}
+          >
+            {footer.status === 'complete' ? 'All activity loaded' : 'Load more'}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 ```
 
 ## Pitfalls
 
-- Storing loading/data/error as three independent useState values. This allows impossible combinations such as a spinner rendered next to an error, or an empty state that is also a success. Use a single discriminated union on a status field and switch on it.
-- Not guarding against stale responses. Without an AbortController plus a `controller.signal.aborted` check before setState, a slow earlier request can resolve after a faster later one and overwrite fresh results (classic symptom: the list shows results for a query the user already deleted).
-- Flashing spinners on fast responses. A spinner that appears for 40ms reads as a flicker. Pass Spinner's `delay` (300–500ms) and prefer Skeleton placeholders that match the final layout; also clear pending timeouts in the effect cleanup so a debounced fetch never runs after unmount.
-- Unmounting content during refresh. Replacing the list with a loading branch on every refresh destroys scroll position and keyboard focus. Keep the last successful data mounted, track isFetching separately from isInitialLoading, and show a small inline spinner next to the section title.
-- Treating empty as an error. Rendering a retry button for `success` with zero rows gives users an action that can never succeed. Render an empty branch with the reason and a forward action instead, and echo the search term to make it clear the emptiness is a filter result.
-- Showing "Something went wrong" without the underlying message. Always normalize the thrown value to an Error and render `error.message` inside the MessageBar; an unactionable error costs a support ticket every time.
-- Leaving Retry enabled while the retry is in flight. Double-clicking queues duplicate requests and can leave the UI showing an error after a successful retry. Disable the button (and the header Refresh button) while isFetching, and reset state to loading when the retry starts.
+- Scattering `isLoading`/`isError`/`data` booleans instead of one discriminated union, which allows impossible states and keeps the old data rendered after a failure. Use a single union and handle it exhaustively.
+- Treating 'empty' as a request status. Empty is derived from a successful payload (`data.length === 0`); folding it into the state machine means you must remember to clear it on every retry and every refetch.
+- Replacing already-rendered content with a full skeleton or spinner on refresh. This destroys scroll position, focus, text selection, and reading context. Keep the last good data, set `aria-busy`, and show an inline `Spinner` next to the refresh Button.
+- Throwing away good data because a background refresh failed. Keep the payload and downgrade to `MessageBar intent="warning"` with a Retry action; only show `intent="error"` when there is nothing left to display.
+- Not aborting in-flight requests. A slow first request can resolve after a fast second one and overwrite fresh data with stale data; without an `AbortController` cleanup you also get 'state update on an unmounted component' noise. Always check `signal.aborted` before setting state.
+- Double-announcing state changes by wrapping a MessageBar (already a live region) in your own `aria-live` container, or by rendering one `role="status"` per skeleton placeholder instead of one for the group.
+- Stealing focus on every failure, including background refreshes and 'load more' errors. Only move focus when the error replaces the content the user was interacting with.
+- Letting the loading indicator flash for fast responses. Give `Spinner` a delay, or gate the skeleton on a small timer, so a 120 ms response does not produce a visible flicker.
+- Using an icon-only or unlabeled Spinner. Screen reader users get nothing from a bare spinner; always render a text label as its child (or hide it and rely on the surrounding `role="status"` label, never both).
+- Forgetting the surrounding `FluentProvider`. Skeletons, spinners, and message bars resolve design tokens from the provider theme, so an unwrapped subtree renders without the expected colors and spacing.
 
 ## Accessibility
 
-Loading: wrap the loading branch in an element with role="status" and aria-live="polite" and always render real text ("Loading team members…") — Spinner renders no accessible name by itself, so a spinner with no adjacent label is invisible to screen readers. Mark decorative Skeleton markup aria-hidden="true" so placeholders are not announced. Errors: MessageBar with intent="error" announces its content; use politeness="assertive" only for failures the user directly triggered (Retry/Refresh) and politeness="polite" for background polling failures, otherwise repeated announcements interrupt. Put aria-busy="true" on the data container while a refresh is in flight so assistive tech knows the region is updating. Keep the retry/refresh Button mounted as disabled rather than unmounting it, so keyboard focus is not dropped to <body>; if a branch must be swapped, move focus deliberately to the status region. Do not convey status by color alone — every Badge in these examples also carries a text label. Use stable entity ids as React keys so revalidated data does not reuse rows and mismatch the accessibility tree. Empty states should pair a descriptive Text with a single actionable Button, and search empty states should echo the query so the state is understandable without sight of the input.
+Announce phases exactly once. Wrap first-load placeholders in a single `role="status"` element with a meaningful `aria-label` ('Loading deployments') instead of one live region per skeleton. MessageBar is already a live region: use its `politeness` prop (`assertive` only for errors that remove content the user was on, otherwise `polite`) rather than adding another `aria-live` wrapper, which would double-announce. Put `aria-busy` on the region that is fetching so assistive tech knows the content will change without tearing the tree down. Manage focus deliberately: move focus to the retry Button when an error surface replaces the content (the examples do this via a ref plus an effect keyed on the status change), and never move focus for background refreshes, stale-data warnings, or `load more` failures. Keep the pagination button disabled while its request is in flight so it cannot be double-activated from the keyboard. Give ProgressBar an accessible name (`aria-label`) when no adjacent text describes it. Announce results as well as work — update the CardHeader description to '24 services' when a refresh succeeds so a screen reader user learns what changed, not just that something happened. Prefer `animation="pulse"` when you need a calmer skeleton for users sensitive to motion.
 
 ## Components used
 
-- [Avatar](../../components/avatar.md)
 - [Badge](../../components/badge.md)
 - [Button](../../components/button.md)
 - [Card](../../components/card.md)
+- [CardHeader](../../components/card-header.md)
 - [Divider](../../components/divider.md)
-- [Field](../../components/field.md)
-- [Input](../../components/input.md)
 - [MessageBar](../../components/message-bar.md)
+- [MessageBarActions](../../components/message-bar-actions.md)
+- [MessageBarBody](../../components/message-bar-body.md)
+- [MessageBarTitle](../../components/message-bar-title.md)
+- [ProgressBar](../../components/progress-bar.md)
 - [Skeleton](../../components/skeleton.md)
 - [Spinner](../../components/spinner.md)
 - [Text](../../components/text.md)

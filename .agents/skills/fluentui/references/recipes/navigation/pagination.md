@@ -4,706 +4,837 @@
 
 ## Goal
 
-Build an accessible, composable pagination control (numbered pages with ellipses, previous/next, page-size selector, and a compact page picker) out of Fluent UI React v9 primitives: Button, Text, Field, and Select.
+Build a controlled, accessible pagination control for Fluent UI React v9 by composing Button, Tooltip, Text, Field/Select/SpinButton and Menu primitives, then wire it to a paged data list (page-size selector, jump-to-page, windowed page numbers and an overflow menu for large page counts).
 
 ## When to Use
 
-Use this recipe whenever a dataset is split into pages and the user must know their position plus move between pages: data tables, search result lists, galleries, server-paged APIs where the client only owns page/pageSize/totalItems. Also use it when you need a compact, mobile-friendly page switcher or a table footer with a rows-per-page control.
+Use this recipe when a data set is split into discrete pages and users must be able to reach a specific page, see how much data exists and control the page size: data tables, search results, admin/audit lists, galleries, inboxes. Also use it when the current page must be reflected in the URL, restored from state, or share between components.
 
 ## When Not to Use
 
-Do not use numbered pagination for infinite feeds or short lists that fit on one screen — use 'Load more' with a Button, or a scroll container. If the user is stepping through a wizard or a set of views (not a data window), use Tabs or a Breadcrumb for hierarchy instead. If pages are real, linkable URLs and SEO matters, render Link (or an anchor) for each page instead of a Button-driven client state.
+Avoid pagination for: short lists that fit one screen or one scroll container (just render them, or add a 'Load more' Button); switching between peer views of the same object (use TabList); walking through a fixed, ordered wizard flow (use Back/Next Buttons with a step indicator); one-item-at-a-time media browsing (use Carousel); showing location in a hierarchy (use Breadcrumb). Infinite scroll is an alternative for feeds, but it breaks deep linking and is harder for keyboard and screen reader users.
 
-Fluent UI React v9 does not ship a `Pagination` component. You compose it from primitives you already have:
+Fluent UI React v9 has no `Pagination` component, so the reliable approach is to compose one from primitives and keep it **controlled**: the parent owns the page index, and the bar is a pure function of `page`, `pageCount` and `onPageChange`.
 
-- `Button` for every page affordance (previous, next, page numbers, first/last),
-- `Text` for the ellipsis glyph and the "showing X–Y of Z" / "Page 3 of 12" summary,
-- `Field` + `Select` for the rows-per-page control and for a compact page picker,
-- a plain `<nav>` + `<ul>`/`<li>` for landmark and list semantics.
+## 1. The contract
 
-The recipe has three parts: (1) a pure page model, (2) a hook that owns controlled/uncontrolled page state, and (3) presentational components that render the model with Fluent primitives.
-
-## 1. Define the state you own
-
-Keep the state minimal and derive everything else:
-
-| Value | Owner | Notes |
-| --- | --- | --- |
-| `page` | component (controlled) or `Pagination` (uncontrolled) | 1-based, always clamped to `[1, pageCount]` |
-| `pageSize` | the owning table/list | user-selectable |
-| `totalItems` | server or parent | `pageCount = Math.ceil(totalItems / pageSize)` |
-| `pageCount` | derived | never store it in state |
-
-Server-side paging uses exactly the same model — you just fetch `page`/`pageSize` instead of slicing an in-memory array.
-
-## 2. Compute which buttons to render (the ellipsis algorithm)
-
-Naive pagination renders one button per page. That breaks down past ~10 pages. Instead, always show `boundaryCount` pages at each end, `siblingCount` pages around the current page, and collapse the gaps into a non-interactive ellipsis:
-
-```
-page 1 of 20  =>  [1 2 3 4 5 … 20]
-page 5 of 20  =>  [1 … 4 5 6 … 20]
-page 20 of 20 =>  [1 … 16 17 18 19 20]
+```ts
+export interface PaginationBarProps {
+  page: number;                        // 1-based index of the current page
+  pageCount: number;                   // total number of pages
+  onPageChange: (page: number) => void;
+  siblingCount?: number;               // extra page buttons on each side
+  disabled?: boolean;                  // e.g. while the next page loads
+}
 ```
 
-The helper in the example returns `number | 'start-ellipsis' | 'end-ellipsis'`, so the renderer only needs one `typeof item === 'number'` branch. Keep the helper pure and free of React so you can unit-test it.
+Decisions this recipe bakes in:
 
-## 3. Render with Fluent primitives inside a `<nav>`
+* **Pages are 1-based in the public API**; only the array-slicing math is 0-based.
+* **The parent owns the page** (component state, URL search param, store). The bar never keeps a private copy, so a filter change cannot desync it.
+* **`pageCount` is derived**, never stored: `Math.max(1, Math.ceil(totalItems / pageSize))`.
+* **Clamp on read**: `const currentPage = Math.min(Math.max(page, 1), pageCount)`. If the result set shrinks, the UI renders the last real page instead of an empty one.
 
-```tsx
-<nav aria-label="Items pagination">
-  <ul>
-    <li><Button appearance="subtle" disabled={!canGoPrevious}>Previous</Button></li>
-    {/* one <li> per item: Button for numbers, Text for ellipsis */}
-    <li><Button appearance="subtle">Next</Button></li>
-  </ul>
-  <Text aria-live="polite">Page 5 of 20</Text>
+## 2. Anatomy
+
+```
+<nav aria-label='Pagination'>                  <- one landmark per paginated region
+  <Tooltip relationship='label'>
+    <Button icon={<ChevronLeftIcon />}>Previous</Button>
+  </Tooltip>
+  <div>                                        <- windowed page buttons
+    <Button appearance='subtle'>3</Button>
+    <Button appearance='primary' aria-current='page'>4</Button>
+    <Button appearance='subtle'>5</Button>
+    <Text aria-hidden='true'>...</Text>        <- or a Menu trigger, see example 3
+  </div>
+  <Tooltip relationship='label'>
+    <Button icon={<ChevronRightIcon />} iconPosition='after'>Next</Button>
+  </Tooltip>
 </nav>
 ```
 
-Rules that keep this correct and accessible:
+* `appearance='primary'` marks the current page **visually**, `aria-current='page'` marks it **programmatically**. You need both - color alone is invisible to assistive technology.
+* `Tooltip relationship='label'` names icon-only buttons, but always pass an explicit `aria-label` as well: tooltips are hover-only and are not reliably announced.
+* Put the range summary (`Showing 21-40 of 128`) in an `aria-live='polite'` region so a page change is announced without moving focus.
 
-- The current page gets `appearance="primary"` **and** `aria-current="page"` — never color alone.
-- Ellipses are `<Text aria-hidden="true">…</Text>`, never a `Button` (a focusable control that does nothing is a keyboard trap of sorts).
-- `Previous`/`Next` at a boundary are `disabled` (or `disabledFocusable` if you want focus to stay put instead of jumping to `<body>`).
-- Do not wrap the whole control in one giant `Tooltip`; the visible number plus accessible name is enough.
+## 3. The windowing algorithm
 
-## 4. Controlled vs. uncontrolled
+Never render one Button per page. `getPageItems(page, pageCount, siblingCount)`:
 
-Accept both shapes, exactly like Fluent inputs do:
+1. anchors page `1` and page `pageCount`,
+2. keeps `current +/- siblingCount` in the middle,
+3. emits an `'ellipsis'` marker for each skipped range,
+4. returns every page when the set is small (`pageCount <= siblingCount * 2 + 5`).
 
-```tsx
-<Pagination count={20} />                                  // uncontrolled, page starts at 1
-<Pagination count={20} defaultPage={3} />                   // uncontrolled, page starts at 3
-<Pagination count={20} page={page} onPageChange={...} />    // controlled
+With `pageCount = 12`, `page = 6`, `siblingCount = 1` you get `1 ... 5 6 7 ... 12`.
+
+## 4. Wiring it to data
+
+```ts
+const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+const currentPage = Math.min(Math.max(page, 1), pageCount);
+const firstIndex = (currentPage - 1) * pageSize;
+const visibleItems = items.slice(firstIndex, firstIndex + pageSize);
 ```
 
-The hook checks `page !== undefined` to decide whether to call `setState`. When controlled, **always** supply `onPageChange`, otherwise the buttons render but do nothing.
+* **Reset or re-clamp the page** when the *query* changes (search text, filters, sort) or when the page size changes, because the old index points at different rows.
+* **Keep the page** when only the underlying data is refreshed (poll, refetch).
+* **Deep links**: persist `?page=3&size=25`; treat a missing, non-numeric or out-of-range value as page 1 (the clamp in step 4 handles the range for you).
 
-## 5. Page-size changes are the classic blank-page bug
+## 5. Large page counts: overflow Menu
 
-When `pageSize` grows, `pageCount` shrinks, and a stale `page` can point past the end. Two defenses:
+Replace the static ellipsis with a `Menu` whose `MenuList` lists the skipped pages, so a user who knows the target page can jump directly (example 3). Cap the number of `MenuItem`s (about 20) and fall back to a jump control beyond that, otherwise the menu becomes a scrollable wall of text.
 
-1. Clamp on render: `const currentPage = clamp(page, 1, pageCount)`.
-2. Reset to page 1 inside the page-size handler — this is also what users expect.
+## 6. Page size and jump-to-page
 
-Both appear in the table-footer example.
+Wrap `Select` (page size) and `SpinButton` (jump) in `Field` so they inherit the label, `id` and validation wiring:
 
-## 6. Table footer variant (rows per page + range summary)
+```tsx
+<Field label='Items per page' orientation='horizontal' size='small'>
+  <Select size='small' value={String(pageSize)} onChange={...}>
+    <option value={5}>5</option>
+  </Select>
+</Field>
 
-A pagination footer typically shows three things in one row: a `Field`-wrapped `Select` for rows per page, a `Text` summary such as `11–20 of 137`, and prev/next buttons with "Page 2 of 14". Use `justifyContent: 'space-between'` with `flexWrap: 'wrap'` so it degrades gracefully on narrow screens. Put the range summary in an `aria-live="polite"` region so keyboard and screen-reader users hear the update when the page changes.
+<Field label='Go to page' orientation='horizontal' size='small'>
+  <SpinButton size='small' min={1} max={pageCount} value={currentPage} onChange={...} />
+</Field>
+```
 
-## 7. Compact variant for small page counts / small screens
+Changing the page size must reset to page 1. The `SpinButton` is controlled and its `onChange` must guard `typeof data.value !== 'number'`, because the input can be cleared or contain junk.
 
-On mobile, or when `pageCount` is small, replace the number strip with a `Select` that lists pages ("3 of 12") flanked by first/previous/next/last icon buttons. Cap the number of `<option>`s — `Select` does not virtualize, so an unbounded list of hundreds of options is slow and unusable. If you need to jump within thousands of pages, switch to the numbered variant with an ellipsis or add a dedicated search/tag control instead.
+## 7. Compact / responsive variant
 
-## 8. Styling
+Below roughly 600 px, hide the numbered buttons and render `Previous | Page 3 of 12 | Next`, where the middle is a `Select`, an overflow `Menu`, or a `SpinButton`. Keep Previous/Next and the live summary - those are the load-bearing parts of the control.
 
-Use `makeStyles` + `tokens` from `@fluentui/react-components`. Pagination needs very little: a flex row with `gap: tokens.spacingHorizontalXS`, a reset list (`margin: 0; padding: 0; listStyleType: 'none'`), and `colorNeutralForeground3` for the ellipsis and summary text. Middle-size `Button` is 32px tall, which satisfies the minimum target size; do not shrink below `size="small"` (24px) unless you also increase hit area.
+## 8. Behavior details worth getting right
 
-## Accessibility checklist
+* **Do not lose focus.** Use `disabledFocusable` instead of `disabled` for Previous/Next: a `disabled` button leaves the tab order, and a keyboard user who reaches the last page has focus thrown back to `document.body`.
+* **Keep the focused node mounted.** Key page buttons by page number, not by array index, so React reuses the same DOM node when the window shifts.
+* **Scroll, but do not steal focus.** Call `listRef.current?.scrollIntoView({ block: 'nearest' })` in an effect on page change instead of focusing the list container.
+* **Announce the change** via the `aria-live='polite'` summary. Do not announce on every keystroke of a jump control.
+* **Guard against double fetches**: set the bar's `disabled` flag while a page request is in flight.
 
-- One `<nav aria-label="…">` landmark; give each landmark a unique label when a page has several.
-- Semantic list (`<ul>`/`<li>`) so assistive tech announces "list of 7 items".
-- `aria-current="page"` on the active page button.
-- Accessible names on icon-only buttons (`aria-label="Previous page"`).
-- Announce changes with a polite live region ("Page 3 of 12" / "11–20 of 137").
-- Full keyboard support comes for free from `Button`; never use `<div onClick>` or `<span role="link">`.
+## 9. Accessibility summary
+
+* One `<nav aria-label='Pagination'>` per region; with two paginated areas, label them differently (`Results pagination`, `Activity pagination`).
+* Current page = `aria-current='page'` + `appearance='primary'`.
+* Icon-only controls need `aria-label` (`Previous page`, `Next page`, `Show pages 7 through 19`).
+* Every control is a real `Button`/`Select`/`SpinButton`, so Tab, Enter, Space and native select behavior work with no custom key handling. Do not add roving tabindex unless you also implement the full arrow-key model.
 
 ## Examples
 
-### Numbered pagination with ellipses (hook + component + demo)
+### PaginationBar (core control)
 
-A complete, self-contained file: a pure getPaginationItems helper, a usePagination hook with controlled/uncontrolled support, and a Pagination component that renders page buttons plus a live 'Page X of Y' status, driven by a 137-item demo list.
+A reusable, controlled pagination bar: windowed page numbers, Previous/Next buttons, current page marked with aria-current, and a live page summary.
 
 ```tsx
 import * as React from 'react';
-import { Button, Text, makeStyles, tokens } from '@fluentui/react-components';
+import { Button, Text, Tooltip } from '@fluentui/react-components';
 
-/* -------------------------------------------------------------------------- */
-/* 1. Pure helpers - the page model (framework agnostic, easy to unit test)   */
-/* -------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------- */
+/* Inline SVG icons: no extra dependency, and they inherit currentColor */
+/* ------------------------------------------------------------------- */
 
-export type PaginationItem = number | 'start-ellipsis' | 'end-ellipsis';
+const ChevronLeftIcon = () => (
+  <svg width='16' height='16' viewBox='0 0 16 16' aria-hidden='true' focusable='false'>
+    <path
+      d='M10.5 2.5 5.5 8l5 5.5'
+      fill='none'
+      stroke='currentColor'
+      strokeWidth='1.5'
+      strokeLinecap='round'
+      strokeLinejoin='round'
+    />
+  </svg>
+);
 
-const range = (start: number, end: number): number[] =>
-  Array.from({ length: Math.max(end - start + 1, 0) }, (_, index) => start + index);
+const ChevronRightIcon = () => (
+  <svg width='16' height='16' viewBox='0 0 16 16' aria-hidden='true' focusable='false'>
+    <path
+      d='M5.5 2.5 10.5 8l-5 5.5'
+      fill='none'
+      stroke='currentColor'
+      strokeWidth='1.5'
+      strokeLinecap='round'
+      strokeLinejoin='round'
+    />
+  </svg>
+);
 
-const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
+/* ------------------------------ windowing --------------------------- */
+
+export type PageItem = number | 'ellipsis';
 
 /**
- * Returns the sequence of page numbers and ellipses to render.
- * Example for page 5 of 20: [1, 'start-ellipsis', 4, 5, 6, 'end-ellipsis', 20]
+ * Page numbers to render: page 1 and the last page are always anchored,
+ * the current page keeps `siblingCount` neighbours, and skipped ranges
+ * collapse into an 'ellipsis' marker.
  */
-export const getPaginationItems = (
-  page: number,
-  count: number,
-  siblingCount = 1,
-  boundaryCount = 1,
-): PaginationItem[] => {
-  if (count <= 0) {
+export function getPageItems(page: number, pageCount: number, siblingCount = 1): PageItem[] {
+  if (pageCount <= 0) {
     return [];
   }
 
-  // Everything fits without collapsing anything.
-  const totalSlots = boundaryCount * 2 + siblingCount * 2 + 3;
-  if (count <= totalSlots) {
-    return range(1, count);
+  // first + last + current + siblingCount on each side + 2 ellipses
+  const maxSlots = siblingCount * 2 + 5;
+  if (pageCount <= maxSlots) {
+    return Array.from({ length: pageCount }, (_, index) => index + 1);
   }
 
-  const siblingsStart = Math.max(
-    Math.min(page - siblingCount, count - boundaryCount - siblingCount * 2 - 1),
-    boundaryCount + 2,
-  );
-  const siblingsEnd = Math.min(
-    Math.max(page + siblingCount, boundaryCount + siblingCount * 2 + 2),
-    count - boundaryCount - 1,
-  );
+  const left = Math.max(page - siblingCount, 2);
+  const right = Math.min(page + siblingCount, pageCount - 1);
 
-  const items: PaginationItem[] = [
-    ...range(1, boundaryCount),
-    siblingsStart > boundaryCount + 2 ? 'start-ellipsis' : boundaryCount + 1,
-    ...range(siblingsStart, siblingsEnd),
-    siblingsEnd < count - boundaryCount - 1 ? 'end-ellipsis' : count - boundaryCount,
-    ...range(count - boundaryCount + 1, count),
-  ];
+  const items: PageItem[] = [1];
+  if (left > 2) {
+    items.push('ellipsis');
+  }
+  for (let p = left; p <= right; p += 1) {
+    items.push(p);
+  }
+  if (right < pageCount - 1) {
+    items.push('ellipsis');
+  }
+  items.push(pageCount);
 
   return items;
-};
-
-/* -------------------------------------------------------------------------- */
-/* 2. Hook - controlled / uncontrolled page state                             */
-/* -------------------------------------------------------------------------- */
-
-export interface UsePaginationOptions {
-  /** Total number of pages. */
-  count: number;
-  /** Controlled current page (1-based). */
-  page?: number;
-  /** Initial page when uncontrolled. Defaults to 1. */
-  defaultPage?: number;
-  siblingCount?: number;
-  boundaryCount?: number;
-  onPageChange?: (event: React.MouseEvent<HTMLButtonElement>, page: number) => void;
 }
 
-export interface UsePaginationResult {
+/* ------------------------------ component --------------------------- */
+
+export interface PaginationBarProps {
+  /** 1-based index of the selected page. */
   page: number;
+  /** Total number of pages. */
   pageCount: number;
-  items: PaginationItem[];
-  canGoPrevious: boolean;
-  canGoNext: boolean;
-  goTo: (event: React.MouseEvent<HTMLButtonElement>, nextPage: number) => void;
-}
-
-export const usePagination = ({
-  count,
-  page,
-  defaultPage = 1,
-  siblingCount = 1,
-  boundaryCount = 1,
-  onPageChange,
-}: UsePaginationOptions): UsePaginationResult => {
-  const pageCount = Math.max(Math.floor(count), 0);
-  const isControlled = page !== undefined;
-  const [uncontrolledPage, setUncontrolledPage] = React.useState(defaultPage);
-
-  const rawPage = isControlled ? (page as number) : uncontrolledPage;
-  const currentPage = pageCount === 0 ? 0 : clamp(Math.round(rawPage), 1, pageCount);
-
-  const goTo = React.useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>, nextPage: number) => {
-      if (pageCount === 0) {
-        return;
-      }
-      const target = clamp(Math.round(nextPage), 1, pageCount);
-      if (target === currentPage) {
-        return;
-      }
-      if (!isControlled) {
-        setUncontrolledPage(target);
-      }
-      onPageChange?.(event, target);
-    },
-    [currentPage, isControlled, onPageChange, pageCount],
-  );
-
-  const items = React.useMemo(
-    () => getPaginationItems(currentPage || 1, pageCount, siblingCount, boundaryCount),
-    [boundaryCount, currentPage, pageCount, siblingCount],
-  );
-
-  return {
-    page: currentPage,
-    pageCount,
-    items,
-    canGoPrevious: currentPage > 1,
-    canGoNext: pageCount > 0 && currentPage < pageCount,
-    goTo,
-  };
-};
-
-/* -------------------------------------------------------------------------- */
-/* 3. Presentation - Button/Text inside a <nav><ul>                           */
-/* -------------------------------------------------------------------------- */
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    columnGap: tokens.spacingHorizontalM,
-    rowGap: tokens.spacingVerticalS,
-  },
-  list: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalXS,
-    margin: 0,
-    padding: 0,
-    listStyleType: 'none',
-  },
-  item: {
-    display: 'flex',
-  },
-  ellipsis: {
-    color: tokens.colorNeutralForeground3,
-    paddingInline: tokens.spacingHorizontalXS,
-    userSelect: 'none',
-  },
-  status: {
-    color: tokens.colorNeutralForeground3,
-  },
-  demoList: {
-    display: 'grid',
-    rowGap: tokens.spacingVerticalXS,
-    margin: 0,
-    padding: 0,
-    listStyleType: 'none',
-  },
-});
-
-export interface PaginationProps {
-  count: number;
-  page?: number;
-  defaultPage?: number;
+  /** Called with the 1-based index of the requested page. */
+  onPageChange: (page: number) => void;
+  /** Extra page buttons rendered on each side of the current page. */
   siblingCount?: number;
-  boundaryCount?: number;
-  onPageChange?: (event: React.MouseEvent<HTMLButtonElement>, page: number) => void;
+  /** Disables every control, e.g. while the next page is loading. */
   disabled?: boolean;
-  size?: 'small' | 'medium' | 'large';
+  /** Accessible name of the nav landmark. */
   ariaLabel?: string;
 }
 
-export const Pagination: React.FC<PaginationProps> = ({
-  count,
+export const PaginationBar: React.FC<PaginationBarProps> = ({
   page,
-  defaultPage = 1,
-  siblingCount = 1,
-  boundaryCount = 1,
+  pageCount,
   onPageChange,
+  siblingCount = 1,
   disabled = false,
-  size = 'medium',
   ariaLabel = 'Pagination',
 }) => {
-  const styles = useStyles();
-  const { page: currentPage, pageCount, items, canGoPrevious, canGoNext, goTo } = usePagination({
-    count,
-    page,
-    defaultPage,
-    siblingCount,
-    boundaryCount,
-    onPageChange,
-  });
+  const items = React.useMemo(
+    () => getPageItems(page, pageCount, siblingCount),
+    [page, pageCount, siblingCount],
+  );
 
-  if (pageCount === 0) {
+  const goTo = React.useCallback(
+    (next: number) => {
+      const clamped = Math.min(Math.max(next, 1), pageCount);
+      if (clamped !== page) {
+        onPageChange(clamped);
+      }
+    },
+    [onPageChange, page, pageCount],
+  );
+
+  if (pageCount <= 1) {
     return null;
   }
 
   return (
-    <nav aria-label={ariaLabel} className={styles.root}>
-      <ul className={styles.list}>
-        <li className={styles.item}>
-          <Button
-            appearance="subtle"
-            size={size}
-            icon={<span aria-hidden="true">&lsaquo;</span>}
-            disabled={disabled || !canGoPrevious}
-            onClick={(event) => goTo(event, currentPage - 1)}
-          >
-            Previous
-          </Button>
-        </li>
+    <nav aria-label={ariaLabel} style={navStyle}>
+      <Tooltip content='Previous page' relationship='label'>
+        <Button
+          appearance='subtle'
+          icon={<ChevronLeftIcon />}
+          disabledFocusable={disabled || page <= 1}
+          onClick={() => goTo(page - 1)}
+        >
+          Previous
+        </Button>
+      </Tooltip>
 
-        {items.map((item) =>
-          typeof item === 'number' ? (
-            <li key={item} className={styles.item}>
-              <Button
-                appearance={item === currentPage ? 'primary' : 'subtle'}
-                size={size}
-                disabled={disabled}
-                aria-label={`Page ${item}`}
-                aria-current={item === currentPage ? 'page' : undefined}
-                onClick={(event) => goTo(event, item)}
-              >
-                {item}
-              </Button>
-            </li>
+      <div style={pagesStyle}>
+        {items.map((item, index) =>
+          item === 'ellipsis' ? (
+            <Text key={`ellipsis-${index}`} aria-hidden='true' style={ellipsisStyle}>
+              …
+            </Text>
           ) : (
-            <li key={item} className={styles.item}>
-              <Text aria-hidden="true" size={400} className={styles.ellipsis}>
-                &hellip;
-              </Text>
-            </li>
+            <Button
+              key={item}
+              appearance={item === page ? 'primary' : 'subtle'}
+              aria-label={`Page ${item}`}
+              aria-current={item === page ? 'page' : undefined}
+              disabled={disabled}
+              onClick={() => goTo(item)}
+              style={pageButtonStyle}
+            >
+              {item}
+            </Button>
           ),
         )}
-
-        <li className={styles.item}>
-          <Button
-            appearance="subtle"
-            size={size}
-            icon={<span aria-hidden="true">&rsaquo;</span>}
-            iconPosition="after"
-            disabled={disabled || !canGoNext}
-            onClick={(event) => goTo(event, currentPage + 1)}
-          >
-            Next
-          </Button>
-        </li>
-      </ul>
-
-      <Text aria-live="polite" size={200} className={styles.status}>
-        Page {currentPage} of {pageCount}
-      </Text>
-    </nav>
-  );
-};
-
-/* -------------------------------------------------------------------------- */
-/* 4. Demo - controlled usage over a 137 item list                            */
-/* -------------------------------------------------------------------------- */
-
-const ALL_ITEMS = Array.from({ length: 137 }, (_, index) => `Item ${index + 1}`);
-const PAGE_SIZE = 10;
-
-export const PaginationDemo: React.FC = () => {
-  const styles = useStyles();
-  const [page, setPage] = React.useState(1);
-
-  const pageCount = Math.ceil(ALL_ITEMS.length / PAGE_SIZE);
-  const start = (page - 1) * PAGE_SIZE;
-  const visibleItems = ALL_ITEMS.slice(start, start + PAGE_SIZE);
-
-  return (
-    <div>
-      <ul className={styles.demoList}>
-        {visibleItems.map((item) => (
-          <li key={item}>
-            <Text>{item}</Text>
-          </li>
-        ))}
-      </ul>
-
-      <Pagination
-        count={pageCount}
-        page={page}
-        onPageChange={(_event, nextPage) => setPage(nextPage)}
-        ariaLabel="Items pagination"
-      />
-    </div>
-  );
-};
-```
-
-### Table footer pagination with rows-per-page selector
-
-A drop-in footer for a Table/DataGrid: a Field-wrapped Select for page size, a live range summary ('11-20 of 137'), and prev/next buttons. Clamps the page on render and resets to page 1 when the page size changes.
-
-```tsx
-import * as React from 'react';
-import { Button, Field, Select, Text, makeStyles, tokens } from '@fluentui/react-components';
-import type { SelectOnChangeData } from '@fluentui/react-components';
-
-const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    columnGap: tokens.spacingHorizontalL,
-    rowGap: tokens.spacingVerticalS,
-    paddingTop: tokens.spacingVerticalS,
-    paddingBottom: tokens.spacingVerticalS,
-    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-  },
-  summary: {
-    color: tokens.colorNeutralForeground2,
-  },
-  controls: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalXS,
-  },
-  rows: {
-    display: 'grid',
-    rowGap: tokens.spacingVerticalXS,
-    margin: 0,
-    padding: 0,
-    listStyleType: 'none',
-  },
-});
-
-export interface TablePaginationProps {
-  totalItems: number;
-  page: number;
-  pageSize: number;
-  pageSizeOptions?: number[];
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (pageSize: number) => void;
-  disabled?: boolean;
-}
-
-export const TablePagination: React.FC<TablePaginationProps> = ({
-  totalItems,
-  page,
-  pageSize,
-  pageSizeOptions = [10, 25, 50, 100],
-  onPageChange,
-  onPageSizeChange,
-  disabled = false,
-}) => {
-  const styles = useStyles();
-
-  const pageCount = Math.max(Math.ceil(totalItems / pageSize), 1);
-  // Defensive clamp: a pageSize change can leave `page` past the end.
-  const currentPage = clamp(page, 1, pageCount);
-  const firstRow = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-  const lastRow = Math.min(currentPage * pageSize, totalItems);
-
-  const handlePageSizeChange = React.useCallback(
-    (_event: React.ChangeEvent<HTMLSelectElement>, data: SelectOnChangeData) => {
-      onPageSizeChange(Number(data.value));
-      onPageChange(1);
-    },
-    [onPageChange, onPageSizeChange],
-  );
-
-  return (
-    <div className={styles.root}>
-      <Field label="Rows per page" orientation="horizontal" size="small">
-        <Select size="small" value={String(pageSize)} onChange={handlePageSizeChange} disabled={disabled}>
-          {pageSizeOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </Select>
-      </Field>
-
-      <Text size={200} className={styles.summary} aria-live="polite">
-        {firstRow}&ndash;{lastRow} of {totalItems}
-      </Text>
-
-      <div className={styles.controls}>
-        <Button
-          appearance="subtle"
-          size="small"
-          icon={<span aria-hidden="true">&lsaquo;</span>}
-          aria-label="Previous page"
-          disabled={disabled || currentPage <= 1}
-          onClick={() => onPageChange(currentPage - 1)}
-        />
-        <Text size={200} className={styles.summary}>
-          Page {currentPage} of {pageCount}
-        </Text>
-        <Button
-          appearance="subtle"
-          size="small"
-          icon={<span aria-hidden="true">&rsaquo;</span>}
-          aria-label="Next page"
-          disabled={disabled || currentPage >= pageCount}
-          onClick={() => onPageChange(currentPage + 1)}
-        />
       </div>
-    </div>
-  );
-};
 
-/* -------------------------------------------------------------------------- */
-/* Demo - render the footer under a paged list                                */
-/* -------------------------------------------------------------------------- */
-
-export const TablePaginationDemo: React.FC = () => {
-  const styles = useStyles();
-  const totalItems = 137;
-  const [page, setPage] = React.useState(1);
-  const [pageSize, setPageSize] = React.useState(10);
-
-  const startIndex = (page - 1) * pageSize;
-  const rowsOnPage = Math.max(Math.min(pageSize, totalItems - startIndex), 0);
-  const rows = Array.from({ length: rowsOnPage }, (_, index) => `Row ${startIndex + index + 1}`);
-
-  return (
-    <div>
-      <ul className={styles.rows}>
-        {rows.map((row) => (
-          <li key={row}>
-            <Text block>{row}</Text>
-          </li>
-        ))}
-      </ul>
-
-      <TablePagination
-        totalItems={totalItems}
-        page={page}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-      />
-    </div>
-  );
-};
-```
-
-### Compact pagination (first / prev / page picker / next / last)
-
-A narrow-width or small-page-count variant: circular icon Buttons for first/previous/next/last around a Select listing the pages, wired through a Field label. Options are capped because Select does not virtualize.
-
-```tsx
-import * as React from 'react';
-import { Button, Field, Select, makeStyles, tokens } from '@fluentui/react-components';
-import type { SelectOnChangeData } from '@fluentui/react-components';
-
-const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max);
-
-/** Select does not virtualize; keep the option list bounded. */
-const MAX_SELECT_OPTIONS = 200;
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: tokens.spacingHorizontalXS,
-  },
-});
-
-export interface CompactPaginationProps {
-  page: number;
-  count: number;
-  onPageChange: (page: number) => void;
-  disabled?: boolean;
-}
-
-export const CompactPagination: React.FC<CompactPaginationProps> = ({
-  page,
-  count,
-  onPageChange,
-  disabled = false,
-}) => {
-  const styles = useStyles();
-
-  const pageCount = Math.max(count, 1);
-  const currentPage = clamp(page, 1, pageCount);
-  const atStart = disabled || currentPage <= 1;
-  const atEnd = disabled || currentPage >= pageCount;
-
-  const options = React.useMemo(
-    () => Array.from({ length: Math.min(pageCount, MAX_SELECT_OPTIONS) }, (_, index) => index + 1),
-    [pageCount],
-  );
-
-  const handlePageSelect = React.useCallback(
-    (_event: React.ChangeEvent<HTMLSelectElement>, data: SelectOnChangeData) => {
-      onPageChange(Number(data.value));
-    },
-    [onPageChange],
-  );
-
-  return (
-    <nav aria-label="Pagination" className={styles.root}>
-      <Button
-        appearance="subtle"
-        shape="circular"
-        icon={<span aria-hidden="true">&laquo;</span>}
-        aria-label="First page"
-        disabled={atStart}
-        onClick={() => onPageChange(1)}
-      />
-      <Button
-        appearance="subtle"
-        shape="circular"
-        icon={<span aria-hidden="true">&lsaquo;</span>}
-        aria-label="Previous page"
-        disabled={atStart}
-        onClick={() => onPageChange(currentPage - 1)}
-      />
-
-      <Field label="Page" orientation="horizontal" size="small">
-        <Select size="small" value={String(currentPage)} onChange={handlePageSelect} disabled={disabled}>
-          {options.map((option) => (
-            <option key={option} value={option}>
-              {option} of {pageCount}
-            </option>
-          ))}
-        </Select>
-      </Field>
-
-      <Button
-        appearance="subtle"
-        shape="circular"
-        icon={<span aria-hidden="true">&rsaquo;</span>}
-        aria-label="Next page"
-        disabled={atEnd}
-        onClick={() => onPageChange(currentPage + 1)}
-      />
-      <Button
-        appearance="subtle"
-        shape="circular"
-        icon={<span aria-hidden="true">&raquo;</span>}
-        aria-label="Last page"
-        disabled={atEnd}
-        onClick={() => onPageChange(pageCount)}
-      />
+      <Tooltip content='Next page' relationship='label'>
+        <Button
+          appearance='subtle'
+          icon={<ChevronRightIcon />}
+          iconPosition='after'
+          disabledFocusable={disabled || page >= pageCount}
+          onClick={() => goTo(page + 1)}
+        >
+          Next
+        </Button>
+      </Tooltip>
     </nav>
   );
 };
 
-/* -------------------------------------------------------------------------- */
-/* Demo                                                                       */
-/* -------------------------------------------------------------------------- */
+/* -------------------------------- styles ---------------------------- */
 
-export const CompactPaginationDemo: React.FC = () => {
-  const [page, setPage] = React.useState(1);
-
-  return <CompactPagination page={page} count={12} onPageChange={setPage} />;
+const navStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  flexWrap: 'wrap',
 };
+
+const pagesStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+};
+
+const pageButtonStyle: React.CSSProperties = {
+  minWidth: '32px',
+};
+
+const ellipsisStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  justifyContent: 'center',
+  minWidth: '32px',
+};
+
+/* --------------------------------- demo ----------------------------- */
+
+export default function PaginationBarExample() {
+  const pageCount = 12;
+  const [page, setPage] = React.useState(4);
+
+  return (
+    <div style={{ display: 'grid', gap: '8px' }}>
+      <Text aria-live='polite' weight='semibold'>
+        Page {page} of {pageCount}
+      </Text>
+      <PaginationBar page={page} pageCount={pageCount} onPageChange={setPage} />
+    </div>
+  );
+}
+```
+
+### PaginatedList with page size and jump-to-page
+
+A generic, clamped list pager: page-size Select and jump-to-page SpinButton inside Field, a live range summary, Previous/Next buttons, and scroll-into-view on page change.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Field,
+  Select,
+  SpinButton,
+  Text,
+  Tooltip,
+} from '@fluentui/react-components';
+
+const ChevronLeftIcon = () => (
+  <svg width='16' height='16' viewBox='0 0 16 16' aria-hidden='true' focusable='false'>
+    <path
+      d='M10.5 2.5 5.5 8l5 5.5'
+      fill='none'
+      stroke='currentColor'
+      strokeWidth='1.5'
+      strokeLinecap='round'
+      strokeLinejoin='round'
+    />
+  </svg>
+);
+
+const ChevronRightIcon = () => (
+  <svg width='16' height='16' viewBox='0 0 16 16' aria-hidden='true' focusable='false'>
+    <path
+      d='M5.5 2.5 10.5 8l-5 5.5'
+      fill='none'
+      stroke='currentColor'
+      strokeWidth='1.5'
+      strokeLinecap='round'
+      strokeLinejoin='round'
+    />
+  </svg>
+);
+
+const listStyle: React.CSSProperties = {
+  display: 'grid',
+  gap: '4px',
+  margin: 0,
+  padding: 0,
+  listStyle: 'none',
+  minHeight: '120px',
+};
+
+const listItemStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '8px',
+  alignItems: 'baseline',
+};
+
+const barStyle: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '12px',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+};
+
+const controlsStyle: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '12px',
+  alignItems: 'center',
+};
+
+const pageControlsStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+};
+
+const counterStyle: React.CSSProperties = {
+  minWidth: '56px',
+  textAlign: 'center',
+};
+
+export interface PaginatedListProps<T> {
+  items: readonly T[];
+  renderItem: (item: T, index: number) => React.ReactNode;
+  initialPageSize?: number;
+  pageSizeOptions?: readonly number[];
+  /** Accessible name of the paginated region. */
+  label?: string;
+}
+
+export function PaginatedList<T>({
+  items,
+  renderItem,
+  initialPageSize = 5,
+  pageSizeOptions = [5, 10, 25],
+  label = 'Results',
+}: PaginatedListProps<T>) {
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(initialPageSize);
+
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+
+  // Never point at a page that no longer exists: clamp on read.
+  const currentPage = Math.min(Math.max(page, 1), pageCount);
+
+  const firstIndex = (currentPage - 1) * pageSize;
+  const visibleItems = items.slice(firstIndex, firstIndex + pageSize);
+  const lastIndex = firstIndex + visibleItems.length;
+
+  const listRef = React.useRef<HTMLUListElement>(null);
+  const isFirstRender = React.useRef(true);
+
+  // Bring the results back into view after a page change, without stealing focus.
+  React.useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    listRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [currentPage, pageSize]);
+
+  return (
+    <section aria-label={label} style={{ display: 'grid', gap: '12px' }}>
+      {items.length === 0 ? (
+        <Text>No results yet.</Text>
+      ) : (
+        <ul ref={listRef} style={listStyle}>
+          {visibleItems.map((item, index) => (
+            <li key={firstIndex + index} style={listItemStyle}>
+              {renderItem(item, firstIndex + index)}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div style={barStyle}>
+        <Text aria-live='polite' size={200}>
+          Showing {items.length === 0 ? 0 : firstIndex + 1}–{lastIndex} of {items.length}
+        </Text>
+
+        <div style={controlsStyle}>
+          <Field label='Items per page' orientation='horizontal' size='small'>
+            <Select
+              size='small'
+              value={String(pageSize)}
+              onChange={(_event, data) => {
+                setPageSize(Number(data.value));
+                // The old index now refers to different rows.
+                setPage(1);
+              }}
+            >
+              {pageSizeOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label='Go to page' orientation='horizontal' size='small'>
+            <SpinButton
+              size='small'
+              min={1}
+              max={pageCount}
+              value={currentPage}
+              onChange={(_event, data) => {
+                // The input can be cleared, so guard the type.
+                if (typeof data.value !== 'number') {
+                  return;
+                }
+                setPage(Math.min(Math.max(data.value, 1), pageCount));
+              }}
+            />
+          </Field>
+
+          <div style={pageControlsStyle}>
+            <Tooltip content='Previous page' relationship='label'>
+              <Button
+                appearance='subtle'
+                icon={<ChevronLeftIcon />}
+                disabledFocusable={currentPage <= 1}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                Previous
+              </Button>
+            </Tooltip>
+
+            <Text aria-hidden='true' weight='semibold' style={counterStyle}>
+              {currentPage} / {pageCount}
+            </Text>
+
+            <Tooltip content='Next page' relationship='label'>
+              <Button
+                appearance='subtle'
+                icon={<ChevronRightIcon />}
+                iconPosition='after'
+                disabledFocusable={currentPage >= pageCount}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                Next
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* --------------------------------- demo ----------------------------- */
+
+interface Person {
+  id: string;
+  name: string;
+  role: string;
+}
+
+const people: Person[] = [
+  { id: '1', name: 'Ada Lovelace', role: 'Engineer' },
+  { id: '2', name: 'Grace Hopper', role: 'Engineer' },
+  { id: '3', name: 'Katherine Johnson', role: 'Analyst' },
+  { id: '4', name: 'Margaret Hamilton', role: 'Engineer' },
+  { id: '5', name: 'Barbara Liskov', role: 'Architect' },
+  { id: '6', name: 'Radia Perlman', role: 'Architect' },
+  { id: '7', name: 'Shafi Goldwasser', role: 'Researcher' },
+  { id: '8', name: 'Frances Allen', role: 'Researcher' },
+  { id: '9', name: 'Jean Bartik', role: 'Engineer' },
+  { id: '10', name: 'Evelyn Boyd Granville', role: 'Analyst' },
+  { id: '11', name: 'Mary Lee Woods', role: 'Engineer' },
+  { id: '12', name: 'Karen Sparck Jones', role: 'Researcher' },
+];
+
+export default function PaginatedListExample() {
+  return (
+    <PaginatedList
+      items={people}
+      renderItem={(person) => (
+        <>
+          <Text weight='semibold'>{person.name}</Text>
+          <Text size={200}>{person.role}</Text>
+        </>
+      )}
+    />
+  );
+}
+```
+
+### Overflow menu pagination for large page counts
+
+When there are dozens of pages, the skipped ranges become Menu triggers that list the hidden pages, so users can jump straight to any page instead of clicking one at a time.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Menu,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+  Text,
+  Tooltip,
+} from '@fluentui/react-components';
+
+const ChevronLeftIcon = () => (
+  <svg width='16' height='16' viewBox='0 0 16 16' aria-hidden='true' focusable='false'>
+    <path
+      d='M10.5 2.5 5.5 8l5 5.5'
+      fill='none'
+      stroke='currentColor'
+      strokeWidth='1.5'
+      strokeLinecap='round'
+      strokeLinejoin='round'
+    />
+  </svg>
+);
+
+const ChevronRightIcon = () => (
+  <svg width='16' height='16' viewBox='0 0 16 16' aria-hidden='true' focusable='false'>
+    <path
+      d='M5.5 2.5 10.5 8l-5 5.5'
+      fill='none'
+      stroke='currentColor'
+      strokeWidth='1.5'
+      strokeLinecap='round'
+      strokeLinejoin='round'
+    />
+  </svg>
+);
+
+type PaginationItem =
+  | { type: 'page'; page: number }
+  | { type: 'gap'; key: string; pages: number[] };
+
+/**
+ * Anchors page 1 and the last page, keeps `windowSize` pages around the
+ * current page, and reports skipped ranges so they can be rendered behind
+ * an overflow Menu.
+ */
+export function buildPaginationItems(
+  currentPage: number,
+  pageCount: number,
+  windowSize = 5,
+): PaginationItem[] {
+  if (pageCount <= windowSize + 2) {
+    return Array.from(
+      { length: pageCount },
+      (_, index): PaginationItem => ({ type: 'page', page: index + 1 }),
+    );
+  }
+
+  const half = Math.floor(windowSize / 2);
+  let start = currentPage - half;
+  let end = currentPage + half;
+
+  if (start < 2) {
+    start = 2;
+    end = start + windowSize - 1;
+  }
+  if (end > pageCount - 1) {
+    end = pageCount - 1;
+    start = end - windowSize + 1;
+  }
+
+  const items: PaginationItem[] = [{ type: 'page', page: 1 }];
+
+  if (start > 2) {
+    const pages: number[] = [];
+    for (let p = 2; p < start; p += 1) {
+      pages.push(p);
+    }
+    items.push({ type: 'gap', key: 'gap-start', pages });
+  }
+
+  for (let p = start; p <= end; p += 1) {
+    items.push({ type: 'page', page: p });
+  }
+
+  if (end < pageCount - 1) {
+    const pages: number[] = [];
+    for (let p = end + 1; p < pageCount; p += 1) {
+      pages.push(p);
+    }
+    items.push({ type: 'gap', key: 'gap-end', pages });
+  }
+
+  items.push({ type: 'page', page: pageCount });
+
+  return items;
+}
+
+const navStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  flexWrap: 'wrap',
+};
+
+const pagesStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+};
+
+const pageButtonStyle: React.CSSProperties = {
+  minWidth: '32px',
+};
+
+export interface OverflowPaginationProps {
+  page: number;
+  pageCount: number;
+  onPageChange: (page: number) => void;
+}
+
+export const OverflowPagination: React.FC<OverflowPaginationProps> = ({
+  page,
+  pageCount,
+  onPageChange,
+}) => {
+  const items = React.useMemo(
+    () => buildPaginationItems(page, pageCount),
+    [page, pageCount],
+  );
+
+  return (
+    <nav aria-label='Pagination' style={navStyle}>
+      <Tooltip content='Previous page' relationship='label'>
+        <Button
+          appearance='subtle'
+          icon={<ChevronLeftIcon />}
+          disabledFocusable={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+        >
+          Previous
+        </Button>
+      </Tooltip>
+
+      <div style={pagesStyle}>
+        {items.map((item) =>
+          item.type === 'page' ? (
+            <Button
+              key={`page-${item.page}`}
+              appearance={item.page === page ? 'primary' : 'subtle'}
+              aria-label={`Page ${item.page}`}
+              aria-current={item.page === page ? 'page' : undefined}
+              onClick={() => onPageChange(item.page)}
+              style={pageButtonStyle}
+            >
+              {item.page}
+            </Button>
+          ) : (
+            <Menu key={item.key}>
+              <MenuTrigger disableButtonEnhancement>
+                <Button
+                  appearance='subtle'
+                  aria-label={`Show pages ${item.pages[0]} through ${
+                    item.pages[item.pages.length - 1]
+                  }`}
+                  style={pageButtonStyle}
+                >
+                  …
+                </Button>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  {item.pages.map((gapPage) => (
+                    <MenuItem key={gapPage} onClick={() => onPageChange(gapPage)}>
+                      Page {gapPage}
+                    </MenuItem>
+                  ))}
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+          ),
+        )}
+      </div>
+
+      <Tooltip content='Next page' relationship='label'>
+        <Button
+          appearance='subtle'
+          icon={<ChevronRightIcon />}
+          iconPosition='after'
+          disabledFocusable={page >= pageCount}
+          onClick={() => onPageChange(page + 1)}
+        >
+          Next
+        </Button>
+      </Tooltip>
+    </nav>
+  );
+};
+
+/* --------------------------------- demo ----------------------------- */
+
+export default function OverflowPaginationExample() {
+  const pageCount = 24;
+  const [page, setPage] = React.useState(9);
+
+  return (
+    <div style={{ display: 'grid', gap: '8px' }}>
+      <Text aria-live='polite' weight='semibold'>
+        Page {page} of {pageCount}
+      </Text>
+      <OverflowPagination page={page} pageCount={pageCount} onPageChange={setPage} />
+    </div>
+  );
+}
 ```
 
 ## Pitfalls
 
-- Computing pageCount with Math.round or a hard-coded number instead of Math.ceil(totalItems / pageSize) - this loses the last partial page and mislabels the summary range.
-- Changing pageSize without resetting or clamping `page` - the user lands on a now-empty page. Reset to 1 in the page-size handler and also clamp on render with clamp(page, 1, pageCount).
-- Rendering the ellipsis as a disabled Button - a focusable (or disabled-but-rendered) control that does nothing is confusing. Use <Text aria-hidden="true">...</Text> and no list-style.
-- Relying only on appearance="primary" to convey the current page - add aria-current="page" so the state is programmatically available.
-- Icon-only page/first/last buttons without aria-label - they are announced as unlabeled buttons. Also remember Button renders its `icon` slot element; pass a decorative span or an aria-hidden icon.
-- Passing `page` (controlled mode) without `onPageChange` - the component renders but clicks do nothing. Either pass both props or use `defaultPage` only.
-- Building the page strip from <div onClick> or <span role="link"> - you lose keyboard activation, focus rings, and disabled semantics. Always use Button (or Link for real URLs).
-- Feeding an unbounded list of <option> elements into the compact Select - Select does not virtualize. Cap the option count (e.g. 200) or use the numbered variant with ellipses for very large page counts.
-- Forgetting the live region: without an aria-live announcement, keyboard and screen-reader users get no feedback that the page (and therefore the results) changed.
-- Recreating the item array on every render without useMemo - harmless for small lists but it re-renders every button whenever any parent state changes; memoize the derived items.
+- Off-by-one between the 1-based `page` and 0-based slicing. Always compute `const firstIndex = (page - 1) * pageSize` and keep the public API 1-based; mixing the two duplicates or skips a row set.
+- Not clamping the page when `pageCount` shrinks (search, filter, larger page size). Derive `const currentPage = Math.min(Math.max(page, 1), pageCount)` before slicing, otherwise the list renders empty while the bar highlights a page that no longer exists.
+- Using `disabled` instead of `disabledFocusable` for Previous/Next. A disabled button leaves the tab order, and a keyboard user who just reached the last page loses focus to the document body.
+- Rendering one Button per page for a large data set (thousands of pages). Window the pages with `getPageItems`/`buildPaginationItems` and put skipped ranges behind a Menu or a jump-to-page control.
+- Indicating the current page with color alone (`appearance='primary'`) and forgetting `aria-current='page'`, which leaves screen reader users unable to tell which page is selected.
+- Keying page buttons by array index. When the window shifts, React reuses the wrong DOM node and focus can land on a different page; key page buttons by page number and give each ellipsis node a stable string key.
+- Forgetting to reset the page to 1 when the page size, search term or filter changes, so the user lands on an out-of-range page or a seemingly random slice of the data.
+- Making the ellipsis a dead, non-interactive element on large page counts - users who know the page they want must walk there one click at a time. Make it a Menu trigger (example 3) or pair the bar with a jump-to-page SpinButton.
+- Building the bar with nested Tooltip + Button + custom clickable spans instead of real Buttons, which loses keyboard activation and the native pressed/focus semantics.
 
 ## Accessibility
 
-Wrap the control in a single <nav> landmark with a descriptive aria-label (give each landmark a unique label when a page has more than one). Render the page strip as a semantic <ul>/<li> so assistive technology announces it as a list. Mark the active page with aria-current="page" in addition to appearance="primary" - never rely on color alone. Every icon-only Button needs an accessible name (aria-label="Previous page", "Last page", etc.). Announce page changes with a polite live region, e.g. <Text aria-live="polite">Page 3 of 12</Text> or the "11-20 of 137" range summary. The ellipsis is decorative: render it with Text aria-hidden="true" so it is skipped and never focusable. Buttons give full keyboard support (Tab/Enter/Space) for free; if focus stability matters, use disabledFocusable instead of disabled on the boundary Previous/Next buttons so focus is not dumped on document.body. If the pages are real URLs, render Link elements per page instead of stateful Buttons.
+Wrap the controls in a `<nav aria-label='Pagination'>` landmark, and give each paginated region a distinct label when a page has more than one (for example 'Results pagination' and 'Activity pagination'); unlabeled duplicate nav landmarks are indistinguishable in a screen reader landmark list. Mark the current page with `aria-current='page'` on the page Button in addition to `appearance='primary'` - the visual style alone is invisible to assistive technology. Every control needs an accessible name: page buttons need visible text or `aria-label={'Page ' + n}`, and icon-only Previous/Next buttons need an explicit `aria-label` plus `Tooltip relationship='label'` for sighted mouse users (tooltips are hover-only and are not reliably announced, so never rely on them as the only name). Prefer `disabledFocusable` over `disabled` for Previous/Next so the button stays focusable and keyboard focus is not dropped to `document.body` when the user reaches the first or last page. Announce page changes by putting the range summary ('Showing 21-40 of 128') in an `aria-live='polite'` region and hide any duplicate counter text with `aria-hidden='true'`, so the change is not announced twice. Because everything is built from native Button, Select and SpinButton, Tab/Enter/Space/arrow behavior comes for free - do not replace them with divs, and do not add roving tabindex unless you also implement the full arrow-key model. In RTL layouts mirror the chevron SVGs (for example with a scaleX(-1) transform) and swap the order of Previous/Next so the direction matches reading order. Ensure the selected page button keeps sufficient contrast: it uses the brand background with the theme's inverted foreground, and the subtle appearance must still meet 3:1 against the surrounding surface.
 
 ## Components used
 
 - [Button](../../components/button.md)
 - [Field](../../components/field.md)
+- [Menu](../../components/menu.md)
+- [MenuItem](../../components/menu-item.md)
+- [MenuList](../../components/menu-list.md)
+- [MenuPopover](../../components/menu-popover.md)
+- [MenuTrigger](../../components/menu-trigger.md)
 - [Select](../../components/select.md)
+- [SpinButton](../../components/spin-button.md)
 - [Text](../../components/text.md)
+- [Tooltip](../../components/tooltip.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

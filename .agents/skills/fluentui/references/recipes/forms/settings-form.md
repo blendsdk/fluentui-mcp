@@ -4,808 +4,473 @@
 
 ## Goal
 
-Build an accessible settings/preferences form that edits one typed settings object with Fluent UI v9 fields, tracks saved-vs-draft state, validates inline, persists through an injected save callback, and reports load/save status to assistive technology.
+Build a complete, accessible settings/preferences form: a typed draft state object, Field-wrapped controls with hints and validation, grouped sections, dirty-state aware Save/Reset actions, success feedback via MessageBar, and an unsaved-changes guard implemented with Dialog (plus an optional Accordion layout for long preference lists).
 
 ## When to Use
 
-Use this recipe for account, workspace, profile, or notification settings panes: a bounded set of typed values that are loaded once, edited as a group, and saved wholesale to a backend. It fits both the explicit 'Save changes / Discard changes' pattern and the instant-apply preference pattern, and it scales from a handful of fields to several sections on one scrollable pane.
+Use this recipe when users edit several related values and commit them together with an explicit Save step: application preferences, account/profile settings, workspace or tenant configuration, notification preferences, editor/appearance settings, or an admin panel section. It is also the right choice when the form must protect users from losing unsaved edits (navigation away, cancel, close) and when you need grouped, labelled, validated Fluent UI v9 controls without a heavyweight form library.
 
 ## When Not to Use
 
-Do not use it for create flows or multi-step wizards where every field is new data and there is nothing to compare against. Do not use it for search or filter bars where values apply instantly and are never persisted, or for a single inline edit in a list (edit the row instead of opening a whole pane). If a setting is destructive and needs confirmation, add a confirmation dialog rather than relying on the form's save button alone.
+Do not use this plumbing for single-value, instant-apply controls (a lone Switch or Input inside a Popover or Menu that saves immediately) - there is no draft state, no dirty tracking, and no Save button needed. Do not hand-roll validation and change tracking for very large, schema-driven, or dynamically generated forms; instead pair the same Field-based controls with a dedicated form library and use Field's render-prop children to bind control props. If the settings are collected as part of a multi-step onboarding flow, use a stepped layout (TabList of steps or a Dialog/Drawer wizard) instead of one long scrolling form. If the user edits one record among many in a table, prefer an inline editing surface or a Drawer/Dialog editor over a full-page settings form.
 
-A settings screen is a long, low-frequency, high-consequence form. Users expect their previous values to still be there, need to know whether a change was saved, and must be able to undo an accidental edit. This recipe composes Fluent UI React v9 primitives into exactly that shape:
+## Outcome
 
-- `Card`, `Text`, and `Divider` for the pane and its sections
-- `Field` + `Input` / `Select` / `Textarea` for labeled values
-- `Switch` and `Checkbox` for toggles, with their own labels
-- `Button` and `Badge` for the action bar and the unsaved-changes signal
-- `MessageBar` and `Spinner` for the save/load lifecycle
+A settings surface that users can edit incrementally and commit with confidence:
 
-## 1. Model the screen as one typed object, in two copies
+- one typed state object for all settings, plus a `savedValues` snapshot used for dirty tracking and reset,
+- every control wrapped in `Field` so label, hint, and validation message are programmatically associated,
+- topic groups using `fieldset`/`legend` (with `Text` for typography) or `Accordion` when the list is long,
+- a Save/Reset action row that stays disabled until something actually changed,
+- success feedback via `MessageBar intent="success"`, rendered only after a successful save,
+- a controlled `Dialog` that guards unsaved edits before they are thrown away.
+
+## Anatomy
+
+1. **State model** - a single `interface` that describes every setting, plus a `savedValues` copy.
+2. **Sections** - a `fieldset` with a `legend` per topic (Profile, Language and region, Appearance and behavior). The `legend` gives screen readers a group name; `Text` supplies the visual typography.
+3. **Controls** - each control is wrapped in `Field`. `Field` renders a `Label`, computes a stable `id`, and clones its single child control to add that `id`, the `aria-describedby` for hint/validation text, and `aria-invalid` when `validationState` is `error` or `warning`.
+4. **Actions** - a primary `Button` with `type="submit"` that triggers the `<form onSubmit>`, and a secondary `Button` with `type="button"` that restores `savedValues`.
+5. **Feedback** - `MessageBar` + `MessageBarBody` + `MessageBarTitle`, only mounted after a successful save.
+6. **Guard** - a controlled `Dialog` (`open` + `onOpenChange`) with `DialogSurface` / `DialogBody` / `DialogTitle` / `DialogContent` / `DialogActions`.
+
+## Step 1 - Model the settings as one typed object
+
+Define the shape once and export the defaults so tests, stories, and reset logic share the same source of truth. Union-typed fields (`'daily' | 'weekly' | 'never'`) keep the form honest about what the rest of the app will receive.
 
 ```ts
-export type AccountSettings = {
+export interface SettingsValues {
   displayName: string;
   email: string;
-  language: string;
-  timeZone: string;
-  bio: string;
-  productUpdates: boolean;
-  weeklyDigest: boolean;
-};
+  emailDigest: 'daily' | 'weekly' | 'never';
+  editorFontSize: number;
+}
 
-const [saved, setSaved] = React.useState<AccountSettings>(initialSettings); // last persisted
-const [draft, setDraft] = React.useState<AccountSettings>(initialSettings); // on screen
-const isDirty = (Object.keys(draft) as Array<keyof AccountSettings>).some(
-  (key) => draft[key] !== saved[key],
-);
+export const DEFAULT_SETTINGS: SettingsValues = { /* ... */ };
 ```
 
-Two copies pay for themselves immediately: "Discard changes" is `setDraft(saved)`, "Save" can be disabled unless `isDirty`, and the submit handler only needs `draft`.
+Keep a second piece of state, `savedValues`, that only changes on submit. Every write goes through one `update(patch: Partial<SettingsValues>)` helper, which makes it impossible for a field to be forgotten in the dirty check.
 
-Always patch with a new object - never mutate:
+## Step 2 - Wrap every control in Field
 
-```ts
-const update = (patch: Partial<AccountSettings>) => setDraft((prev) => ({ ...prev, ...patch }));
-```
+`Field` is the single mechanism that answers "what is this control, why is it here, and what is wrong with it":
 
-## 2. Let Field own the label, hint, and error wiring
+- `label` (required for association) - pass a string or a slot object,
+- `required` - renders the required indicator and forwards `required` to the control,
+- `hint` - helper text a user reads *before* an error occurs (character counters, units, examples),
+- `validationState="error" | "warning" | "success" | "none"` and `validationMessage` - the inline message,
+- `orientation="vertical" | "horizontal"` and `size` - layout and density.
 
-`Field` is the load-bearing component of this recipe. It associates a real label with its child control, routes `hint` and `validationMessage` through `aria-describedby`, adds `aria-invalid` when `validationState="error"`, and renders the required indicator:
+Use `Field` for label-less controls: `Input`, `Textarea`, `Select`, `SpinButton`, `Slider`, and `RadioGroup`. For controls that render their own label (`Checkbox`, `Switch`, and individual `Radio`s), use the control's own `label` prop unless the group needs a name - a group of radios is labelled with `Field`, each `Radio` keeps its own label.
+
+Show validation only when the user can act on it. A common rule: compute the error, but keep the control in `validationState="none"` until the field is dirty or the form has been submitted once. Never hide an error in a tooltip - it must be visible text.
+
+## Step 3 - Group related controls
+
+Two grouping mechanisms cover almost every settings page:
+
+- **Always-visible groups** - `fieldset` + `legend` (the `Section` helper in Example 1) separated by `Divider`. Everything is scannable and Cmd/Ctrl+F-able.
+- **Collapsible groups** - `Accordion` with `multiple collapsible` so several panels can be open at once (Example 3). Use `defaultOpenItems` for uncontrolled state, or `openItems` + `onToggle` to persist which sections are open.
+
+Sections should be ordered by how often they change: identity and profile first, then behavior, then advanced/rare settings last.
+
+## Step 4 - Track dirty state and validate
+
+Derive `isDirty` from the field-by-field comparison of `values` against `savedValues` rather than a boolean you toggle in every handler; a toggle is guaranteed to drift once you add a field. Use the same derived value for three things: enabling Save, showing the "You have unsaved changes" status text, and deciding whether cancel/close needs a confirmation.
+
+Validation follows the same shape - derive the message from `values`, don't store it:
 
 ```tsx
-<Field
-  label="Email"
-  required
-  hint="Used for account recovery."
-  validationState={emailError ? 'error' : 'none'}
-  validationMessage={emailError}
->
-  <Input type="email" value={draft.email} onChange={(_, data) => update({ email: data.value })} />
-</Field>
-```
-
-Use `Field` for controls that do **not** have a visible label of their own: `Input`, `Select`, `Textarea`. `Switch` and `Checkbox` render their label from their children, so give them descriptive child text instead of wrapping them in `Field` - a wrapped toggle ends up with two competing labels.
-
-Set `orientation="horizontal"` on a `Field` when you want the label beside the control for compact panes, and `validationState="warning"` for non-blocking advice.
-
-## 3. Derive validation, then gate when it is shown
-
-Compute error strings from `draft` on every render; never store them in state:
-
-```ts
-const displayNameError =
-  draft.displayName.trim() === '' ? 'Enter the name your teammates will see.' : undefined;
 const emailError =
-  draft.email.trim() === ''
-    ? 'Enter the email address we should use for account recovery.'
-    : draft.email.includes('@')
-      ? undefined
-      : 'Email addresses must contain an "@" character.';
+  values.email.trim().length > 0 && !EMAIL_PATTERN.test(values.email.trim())
+    ? 'Enter an email address in the format name@example.com.'
+    : undefined;
 ```
 
-Then hide messages until the user has acted on the field or tried to submit:
+Guard the submit handler with the same condition and disable the primary button when the form is invalid or unchanged, so an invalid value can never reach your persistence layer.
 
-```ts
-const [touched, setTouched] = React.useState<Partial<Record<keyof AccountSettings, boolean>>>({});
-const [hasSubmitted, setHasSubmitted] = React.useState(false);
+## Step 5 - Save, reset, and confirm
 
-const visibleError = (key: 'displayName' | 'email') => {
-  const message = key === 'displayName' ? displayNameError : emailError;
-  return message && (touched[key] || hasSubmitted) ? message : undefined;
-};
-```
+On submit: `event.preventDefault()`, bail out if there is a blocking validation error, copy `values` into `savedValues`, then surface the success `MessageBar`. On reset: copy `savedValues` back into `values` and clear the message. Because both directions go through the same state, Reset is a true "undo all edits" and dirty state returns to false automatically.
 
-Have `update()` mark the keys in the patch as touched. On submit, set `hasSubmitted`, return early when an error blocks the save, and move focus to the first invalid control so the message is announced together with the field:
+Mount the success `MessageBar` conditionally (`showSavedMessage && ...`) and clear that flag on the next edit. Rendering it permanently or on every keystroke causes repeated, noisy live-region announcements.
+
+## Step 6 - Guard unsaved changes with Dialog
+
+Wrap the form in a fragment and render a controlled `Dialog` next to it:
+
+- keep `open` in state (`discardDialogOpen`),
+- always pass `onOpenChange={(event, data) => setDiscardDialogOpen(data.open)}` so Escape, backdrop clicks, and the built-in close affordance keep working,
+- put a `DialogTrigger` with `action="close"` and `disableButtonEnhancement` around the "Keep editing" button,
+- the destructive "Discard changes" button calls a handler that restores `savedValues` and closes the dialog.
+
+Reuse the dialog for any exit path (Cancel, route change, dirty close) by opening it instead of navigating away. `Dialog` also supports `modalType="alert"` when a decision must be acknowledged before anything else can happen.
+
+## Step 7 - Optional: collapsible sections with Accordion
+
+For preference dialogs and pages with many rarely changed settings, swap the `fieldset` sections for `Accordion`:
 
 ```tsx
-const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-  event.preventDefault();
-  setHasSubmitted(true);
-  if (displayNameError || emailError) {
-    (displayNameError ? displayNameRef : emailRef).current?.focus();
-    return;
-  }
-  // ...save
-};
+<Accordion multiple collapsible defaultOpenItems={['profile']}>
+  <AccordionItem value="profile">
+    <AccordionHeader>Profile</AccordionHeader>
+    <AccordionPanel>{/* Fields live here */}</AccordionPanel>
+  </AccordionItem>
+</Accordion>
 ```
 
-`Input` forwards its `ref` to the underlying `<input>` element, so `React.useRef<HTMLInputElement>(null)` is all the plumbing you need. Add `noValidate` to the `<form>` so the browser's own bubbles do not pre-empt Fluent's messages.
+`AccordionItem` requires a unique `value`; `AccordionPanel` must be a direct child of its `AccordionItem`. Use `AccordionHeader size` to match the density of the surrounding page, and keep the panels that contain validation errors open if you validate on submit.
 
-## 4. Shape the pane: Card, headings, Divider, a field grid
+## Choosing the right control
 
-- One `Card appearance="filled-alternative"` per pane, with a max width from `style`.
-- A single `<form>` inside it with `display: flex; flexDirection: column; gap: 16` - DOM order is tab order, so keep the markup order equal to the visual order.
-- Each group is a `<section aria-labelledby="...">` whose heading is an `<h3 id="...">` wrapping `Text size={400} weight="semibold"`. Screen-reader users can then jump between groups.
-- Separate groups with `<Divider />`.
-- Lay fields out with CSS grid instead of per-field widths:
+| Setting shape | Component | Notes |
+| --- | --- | --- |
+| Short free text, email, URL | `Input` | Set `type` to enable mobile keyboards and autofill |
+| Long free text | `Textarea` | `resize="vertical"` keeps the layout stable |
+| One of many (5+) options | `Select` | Native `<option>` children keep it lightweight |
+| One of a few (2-5) options | `RadioGroup` + `Radio` | All options stay visible; wrap in `Field` for the group name |
+| Boolean, applies immediately | `Checkbox` / `Switch` | Both render their own `label`; `Switch` reads as on/off state, `Checkbox` as an opt-in |
+| Bounded number | `Slider` (exploration) or `SpinButton` (precise entry) | Show units in the `Field` hint |
 
-```ts
-const gridStyle: React.CSSProperties = {
-  display: 'grid',
-  gap: 16,
-  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-};
-```
+## Accessibility checklist
 
-Give multi-line or wide fields `style={{ gridColumn: '1 / -1' }}`. For 6-12 settings, keep everything on one scrollable page instead of hiding fields behind collapsible sections: the dirty state, the action bar, and the save error all stay in one place.
-
-## 5. Make the save lifecycle explicit
-
-```ts
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
-```
-
-- Disable the primary button while `!isDirty || isBusy` and swap its label to "Saving" - this is what prevents duplicate submits. Use `disabledFocusable` instead of `disabled` if you want the button to stay in the tab order.
-- Put `aria-busy={isBusy}` on the `<form>` and, for longer writes, render a small `Spinner` in the action row.
-- Announce outcomes by *mounting* a `MessageBar`: `intent="success" politeness="polite"` for saved, `intent="error" politeness="assertive"` for failed. Clear the message on the next edit.
-- Assign `setSaved(draft)` only after the promise resolves; that flips `isDirty` back to false and enables "Discard changes".
-- On failure, keep the draft untouched, tell the user nothing was lost, and leave the button enabled for a retry.
-
-## 6. Instant-apply variant (no Save button)
-
-Preference panes often apply each change immediately. Same structure, minus the dirty tracking:
-
-```tsx
-<Switch
-  checked={settings.productUpdates}
-  onChange={(_, data) => apply({ productUpdates: data.checked })}
->
-  Product updates and announcements
-</Switch>
-```
-
-Two rules keep instant-apply honest:
-
-1. **Numeric inputs need their own text state.** `value={rowsText}` holds exactly what the user typed; parse it, validate it, and only commit to the settings object when the parse is in range. Never store `NaN`, and never reformat the text while the user is typing.
-2. **Roll back on failure.** Apply optimistically, and if the write rejects, restore the previous value and surface a `MessageBar`; otherwise the UI lies about what the server stored.
-
-Add a `Restore defaults` button (`appearance="secondary"`, `disabled` when nothing changed) so an exploratory click is cheap to undo.
-
-## 7. Load existing values before rendering controls
-
-```ts
-type PanelState = 'loading' | 'ready' | 'error';
-```
-
-- `loading` -> `<Spinner label="Loading workspace settings" />` inside the `Card`.
-- `error` -> an error `MessageBar` plus a `Button` that retries the load.
-- `ready` -> render the form with the real server values.
-
-Do not render the form with placeholder defaults and swap them later: the dirty check compares against the placeholder, and a fast click on Save can overwrite server state. Memoize the loader with `React.useCallback` and depend on it from `useEffect` - an inline arrow prop re-runs the effect on every render and refetches forever.
-
-## 8. Review checklist
-
-- Enter submits from any field (a real `<form onSubmit>` plus `type="submit"` on the primary button).
-- Tab order matches the visual order; no positive `tabIndex`.
-- Every control has exactly one label: `Field` for `Input` / `Select` / `Textarea`, children for `Switch` / `Checkbox`.
-- Inline error text is spoken when its field is focused (`aria-describedby` from `Field`).
-- Save and Discard are disabled when nothing changed and while a save is in flight.
-- Success and failure are announced, and the draft survives a failure.
+- Every control has a visible label: `Field label` for label-less controls, `label` prop for `Checkbox`/`Switch`/`Radio`.
+- Related controls sit in a named group (`fieldset`/`legend`) or an `AccordionHeader`, never as an unlabelled visual block.
+- Hints and errors are text, adjacent to the control, and referenced by `Field` - never tooltip-only, never color-only.
+- The primary action is a real submit button (`type="submit"` inside a `<form>`), so Enter in any text field saves.
+- Disabled Save always has a visible explanation nearby (validation message or the "No unsaved changes" status).
+- Success/error banners are `MessageBar` (polite by default); reserve `politeness="assertive"` for failures that block the user.
+- The discard dialog is modal, labelled by `DialogTitle`, closable with Escape, and focus returns to the trigger on close.
+- Tab order follows visual order top-to-bottom; do not reorder with CSS `order` in a form.
 
 ## Examples
 
-### AccountSettingsForm
+### Full settings form with sections, validation and dirty tracking
 
-A complete account settings pane: typed draft/saved state, dirty tracking, inline validation with focus management on failed submit, Switch toggles with their own labels, a save lifecycle with Badge, MessageBar, and Save/Discard actions.
+A typed settings object, three grouped sections (Profile, Language and region, Appearance and behavior), Field-wrapped Input/Textarea/Select/RadioGroup/Slider/SpinButton, a Checkbox with its own label, email validation, reset, an enabled-only-when-dirty Save button, and a success MessageBar that appears only after a real save.
 
 ```tsx
 import * as React from 'react';
-import { Badge, Button, Card, Divider, Field, Input, MessageBar, Select, Switch, Text, Textarea } from '@fluentui/react-components';
+import {
+  Button,
+  Checkbox,
+  Divider,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Radio,
+  RadioGroup,
+  Select,
+  Slider,
+  SpinButton,
+  Text,
+  Textarea,
+} from '@fluentui/react-components';
 
-export type AccountSettings = {
+export interface SettingsValues {
   displayName: string;
   email: string;
+  bio: string;
   language: string;
   timeZone: string;
-  bio: string;
-  productUpdates: boolean;
-  weeklyDigest: boolean;
-};
+  emailDigest: 'daily' | 'weekly' | 'never';
+  editorFontSize: number;
+  autosaveInterval: number;
+  reduceMotion: boolean;
+}
 
-export const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
-  displayName: '',
-  email: '',
+export const DEFAULT_SETTINGS: SettingsValues = {
+  displayName: 'Ada Lovelace',
+  email: 'ada@example.com',
+  bio: '',
   language: 'en-US',
   timeZone: 'utc',
-  bio: '',
-  productUpdates: true,
-  weeklyDigest: false,
+  emailDigest: 'weekly',
+  editorFontSize: 14,
+  autosaveInterval: 5,
+  reduceMotion: false,
 };
 
-export type AccountSettingsFormProps = {
-  /** The settings currently persisted on the server. */
-  initialSettings?: AccountSettings;
-  /** Persist the draft. Reject the promise to surface an inline error. */
-  onSave?: (settings: AccountSettings) => Promise<void>;
-};
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
-type SettingsKey = keyof AccountSettings;
+const Section: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({
+  title,
+  description,
+  children,
+}) => (
+  <fieldset
+    style={{
+      border: 'none',
+      margin: 0,
+      padding: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '16px',
+    }}
+  >
+    <legend style={{ padding: 0 }}>
+      <Text size={500} weight="semibold">
+        {title}
+      </Text>
+    </legend>
+    {description ? (
+      <Text size={200} block>
+        {description}
+      </Text>
+    ) : null}
+    {children}
+  </fieldset>
+);
 
-const formStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 16,
-  minWidth: 320,
-};
+export interface SettingsFormProps {
+  initialValues?: SettingsValues;
+  onSave?: (values: SettingsValues) => void;
+}
 
-const gridStyle: React.CSSProperties = {
-  display: 'grid',
-  gap: 16,
-  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-};
+export const SettingsForm: React.FC<SettingsFormProps> = ({ initialValues = DEFAULT_SETTINGS, onSave }) => {
+  const [values, setValues] = React.useState<SettingsValues>(initialValues);
+  const [savedValues, setSavedValues] = React.useState<SettingsValues>(initialValues);
+  const [showSavedMessage, setShowSavedMessage] = React.useState(false);
 
-const togglesStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 12 };
-
-const actionsStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  flexWrap: 'wrap',
-};
-
-const headingStyle: React.CSSProperties = { margin: 0 };
-
-export const AccountSettingsForm: React.FC<AccountSettingsFormProps> = ({
-  initialSettings = DEFAULT_ACCOUNT_SETTINGS,
-  onSave,
-}) => {
-  const [saved, setSaved] = React.useState<AccountSettings>(initialSettings);
-  const [draft, setDraft] = React.useState<AccountSettings>(initialSettings);
-  const [touched, setTouched] = React.useState<Partial<Record<SettingsKey, boolean>>>({});
-  const [hasSubmitted, setHasSubmitted] = React.useState(false);
-  const [status, setStatus] = React.useState<SaveStatus>('idle');
-
-  const displayNameRef = React.useRef<HTMLInputElement>(null);
-  const emailRef = React.useRef<HTMLInputElement>(null);
-
-  const update = (patch: Partial<AccountSettings>) => {
-    setDraft((prev) => ({ ...prev, ...patch }));
-    setTouched((prev) => {
-      const next = { ...prev };
-      (Object.keys(patch) as SettingsKey[]).forEach((key) => {
-        next[key] = true;
-      });
-      return next;
-    });
-    setStatus('idle');
+  const update = (patch: Partial<SettingsValues>) => {
+    setValues(prev => ({ ...prev, ...patch }));
+    setShowSavedMessage(false);
   };
 
-  const isDirty = (Object.keys(draft) as SettingsKey[]).some((key) => draft[key] !== saved[key]);
-
-  const displayNameError =
-    draft.displayName.trim() === '' ? 'Enter the name your teammates will see.' : undefined;
-  const emailError =
-    draft.email.trim() === ''
-      ? 'Enter the email address we should use for account recovery.'
-      : draft.email.includes('@')
-        ? undefined
-        : 'Email addresses must contain an "@" character.';
-
-  const visibleError = (key: 'displayName' | 'email'): string | undefined => {
-    const message = key === 'displayName' ? displayNameError : emailError;
-    return message && (touched[key] || hasSubmitted) ? message : undefined;
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setHasSubmitted(true);
-
-    if (displayNameError || emailError) {
-      if (displayNameError) {
-        displayNameRef.current?.focus();
-      } else {
-        emailRef.current?.focus();
-      }
-      return;
-    }
-
-    setStatus('saving');
-    try {
-      await onSave?.(draft);
-      setSaved(draft);
-      setTouched({});
-      setStatus('saved');
-    } catch {
-      setStatus('error');
-    }
-  };
-
-  const handleDiscard = () => {
-    setDraft(saved);
-    setTouched({});
-    setStatus('idle');
-  };
-
-  const isBusy = status === 'saving';
-
-  return (
-    <Card appearance="filled-alternative" style={{ maxWidth: 720 }}>
-      <form
-        noValidate
-        aria-label="Account settings"
-        aria-busy={isBusy}
-        onSubmit={handleSubmit}
-        style={formStyle}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <Text size={500} weight="semibold" block>
-            Account settings
-          </Text>
-          <Text size={200} block>
-            Changes are saved to your Contoso account and apply the next time you sign in.
-          </Text>
-        </div>
-
-        {status === 'saved' && (
-          <MessageBar intent="success" politeness="polite">
-            Your settings were saved.
-          </MessageBar>
-        )}
-        {status === 'error' && (
-          <MessageBar intent="error" politeness="assertive">
-            We could not save your settings. Nothing was lost - please try again.
-          </MessageBar>
-        )}
-
-        <Divider />
-
-        <section
-          aria-labelledby="account-profile-heading"
-          style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
-        >
-          <h3 id="account-profile-heading" style={headingStyle}>
-            <Text size={400} weight="semibold">
-              Profile
-            </Text>
-          </h3>
-
-          <div style={gridStyle}>
-            <Field
-              label="Display name"
-              required
-              validationState={visibleError('displayName') ? 'error' : 'none'}
-              validationMessage={visibleError('displayName')}
-            >
-              <Input
-                ref={displayNameRef}
-                value={draft.displayName}
-                onChange={(_, data) => update({ displayName: data.value })}
-              />
-            </Field>
-
-            <Field
-              label="Email"
-              required
-              validationState={visibleError('email') ? 'error' : 'none'}
-              validationMessage={visibleError('email')}
-            >
-              <Input
-                ref={emailRef}
-                type="email"
-                value={draft.email}
-                onChange={(_, data) => update({ email: data.value })}
-              />
-            </Field>
-
-            <Field label="Language">
-              <Select value={draft.language} onChange={(_, data) => update({ language: data.value })}>
-                <option value="en-US">English (United States)</option>
-                <option value="en-GB">English (United Kingdom)</option>
-                <option value="de-DE">Deutsch</option>
-                <option value="ja-JP">Japanese</option>
-              </Select>
-            </Field>
-
-            <Field label="Time zone">
-              <Select value={draft.timeZone} onChange={(_, data) => update({ timeZone: data.value })}>
-                <option value="utc">UTC</option>
-                <option value="utc-8">UTC-08:00 (Pacific)</option>
-                <option value="utc+1">UTC+01:00 (Central European)</option>
-                <option value="utc+9">UTC+09:00 (Japan)</option>
-              </Select>
-            </Field>
-
-            <Field label="Bio" hint="Shown on your profile card." style={{ gridColumn: '1 / -1' }}>
-              <Textarea
-                resize="vertical"
-                value={draft.bio}
-                onChange={(_, data) => update({ bio: data.value.slice(0, 280) })}
-              />
-            </Field>
-          </div>
-        </section>
-
-        <Divider />
-
-        <section
-          aria-labelledby="account-notifications-heading"
-          style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
-        >
-          <h3 id="account-notifications-heading" style={headingStyle}>
-            <Text size={400} weight="semibold">
-              Notifications
-            </Text>
-          </h3>
-
-          <div style={togglesStyle}>
-            <Switch
-              checked={draft.productUpdates}
-              onChange={(_, data) => update({ productUpdates: data.checked })}
-            >
-              Product updates and announcements
-            </Switch>
-            <Switch
-              checked={draft.weeklyDigest}
-              onChange={(_, data) => update({ weeklyDigest: data.checked })}
-            >
-              Weekly activity digest
-            </Switch>
-          </div>
-        </section>
-
-        <Divider />
-
-        <div style={actionsStyle}>
-          <Button type="submit" appearance="primary" disabled={!isDirty || isBusy}>
-            {isBusy ? 'Saving' : 'Save changes'}
-          </Button>
-          <Button
-            type="button"
-            appearance="secondary"
-            disabled={!isDirty || isBusy}
-            onClick={handleDiscard}
-          >
-            Discard changes
-          </Button>
-          {isDirty && !isBusy && (
-            <Badge appearance="tint" color="warning">
-              Unsaved changes
-            </Badge>
-          )}
-        </div>
-      </form>
-    </Card>
+  const isDirty = React.useMemo(
+    () => (Object.keys(values) as (keyof SettingsValues)[]).some(key => values[key] !== savedValues[key]),
+    [values, savedValues],
   );
-};
-```
 
-### ProfileSettingsForm
-
-The instant-apply variant: no Save button, changes apply on every interaction, a live Persona preview, a numeric input that keeps its raw text state and only commits valid parses, an inline validation error, and a Restore defaults button.
-
-```tsx
-import * as React from 'react';
-import { Badge, Button, Card, Checkbox, Divider, Field, Input, Persona, Select, Text } from '@fluentui/react-components';
-
-export type ProfileSettings = {
-  displayName: string;
-  jobTitle: string;
-  theme: 'light' | 'dark' | 'system';
-  density: 'comfortable' | 'compact' | 'spacious';
-  rowsPerPage: number;
-  showEmail: boolean;
-};
-
-export const DEFAULT_PROFILE_SETTINGS: ProfileSettings = {
-  displayName: 'Aisha Rahman',
-  jobTitle: 'Product designer',
-  theme: 'system',
-  density: 'comfortable',
-  rowsPerPage: 20,
-  showEmail: true,
-};
-
-const ROWS_MIN = 5;
-const ROWS_MAX = 50;
-
-const formStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 16,
-  minWidth: 320,
-};
-
-const gridStyle: React.CSSProperties = {
-  display: 'grid',
-  gap: 16,
-  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-};
-
-const previewStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' };
-
-/**
- * Instant-apply settings: every change is written as soon as it happens, so there is
- * no draft/saved pair and no Save button. Pass a persisting callback here in real apps.
- */
-export const ProfileSettingsForm: React.FC = () => {
-  const [settings, setSettings] = React.useState<ProfileSettings>(DEFAULT_PROFILE_SETTINGS);
-  // The number input is a free-form string while the user types, so its text lives
-  // outside the settings object and is committed only when it parses in range.
-  const [rowsText, setRowsText] = React.useState<string>(String(DEFAULT_PROFILE_SETTINGS.rowsPerPage));
-
-  const apply = (patch: Partial<ProfileSettings>) => {
-    setSettings((prev) => ({ ...prev, ...patch }));
-  };
-
-  const displayNameError =
-    settings.displayName.trim() === '' ? 'Display name is required.' : undefined;
-
-  const parsedRows = Number.parseInt(rowsText, 10);
-  const rowsError = Number.isNaN(parsedRows)
-    ? 'Enter a number of rows.'
-    : parsedRows < ROWS_MIN || parsedRows > ROWS_MAX
-      ? `Choose between ${ROWS_MIN} and ${ROWS_MAX} rows.`
+  const emailError =
+    values.email.trim().length > 0 && !EMAIL_PATTERN.test(values.email.trim())
+      ? 'Enter an email address in the format name@example.com.'
       : undefined;
 
-  const isDefault = (Object.keys(settings) as Array<keyof ProfileSettings>).every(
-    (key) => settings[key] === DEFAULT_PROFILE_SETTINGS[key],
-  );
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (emailError) {
+      return;
+    }
+    setSavedValues(values);
+    setShowSavedMessage(true);
+    onSave?.(values);
+  };
 
-  const restoreDefaults = () => {
-    setSettings(DEFAULT_PROFILE_SETTINGS);
-    setRowsText(String(DEFAULT_PROFILE_SETTINGS.rowsPerPage));
+  const handleReset = () => {
+    setValues(savedValues);
+    setShowSavedMessage(false);
   };
 
   return (
-    <Card
-      appearance="filled-alternative"
-      style={{ maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 16 }}
+    <form
+      onSubmit={handleSubmit}
+      noValidate
+      style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '640px' }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <Text size={500} weight="semibold" block>
-          Profile and appearance
-        </Text>
-        <Text size={200} block>
-          Every change is applied immediately - this pane has no save button.
-        </Text>
-      </div>
+      {showSavedMessage ? (
+        <MessageBar intent="success">
+          <MessageBarBody>
+            <MessageBarTitle>Settings saved</MessageBarTitle>
+            Your preferences have been updated.
+          </MessageBarBody>
+        </MessageBar>
+      ) : null}
 
-      <Card appearance="outline" style={previewStyle}>
-        <Persona
-          name={settings.displayName || 'Your name'}
-          secondaryText={settings.jobTitle || 'Job title'}
-          size="large"
-        />
-        <Badge appearance="tint" color="informative">
-          {settings.theme}
-        </Badge>
-        <Text size={200}>{`${settings.rowsPerPage} rows per page`}</Text>
-      </Card>
+      <Section title="Profile" description="How you appear to other people in this workspace.">
+        <Field label="Display name" required hint="Shown on your profile and in comments.">
+          <Input value={values.displayName} onChange={(ev, data) => update({ displayName: data.value })} />
+        </Field>
 
-      <Divider />
-
-      <div style={gridStyle}>
         <Field
-          label="Display name"
+          label="Email address"
           required
-          validationState={displayNameError ? 'error' : 'none'}
-          validationMessage={displayNameError}
+          validationState={emailError ? 'error' : 'none'}
+          validationMessage={emailError}
         >
-          <Input
-            value={settings.displayName}
-            onChange={(_, data) => apply({ displayName: data.value })}
-          />
+          <Input type="email" value={values.email} onChange={(ev, data) => update({ email: data.value })} />
         </Field>
 
-        <Field label="Job title">
-          <Input value={settings.jobTitle} onChange={(_, data) => apply({ jobTitle: data.value })} />
+        <Field label="Bio" hint={`${values.bio.length} characters used`}>
+          <Textarea value={values.bio} resize="vertical" onChange={(ev, data) => update({ bio: data.value })} />
         </Field>
-
-        <Field label="Theme">
-          <Select
-            value={settings.theme}
-            onChange={(_, data) => apply({ theme: data.value as ProfileSettings['theme'] })}
-          >
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-            <option value="system">Match system</option>
-          </Select>
-        </Field>
-
-        <Field label="Density">
-          <Select
-            value={settings.density}
-            onChange={(_, data) => apply({ density: data.value as ProfileSettings['density'] })}
-          >
-            <option value="comfortable">Comfortable</option>
-            <option value="compact">Compact</option>
-            <option value="spacious">Spacious</option>
-          </Select>
-        </Field>
-
-        <Field
-          label="Rows per page"
-          validationState={rowsError ? 'error' : 'none'}
-          validationMessage={rowsError}
-          hint={rowsError ? undefined : `Between ${ROWS_MIN} and ${ROWS_MAX}.`}
-        >
-          <Input
-            type="number"
-            value={rowsText}
-            onChange={(_, data) => {
-              setRowsText(data.value);
-              const next = Number.parseInt(data.value, 10);
-              if (!Number.isNaN(next) && next >= ROWS_MIN && next <= ROWS_MAX) {
-                apply({ rowsPerPage: next });
-              }
-            }}
-          />
-        </Field>
-      </div>
-
-      <Checkbox
-        checked={settings.showEmail}
-        onChange={(_, data) => apply({ showEmail: data.checked === true })}
-      >
-        Show my email address on my profile
-      </Checkbox>
+      </Section>
 
       <Divider />
 
-      <div style={{ display: 'flex', gap: 8 }}>
-        <Button appearance="secondary" disabled={isDefault} onClick={restoreDefaults}>
-          Restore defaults
+      <Section title="Language and region">
+        <Field label="Interface language">
+          <Select value={values.language} onChange={(ev, data) => update({ language: data.value })}>
+            <option value="en-US">English (United States)</option>
+            <option value="en-GB">English (United Kingdom)</option>
+            <option value="fr-FR">French (France)</option>
+            <option value="ja-JP">Japanese (Japan)</option>
+          </Select>
+        </Field>
+
+        <Field label="Time zone">
+          <Select value={values.timeZone} onChange={(ev, data) => update({ timeZone: data.value })}>
+            <option value="utc">UTC</option>
+            <option value="america-los_angeles">Pacific Time (UTC-08:00)</option>
+            <option value="europe-berlin">Central European Time (UTC+01:00)</option>
+            <option value="asia-tokyo">Japan Standard Time (UTC+09:00)</option>
+          </Select>
+        </Field>
+
+        <Field label="Email digest">
+          <RadioGroup
+            value={values.emailDigest}
+            layout="horizontal"
+            onChange={(ev, data) => update({ emailDigest: data.value as SettingsValues['emailDigest'] })}
+          >
+            <Radio value="daily" label="Daily" />
+            <Radio value="weekly" label="Weekly" />
+            <Radio value="never" label="Never" />
+          </RadioGroup>
+        </Field>
+      </Section>
+
+      <Divider />
+
+      <Section title="Appearance and behavior">
+        <Field label="Editor font size" hint={`${values.editorFontSize} pixels`}>
+          <Slider
+            min={10}
+            max={24}
+            step={1}
+            value={values.editorFontSize}
+            onChange={(ev, data) => update({ editorFontSize: data.value })}
+          />
+        </Field>
+
+        <Field label="Autosave interval in minutes" hint="Use 0 to turn autosave off.">
+          <SpinButton
+            min={0}
+            max={60}
+            step={1}
+            value={values.autosaveInterval}
+            onChange={(ev, data) => update({ autosaveInterval: data.value ?? 0 })}
+          />
+        </Field>
+
+        <Checkbox
+          label="Reduce motion"
+          checked={values.reduceMotion}
+          onChange={(ev, data) => update({ reduceMotion: data.checked === true })}
+        />
+      </Section>
+
+      <Divider />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <Button appearance="primary" type="submit" disabled={!isDirty || Boolean(emailError)}>
+          Save changes
         </Button>
+        <Button appearance="secondary" type="button" onClick={handleReset} disabled={!isDirty}>
+          Reset
+        </Button>
+        <Text size={200}>{isDirty ? 'You have unsaved changes.' : 'No unsaved changes.'}</Text>
       </div>
-    </Card>
+    </form>
   );
 };
 ```
 
-### WorkspaceSettingsPanel
+### Settings form that guards unsaved changes with Dialog
 
-A load/save lifecycle wrapper: Spinner while fetching, an error MessageBar with a retry Button on load failure, then the form with a memoized loader effect, disabled Save/Discard during writes, aria-busy on the form, and success/failure MessageBars.
+A compact workspace settings form whose Cancel action opens a controlled Dialog when the draft differs from the saved snapshot. Demonstrates open/onOpenChange wiring, a DialogTrigger with action="close", focus-safe dialog structure (DialogSurface > DialogBody > DialogTitle/DialogContent/DialogActions) and a discarding handler that restores saved values.
 
 ```tsx
 import * as React from 'react';
-import { Button, Card, Checkbox, Divider, Field, Input, MessageBar, Select, Spinner, Text } from '@fluentui/react-components';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Select,
+  Switch,
+  Text,
+} from '@fluentui/react-components';
 
-export type WorkspaceSettings = {
+export interface WorkspaceSettingsValues {
   workspaceName: string;
-  defaultVisibility: 'private' | 'team' | 'public';
-  allowGuestInvites: boolean;
+  visibility: 'private' | 'organization';
+  usageData: boolean;
+}
+
+const INITIAL_VALUES: WorkspaceSettingsValues = {
+  workspaceName: 'Contoso Design',
+  visibility: 'private',
+  usageData: true,
 };
 
-export type WorkspaceSettingsPanelProps = {
-  /** Memoize this callback (React.useCallback) - a new identity re-runs the load effect. */
-  load: () => Promise<WorkspaceSettings>;
-  save: (settings: WorkspaceSettings) => Promise<void>;
-};
-
-type PanelState = 'loading' | 'ready' | 'error';
-
-const cardStyle: React.CSSProperties = { maxWidth: 560 };
-
-const formStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 16,
-  minWidth: 320,
-};
-
-const actionsStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' };
-
-const stateStyle: React.CSSProperties = {
-  ...cardStyle,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 12,
-  alignItems: 'start',
-};
-
-export const WorkspaceSettingsPanel: React.FC<WorkspaceSettingsPanelProps> = ({ load, save }) => {
-  const [state, setState] = React.useState<PanelState>('loading');
-  const [loadError, setLoadError] = React.useState<string | undefined>();
-  const [saved, setSaved] = React.useState<WorkspaceSettings | undefined>();
-  const [draft, setDraft] = React.useState<WorkspaceSettings | undefined>();
-  const [isSaving, setIsSaving] = React.useState(false);
-  const [saveMessage, setSaveMessage] = React.useState<string | undefined>();
-  const [saveError, setSaveError] = React.useState<string | undefined>();
-
-  const loadSettings = React.useCallback(async () => {
-    setState('loading');
-    setLoadError(undefined);
-    try {
-      const settings = await load();
-      setSaved(settings);
-      setDraft(settings);
-      setState('ready');
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'We could not load these settings.');
-      setState('error');
-    }
-  }, [load]);
-
-  React.useEffect(() => {
-    void loadSettings();
-  }, [loadSettings]);
-
-  if (state === 'loading') {
-    return (
-      <Card appearance="filled-alternative" style={cardStyle}>
-        <Spinner label="Loading workspace settings" labelPosition="after" />
-      </Card>
-    );
-  }
-
-  if (state === 'error' || !draft || !saved) {
-    return (
-      <Card appearance="filled-alternative" style={stateStyle}>
-        <MessageBar intent="error" politeness="assertive">
-          {loadError ?? 'We could not load these settings.'}
-        </MessageBar>
-        <Button appearance="primary" onClick={() => void loadSettings()}>
-          Try again
-        </Button>
-      </Card>
-    );
-  }
-
-  const update = (patch: Partial<WorkspaceSettings>) => {
-    setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
-    setSaveMessage(undefined);
-    setSaveError(undefined);
-  };
-
-  const nameError = draft.workspaceName.trim() === '' ? 'Enter a workspace name.' : undefined;
+export const WorkspaceSettingsForm: React.FC = () => {
+  const [values, setValues] = React.useState<WorkspaceSettingsValues>(INITIAL_VALUES);
+  const [savedValues, setSavedValues] = React.useState<WorkspaceSettingsValues>(INITIAL_VALUES);
+  const [discardDialogOpen, setDiscardDialogOpen] = React.useState(false);
+  const [savedAt, setSavedAt] = React.useState<string | null>(null);
 
   const isDirty =
-    draft.workspaceName !== saved.workspaceName ||
-    draft.defaultVisibility !== saved.defaultVisibility ||
-    draft.allowGuestInvites !== saved.allowGuestInvites;
+    values.workspaceName !== savedValues.workspaceName ||
+    values.visibility !== savedValues.visibility ||
+    values.usageData !== savedValues.usageData;
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const nameError = values.workspaceName.trim().length === 0 ? 'A workspace name is required.' : undefined;
+
+  const update = (patch: Partial<WorkspaceSettingsValues>) => {
+    setValues(prev => ({ ...prev, ...patch }));
+    setSavedAt(null);
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (nameError) {
       return;
     }
+    setSavedValues(values);
+    setSavedAt(new Date().toLocaleTimeString());
+  };
 
-    setIsSaving(true);
-    setSaveMessage(undefined);
-    setSaveError(undefined);
-    try {
-      await save(draft);
-      setSaved(draft);
-      setSaveMessage('Workspace settings saved.');
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'We could not save your changes.');
-    } finally {
-      setIsSaving(false);
+  const handleCancel = () => {
+    if (isDirty) {
+      setDiscardDialogOpen(true);
+      return;
     }
+    setValues(savedValues);
   };
 
   const handleDiscard = () => {
-    setDraft(saved);
-    setSaveMessage(undefined);
-    setSaveError(undefined);
+    setValues(savedValues);
+    setSavedAt(null);
+    setDiscardDialogOpen(false);
   };
 
   return (
-    <Card appearance="filled-alternative" style={cardStyle}>
+    <>
       <form
-        noValidate
-        aria-label="Workspace settings"
-        aria-busy={isSaving}
         onSubmit={handleSubmit}
-        style={formStyle}
+        noValidate
+        style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '560px' }}
       >
-        <Text size={500} weight="semibold" block>
-          Workspace settings
-        </Text>
-
-        {saveMessage && (
-          <MessageBar intent="success" politeness="polite">
-            {saveMessage}
+        {savedAt ? (
+          <MessageBar intent="success">
+            <MessageBarBody>
+              <MessageBarTitle>Workspace updated</MessageBarTitle>
+              Changes were applied at {savedAt}.
+            </MessageBarBody>
           </MessageBar>
-        )}
-        {saveError && (
-          <MessageBar intent="error" politeness="assertive">
-            {saveError}
-          </MessageBar>
-        )}
+        ) : null}
 
         <Field
           label="Workspace name"
@@ -813,96 +478,231 @@ export const WorkspaceSettingsPanel: React.FC<WorkspaceSettingsPanelProps> = ({ 
           validationState={nameError ? 'error' : 'none'}
           validationMessage={nameError}
         >
-          <Input
-            value={draft.workspaceName}
-            onChange={(_, data) => update({ workspaceName: data.value })}
-          />
+          <Input value={values.workspaceName} onChange={(ev, data) => update({ workspaceName: data.value })} />
         </Field>
 
-        <Field label="Default page visibility" hint="Applies to pages created from now on.">
+        <Field label="Visibility" hint="Private workspaces are visible only to invited members.">
           <Select
-            value={draft.defaultVisibility}
-            onChange={(_, data) =>
-              update({ defaultVisibility: data.value as WorkspaceSettings['defaultVisibility'] })
+            value={values.visibility}
+            onChange={(ev, data) =>
+              update({ visibility: data.value as WorkspaceSettingsValues['visibility'] })
             }
           >
-            <option value="private">Private to the workspace</option>
-            <option value="team">Everyone in the workspace</option>
-            <option value="public">Anyone with the link</option>
+            <option value="private">Private - only invited members</option>
+            <option value="organization">Organization - everyone in the tenant</option>
           </Select>
         </Field>
 
-        <Checkbox
-          checked={draft.allowGuestInvites}
-          onChange={(_, data) => update({ allowGuestInvites: data.checked === true })}
-        >
-          Let members invite guests
-        </Checkbox>
+        <Switch
+          label="Share anonymous usage data"
+          checked={values.usageData}
+          onChange={(ev, data) => update({ usageData: data.checked })}
+        />
 
-        <Divider />
-
-        <div style={actionsStyle}>
-          <Button type="submit" appearance="primary" disabled={!isDirty || isSaving}>
-            {isSaving ? 'Saving' : 'Save'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Button appearance="primary" type="submit" disabled={!isDirty || Boolean(nameError)}>
+            Save changes
           </Button>
-          <Button
-            type="button"
-            appearance="secondary"
-            disabled={!isDirty || isSaving}
-            onClick={handleDiscard}
-          >
-            Discard
+          <Button appearance="secondary" type="button" onClick={handleCancel}>
+            Cancel
           </Button>
-          {isSaving && <Spinner size="tiny" label="Saving" labelPosition="after" />}
+          <Text size={200}>{isDirty ? 'Unsaved changes' : 'Up to date'}</Text>
         </div>
       </form>
-    </Card>
+
+      <Dialog open={discardDialogOpen} onOpenChange={(event, data) => setDiscardDialogOpen(data.open)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Discard unsaved changes?</DialogTitle>
+            <DialogContent>
+              Your edits to this workspace have not been saved. If you leave now they will be lost.
+            </DialogContent>
+            <DialogActions>
+              <DialogTrigger disableButtonEnhancement action="close">
+                <Button appearance="secondary">Keep editing</Button>
+              </DialogTrigger>
+              <Button appearance="primary" onClick={handleDiscard}>
+                Discard changes
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+    </>
+  );
+};
+```
+
+### Collapsible settings sections with Accordion
+
+Preference-heavy settings rendered as an Accordion with multiple collapsible panels. Each AccordionItem has a unique value and contains one AccordionPanel; panels hold the same Field/Input/Checkbox/RadioGroup/Switch/Select controls used in the plain form, plus the save action in the last panel.
+
+```tsx
+import * as React from 'react';
+import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  Button,
+  Checkbox,
+  Field,
+  Input,
+  Radio,
+  RadioGroup,
+  Select,
+  Switch,
+  Text,
+} from '@fluentui/react-components';
+
+interface NotificationSettings {
+  productAnnouncements: boolean;
+  commentMentions: boolean;
+  channel: 'email' | 'in-app' | 'both';
+  quietHours: boolean;
+}
+
+const panelContentStyles: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '16px',
+  paddingBottom: '16px',
+  maxWidth: '560px',
+};
+
+export const AccordionSettingsForm: React.FC = () => {
+  const [displayName, setDisplayName] = React.useState('Ada Lovelace');
+  const [email, setEmail] = React.useState('ada@example.com');
+  const [timeZone, setTimeZone] = React.useState('utc');
+  const [notifications, setNotifications] = React.useState<NotificationSettings>({
+    productAnnouncements: true,
+    commentMentions: true,
+    channel: 'in-app',
+    quietHours: false,
+  });
+
+  const updateNotifications = (patch: Partial<NotificationSettings>) =>
+    setNotifications(prev => ({ ...prev, ...patch }));
+
+  return (
+    <Accordion multiple collapsible defaultOpenItems={['profile']} style={{ maxWidth: '640px' }}>
+      <AccordionItem value="profile">
+        <AccordionHeader>Profile</AccordionHeader>
+        <AccordionPanel>
+          <div style={panelContentStyles}>
+            <Field label="Display name" required hint="Shown on your profile and in comments.">
+              <Input value={displayName} onChange={(ev, data) => setDisplayName(data.value)} />
+            </Field>
+            <Field label="Email address">
+              <Input type="email" value={email} onChange={(ev, data) => setEmail(data.value)} />
+            </Field>
+          </div>
+        </AccordionPanel>
+      </AccordionItem>
+
+      <AccordionItem value="notifications">
+        <AccordionHeader>Notifications</AccordionHeader>
+        <AccordionPanel>
+          <div style={panelContentStyles}>
+            <Checkbox
+              label="Product announcements"
+              checked={notifications.productAnnouncements}
+              onChange={(ev, data) => updateNotifications({ productAnnouncements: data.checked === true })}
+            />
+            <Checkbox
+              label="Mentions and replies"
+              checked={notifications.commentMentions}
+              onChange={(ev, data) => updateNotifications({ commentMentions: data.checked === true })}
+            />
+            <Field label="Delivery channel">
+              <RadioGroup
+                value={notifications.channel}
+                onChange={(ev, data) =>
+                  updateNotifications({ channel: data.value as NotificationSettings['channel'] })
+                }
+              >
+                <Radio value="email" label="Email only" />
+                <Radio value="in-app" label="In-app only" />
+                <Radio value="both" label="Email and in-app" />
+              </RadioGroup>
+            </Field>
+            <Switch
+              label="Enable quiet hours (22:00 to 07:00)"
+              checked={notifications.quietHours}
+              onChange={(ev, data) => updateNotifications({ quietHours: data.checked })}
+            />
+          </div>
+        </AccordionPanel>
+      </AccordionItem>
+
+      <AccordionItem value="region">
+        <AccordionHeader>Region</AccordionHeader>
+        <AccordionPanel>
+          <div style={panelContentStyles}>
+            <Field label="Time zone" hint="Used for digests and quiet hours.">
+              <Select value={timeZone} onChange={(ev, data) => setTimeZone(data.value)}>
+                <option value="utc">UTC</option>
+                <option value="america-los_angeles">Pacific Time (UTC-08:00)</option>
+                <option value="europe-berlin">Central European Time (UTC+01:00)</option>
+              </Select>
+            </Field>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Button appearance="primary" type="button">
+                Save preferences
+              </Button>
+              <Text size={200}>Section values are saved together.</Text>
+            </div>
+          </div>
+        </AccordionPanel>
+      </AccordionItem>
+    </Accordion>
   );
 };
 ```
 
 ## Pitfalls
 
-- Mutating the draft object in place (for example `draft.email = value`) keeps the same object identity, so the `isDirty` comparison and React re-render both miss the change. Always patch with a new object via `setDraft((prev) => ({ ...prev, ...patch }))`.
-- Wrapping Switch or Checkbox in Field creates two competing labels. Those controls render their label from their children, so use Field only for controls without a visible label of their own (Input, Select, Textarea).
-- Storing validation messages in state and syncing them with an effect produces stale or flickering errors. Derive error strings from the draft on every render and only gate their visibility behind touched/submitted flags.
-- Parsing a numeric input straight into the settings object on every keystroke stores NaN or partial values while the user types (and fights the caret if you reformat the text). Keep the raw string in its own state, validate it, and commit to the settings object only when the parse is in range.
-- Omitting `noValidate` on the <form> lets the browser's native validation bubbles pre-empt Fluent's Field messages, so users see two different error presentations for the same field.
-- Setting the 'saved' copy before the save promise resolves makes the form claim success on failure and disables Discard against the wrong baseline. Assign `setSaved(draft)` only after the await succeeds, and leave the draft untouched on failure.
-- Passing an inline arrow as the loader to an effect dependency re-runs the fetch on every render. Memoize loaders and persisters with React.useCallback (or module-level functions) before wiring them into useEffect.
-- Forgetting to clear a success MessageBar on the next edit leaves a stale 'saved' confirmation on screen while the form is dirty again; reset the status inside the patch helper.
-- Shallow `isDirty` checks break as soon as a setting is an object or array (a new reference with identical contents reads as dirty). Flatten the settings shape, or compare serialized values for nested fields.
-- Using `disabled` as the only signal that a save is in flight removes the button from the tab order and from screen-reader reach. Pair it with a Spinner that carries a label and aria-busy on the form.
+- Putting more than one control inside a single Field. Field clones one child to inject id/aria-describedby/aria-invalid, so extra children break the association - use a fieldset with a legend (or an AccordionHeader) for groups.
+- Wrapping Checkbox, Switch or Radio in a Field that also has a label, producing duplicated or ambiguous accessible names. Use the control's own label prop for these, and reserve Field for label-less controls such as Input, Textarea, Select, SpinButton, Slider and RadioGroup.
+- Storing validation messages in state instead of deriving them from the draft values, which lets the message drift out of sync with the input and can block submission of a valid form.
+- Toggling a boolean isDirty flag inside each change handler. Always compare the draft object field by field against a savedValues snapshot so that adding a field cannot silently break dirty tracking, Reset, or the unsaved-changes guard.
+- Mounting the success MessageBar permanently or on every keystroke, which re-announces the same message to screen readers repeatedly. Render it only after a successful save and clear it on the next edit.
+- Controlling a Dialog with open but omitting onOpenChange, so Escape, backdrop clicks and the internal close affordance stop working. Always mirror the dialog state with onOpenChange={(event, data) => setOpen(data.open)}.
+- Rendering an AccordionPanel outside its AccordionItem, or creating an AccordionItem without a unique value. AccordionItem.value is required and pairs the header with its panel; duplicates make panels open each other.
+- Trusting the string value from RadioGroup or Select change data when the state field is a union type. Narrow or convert the value before storing it, otherwise an unexpected string can be saved into typed state and later fail at the API boundary.
+- Disabling the Save button without saying why. Pair disabled actions with a visible reason: the Field validation message for invalid values, or a status Text such as 'No unsaved changes' when there is nothing to submit.
+- Using placeholders as the only description of a control. Placeholders disappear on input and are not guaranteed to be announced; put the persistent guidance in the Field label and hint instead.
 
 ## Accessibility
 
-Field is the accessibility workhorse: it renders a real <label> associated with the child control, wires hint and validationMessage through aria-describedby, adds aria-invalid when validationState is 'error', and marks the label when required, so errors are announced when the field receives focus. Do not hand-roll labels with bare Text next to a control - that loses the association, the described-by wiring, and the required semantics.
-
-Give Switch and Checkbox their own descriptive child text ('Product updates and announcements') rather than wrapping them in Field; the control then exposes its own label plus its checked state, and screen readers get one label, not two competing ones. Never encode state in the label text ('Product updates: on').
-
-Group fields into <section aria-labelledby> elements with real <h3> headings so screen-reader users can navigate a long settings pane by heading. Between sections use Divider for the visual break only - the heading carries the meaning.
-
-Announce asynchronous results by mounting a MessageBar: use politeness='polite' for success confirmations and politeness='assertive' for failures. Because the live region announces on mount, conditional rendering is the trigger - do not keep a hidden MessageBar mounted and only change its text. Clear stale success messages on the next edit.
-
-On a failed submit, move focus to the first invalid control (Input forwards its ref to the underlying <input>), so the message is read together with the field. Do not autofocus the first field on page load: it steals focus and scrolls away from the pane title.
-
-Mark busy work with aria-busy on the <form> and swap the primary button's label to 'Saving'; prefer disabledFocusable over disabled when you want the control to remain reachable by keyboard. Never rely on color alone - Field renders the validation text plus a status icon, and MessageBar renders text plus an icon.
-
-Keep DOM order identical to visual order so tab order is predictable, avoid positive tabIndex, and leave the action row after the last field so Tab reaches Save/Discard naturally. Keep every interactive target at Fluent's default control heights instead of shrinking rows, and ensure validation messages are tied to their control (Field does this) instead of being placed in a distant summary only.
+Field is the accessibility backbone of this recipe: it renders a real Label, computes a stable id for its single child control, and forwards id, aria-describedby (hint plus validation message) and aria-invalid when validationState is 'error' or 'warning'. Because Field clones exactly one child, a Field must wrap one control only - wrap groups of controls in a fieldset with a legend (the Section helper) or in an AccordionHeader/AccordionPanel pair so the group has a programmatic name. Controls that render their own label (Checkbox, Switch, and each Radio) should use their own label prop; RadioGroup gets its group name from Field while individual Radios keep their labels. Keep validation messages as visible adjacent text (never tooltip-only) and only render them once the value is being edited or the form is submitted, so a pristine form does not announce errors. The success MessageBar is mounted only after a successful save and cleared on the next edit, avoiding repeated live-region announcements; MessageBar politeness defaults to polite, which is correct for success/warning, while blocking failures may use an assertive error intent. The Save/Reset buttons communicate state through the disabled attribute plus accompanying status text ('You have unsaved changes'), not color alone, and the primary action is a genuine type="submit" button inside a form so Enter in any text input saves. The discard confirmation is a modal Dialog: it traps focus, is labelled by DialogTitle, is dismissible with Escape or backdrop click through onOpenChange, and returns focus to the triggering button on close; the 'Keep editing' trigger uses action="close". Keep the DOM order equal to the visual order, ensure every interactive control has a visible focus indicator from the theme, and never rely on placeholders as labels.
 
 ## Components used
 
-- [Badge](../../components/badge.md)
+- [Accordion](../../components/accordion.md)
+- [AccordionHeader](../../components/accordion-header.md)
+- [AccordionItem](../../components/accordion-item.md)
+- [AccordionPanel](../../components/accordion-panel.md)
 - [Button](../../components/button.md)
-- [Card](../../components/card.md)
 - [Checkbox](../../components/checkbox.md)
+- [Dialog](../../components/dialog.md)
+- [DialogActions](../../components/dialog-actions.md)
+- [DialogBody](../../components/dialog-body.md)
+- [DialogContent](../../components/dialog-content.md)
+- [DialogSurface](../../components/dialog-surface.md)
+- [DialogTitle](../../components/dialog-title.md)
+- [DialogTrigger](../../components/dialog-trigger.md)
 - [Divider](../../components/divider.md)
 - [Field](../../components/field.md)
 - [Input](../../components/input.md)
 - [MessageBar](../../components/message-bar.md)
-- [Persona](../../components/persona.md)
+- [MessageBarBody](../../components/message-bar-body.md)
+- [MessageBarTitle](../../components/message-bar-title.md)
+- [Radio](../../components/radio.md)
+- [RadioGroup](../../components/radio-group.md)
 - [Select](../../components/select.md)
-- [Spinner](../../components/spinner.md)
+- [Slider](../../components/slider.md)
+- [SpinButton](../../components/spin-button.md)
 - [Switch](../../components/switch.md)
 - [Text](../../components/text.md)
 - [Textarea](../../components/textarea.md)

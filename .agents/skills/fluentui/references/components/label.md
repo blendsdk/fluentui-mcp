@@ -7,25 +7,27 @@
 
 ## Overview
 
-Label is the typographic caption primitive for form controls in Fluent UI React v9. It renders a native label element through its root slot and an optional required indicator through a separate required slot, giving a control a visible, programmatically associated name. Beyond labeling, Label carries four presentation and state props: size (small, medium, large), weight (regular or semibold), disabled, and required. The required prop is flexible — a truthy boolean renders the default asterisk, while any non-empty string or JSX node replaces the asterisk with a custom indicator, which is useful for locales or design systems that prefer different requiredness symbols. Because Label is intentionally small and stateless, it is the building block that higher-level compositions such as Field use for their label slot, and it pairs naturally with Input, Textarea, Select, Combobox, Checkbox, Radio, Switch, Slider, Spinbutton, and every other control that needs a visible caption.
+Label renders an accessible caption for a form control such as an Input, Textarea, Select, Combobox, Checkbox, Radio, Switch, Slider, or SpinButton. It emits a single root element (a native label element by default) and an optional required indicator slot, so the visible text can be programmatically tied to the control it describes instead of being a plain paragraph of text. Because it is a real label element, activating it (with a mouse or touch) moves focus to, or toggles, the associated control. Label supports three sizes (small, medium, and large), two font weights (regular and semibold), a disabled visual state, and a required indicator that can be the default asterisk or fully custom content such as a different character, a string, or an inline element. In practice Label is usually composed inside higher-level form building blocks, but it can also be used standalone when you need to hand-assemble the relationship between a caption and its control.
 
-**When to use**: Use Label whenever a form control needs a visible, accessible name: text inputs, textareas, selects, comboboxes, checkboxes, radios, switches, sliders, and spinbuttons. Reach for Label when you are building a custom field layout or when you need a caption in a place where Field does not fit — for example, a visible group caption above a set of individually labeled checkboxes. Prefer Field when the caption must be accompanied by hint text, validation messages, or consistent vertical rhythm, because Field composes a Label for its label slot and wires up the required and validation plumbing for you. Choose Text instead of Label for any content that is not naming a control, such as headings, helper paragraphs, or body copy, since Text carries typography without label semantics. Use Label rather than a bare span or paragraph so that the correct element is rendered and the correct default styling tokens apply.
+**When to use**: Use Label whenever a form control needs a visible caption that users can click to focus or toggle the control. Reach for Label when building custom field layouts by hand, when you need a caption whose text must be associated with an input's id, or when you need a required indicator with a custom marker. Prefer Field when you want the label, control, hint text, and validation message managed and spaced for you, and prefer the label composition that already ships with components such as Field, Checkbox, and Radio when those components provide their own caption. Use Text instead of Label for headings, descriptions, and any string that does not caption a form control, since Text carries typography without implying a control relationship. Use Label with the disabled or required props only when the underlying control is genuinely disabled or required.
 
 ## Props Reference
 
 | Prop | Type | Default | Required | Description |
 | --- | --- | --- | --- | --- |
 | `disabled` | `boolean \| undefined` | `false` | No | Renders the label as disabled |
-| `required` | `any` | `false` | No | Displays an indicator that the label is for a required field. The required prop can be set to true to display an asterisk (*). Or it can be set to a string or jsx content to display a different indicator. |
+| `required` | `boolean \| (string \| number \| ReactPortal \| ({ as?: "span" \| undefined; } & Omit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "children"> & { children?: any; }) \| ReactElement<unknown, string \| JSXElementConstructor<any>> \| Iterable<any>) \| null \| undefined` | `false` | No | Displays an indicator that the label is for a required field. The required prop can be set to true to display an asterisk (*). Or it can be set to a string or jsx content to display a different indicator. |
 | `size` | `"small" \| "medium" \| "large" \| undefined` | `'medium'` | No | A label supports different sizes. |
 | `weight` | `"regular" \| "semibold" \| undefined` | `regular` | No | A label supports regular and semibold fontweight. |
 
 ### Prop Guidance
 
-- **disabled**: Renders the label in the disabled foreground color. Apply it only alongside a genuinely disabled control, and make the reason for the disabled state available elsewhere in the UI, because the resulting contrast ratio does not meet accessibility requirements and the state is purely visual. `true, paired with a disabled control`
-- **required**: Displays the requiredness indicator after the label text. A truthy boolean renders the default asterisk; any non-empty string or JSX node replaces it with a custom indicator for locales or brand conventions that use a different symbol. Leave it false or undefined when the field is optional, and always mirror the state on the control itself. `true for the default asterisk, or a custom string such as *** for a custom indicator`
-- **size**: Controls the caption's type scale. Choose small, medium, or large to match the size of the control being labeled so the label and field share a visual rhythm; medium is the default and suits standard forms. `medium`
-- **weight**: Selects regular or semibold font weight. Use semibold to make a caption stand out in dense layouts or when the label also acts as a small section heading; keep regular for standard field captions so emphasis stays meaningful. `semibold`
+- **disabled**: Renders the caption with the disabled foreground color and no interactive affordance. Apply it only when the associated control is genuinely disabled and the reason is discoverable from the surrounding UI, since the resulting contrast intentionally falls below WCAG minimums. The prop is purely visual and does not disable the control or expose a disabled state to assistive technology. `true`
+- **required**: Displays an indicator that the captioned field is required. Pass true for the default asterisk, or pass a string or inline element to render your own indicator, such as a localized word or a different symbol. Keep it in sync with the control's own required semantics, and remember that falsy values suppress the indicator entirely, so only use it when the field is truly required. `true, or a custom marker string such as three asterisks`
+- **size**: Controls the caption's font size and line height. Use small when the label sits beside compact controls in dense layouts, medium as the default for standard forms, and large for prominent single-field layouts or onboarding screens. Match the size to the control's own size so the caption and the field look like one unit. `medium`
+- **weight**: Selects regular or semibold font weight. Keep regular for ordinary field captions and reserve semibold for labels that need to stand out, such as the first field in a form section or a label used as a group heading above several controls. Semibold at the large size can read like a heading, so use that combination deliberately. `semibold`
+- **root slot**: The root slot renders the caption element itself and is where className, native label attributes for association, and event handlers are applied. Use it to merge custom Griffel classes, to attach the association attributes for the control, and to add native handlers; avoid swapping the element type unless you are intentionally rendering a non-label caption. `className merged with mergeClasses`
+- **required slot**: The required slot renders whatever the required prop resolves to and only appears when required is truthy. Style it through the required state styling hooks if you need a different color or spacing for the marker, and pass meaningful content rather than decorative glyphs when the indicator has to be understandable. `rendered only when required is set`
 
 ### Slots
 
@@ -102,98 +104,99 @@ Required.parameters = {
 
 ### Do's
 
-- Always associate the Label with its control, either by wrapping the control or by pointing the label at the control's id, so clicking the caption moves focus to the field.
-- Use the required prop to render the requiredness indicator instead of typing an asterisk into the label text, so the indicator stays consistent in position, color, and spacing.
-- Match the Label size to the size of the control it captions (for example, a small Label above a small Input) so baselines and line heights align.
-- Keep label text short and scannable — a word or a short phrase in sentence case reads best above or beside a control.
-- Use weight semibold when the label needs to stand out from surrounding content, such as in dense forms, settings panels, or when the label doubles as a small section title.
-- Set required on the underlying control as well as on the Label, so assistive technology announces the true required state rather than relying on the visual indicator.
-- Prefer Field when you need a label plus hint, error, or validation messaging, and let Field render the Label for you.
-- Use disabled on the Label only together with a disabled control, and make the reason for disabledness discoverable elsewhere in the interface.
+- Associate each Label with exactly one form control, either by placing the control inside the label content or by connecting the root element to the control's unique id, so clicking or tapping the caption focuses or activates that control.
+- Set the required prop on the Label only when the associated control is actually required, and mirror that state on the control itself so assistive technology announces the same requirement.
+- Match the Label size to the size of the control it captions: use small for compact or dense layouts, medium for standard forms, and large for hero or single-field layouts.
+- Use weight semibold sparingly to give a label visual priority in a group, such as the first field in a section, and keep regular weight for the majority of fields.
+- Provide a custom required indicator when an asterisk would be ambiguous, for example by passing a short localized word or a descriptive marker as the required value.
+- Reach for Field when the label must sit above a control together with hint text and a validation message, so spacing and error styling stay consistent.
+- Use the disabled prop only when the control it captions is truly non-interactive, and make it obvious elsewhere in the UI why the field cannot be used.
+- Keep label text short, sentence case, and free of trailing punctuation such as colons so it reads cleanly when announced with the control's value.
 
 ### Don'ts
 
-- Do not use Label as a general-purpose text element for headings, descriptions, or body copy — use Text for that.
-- Do not rely on the asterisk indicator alone to communicate requiredness; a visual glyph is not a substitute for the required attribute on the control.
-- Do not overload the Label with long help text, character counts, or error messages — those belong in Field hint and validation content.
-- Do not use the disabled Label state to grey out content that is not a disabled form control.
-- Do not mix Label sizes and weights arbitrarily within the same form section; inconsistent captions make the layout feel broken and hurt scannability.
-- Do not place buttons, links, or other interactive elements inside a Label besides the single control you are labeling, because clicks on the caption are redirected to the control.
-- Do not render a Label with no associated control — it is not focusable and clicking it does nothing, so it becomes decorative text with misleading semantics.
-- Do not nest one Label inside another or point two Labels at the same control, since the control's accessible name can become duplicated or ambiguous.
+- Do not use Label as a general-purpose text or heading element; use Text with an appropriate typography size or weight instead, because a label that is not tied to a control misleads both sighted and assistive technology users.
+- Do not apply the disabled prop while leaving the associated control enabled, or vice versa, because the visual affordance will contradict the actual interaction state.
+- Do not rely on the asterisk from the required prop alone to communicate that a field is required, since the marker is decorative for many screen reader users unless the control also exposes its required state.
+- Do not nest interactive elements such as links or buttons inside the label text, because activating them also activates the label's associated control.
+- Do not wrap a whole group of checkboxes, radios, or inputs in a single Label; each control needs its own caption, and groups need a separate group label.
+- Do not override font size, weight, or color with hard-coded values; use the theme tokens so the Label stays consistent with Fluent theming and high-contrast modes.
+- Do not set size, weight, disabled, or required on a Label that is already rendered by a Field, since the two sets of values can disagree and produce inconsistent styling.
+- Do not leave a Label without an associated control or associate two Labels with the same control; either case produces ambiguous accessible names.
 
 ## Anti-Patterns
 
-### Using Label as body or heading text
+### Using Label as body text or a heading
 
-❌ Label renders label semantics and is not focusable on its own, so using it for headings or paragraphs produces misleading markup and skips the typographic scales that Text provides.
+❌ Label renders a native label element whose purpose is to name a form control. Using it for paragraphs, headings, or captions on non-interactive content produces semantics that do not match the visual result, and assistive technology users hear a label with nothing to label.
 
-✅ Use Text for headings, descriptions, and body copy, and reserve Label for content that names a form control.
+✅ Use Text with the appropriate size and weight for headings and descriptive copy, and reserve Label exclusively for captions that are associated with a form control.
 
-### Requiredness expressed only by the visual indicator
+### Relying on the asterisk to convey required state
 
-❌ Setting the required prop renders an indicator but does not mark the associated control as required, so screen reader users and autofill or validation logic never learn that the field is mandatory.
+❌ The required indicator is a visual marker. If the associated control does not also expose a required state, users of screen readers and users who cannot distinguish the marker's color receive no indication that the field is mandatory.
 
-✅ Keep the indicator for sighted users and also set required or aria-required on the actual control so requiredness is announced.
+✅ Keep the required prop on the Label for the visual cue and make the control itself announce its required status, or supply a custom required value whose meaning survives being read aloud.
 
-### Disabling the caption to disable the field
+### Disabling the caption but not the control
 
-❌ The disabled Label state only changes text color. It cannot prevent interaction, and by the component's own guidance that color does not meet required contrast, so the interface becomes both inaccessible and functionally misleading.
+❌ The disabled prop only changes color and does not make the control non-interactive, so the field looks unavailable while still accepting focus and input. It also produces text contrast that fails WCAG minimums.
 
-✅ Disable the control itself, keep the label legible, and surface the reason for the disabled state next to the field.
+✅ Disable the actual control and apply the disabled prop to the Label at the same time, or better, let Field coordinate both so the visual and interactive states never diverge. Use disabled styling sparingly.
 
-### Stuffing help text and errors into the label
+### Hand-rolling markup instead of composing Field
 
-❌ Long captions are announced in full by screen readers, wrap awkwardly with the required indicator, and duplicate messaging that belongs in dedicated hint or error regions.
+❌ Assembling a caption, control, hint, and error message by hand with a bare Label typically leads to inconsistent spacing, missing association, and error text that is never announced.
 
-✅ Keep the label short and move explanations, constraints, and error text into Field's hint and validation message slots.
+✅ Use Field whenever a caption, hint, and validation message are needed together, and drop down to a standalone Label only for layouts Field cannot express.
 
-### Label without an associated control
+### Embedding interactive elements inside the caption
 
-❌ A Label that neither wraps a control nor points at one is not clickable through to anything and exposes label semantics for text that names nothing, which confuses both pointer and assistive technology users.
+❌ Content placed inside the label is part of the label's activation region, so a link or button inside the text will also focus or toggle the associated control when activated, producing surprising double actions.
 
-✅ Always wrap the control or reference its id, or switch to Text if the content is purely descriptive.
+✅ Keep the caption text-only. Render help links, info buttons, or secondary actions as siblings of the Label, or use InfoLabel or InfoButton style patterns placed next to the control.
 
 ## Accessibility
 
-**Requirements**: The Label must be programmatically associated with exactly one form control, either implicitly by wrapping the control or explicitly through the htmlFor attribute referencing the control's id. Requiredness must be conveyed programmatically on the control (native required or aria-required), not only through the visual indicator rendered by the required prop. Text must keep sufficient contrast in every theme; the disabled state intentionally falls below the required contrast ratio, so it should be used sparingly and never as the only signal that a field is unavailable. When a field is invalid, pair the control with aria-invalid and point aria-describedby at the message that explains the problem.
+**Requirements**: Label exists to provide an accessible name for a form control, so the association between the two is the primary accessibility requirement. Associate the root element with the control using native label semantics (matching the control's id) or by containing the control as a child. Text rendered by Label must meet WCAG 1.4.3 contrast requirements of at least 4.5:1; the disabled visual state intentionally does not meet this ratio, so it must be used sparingly and only where the loss of interaction is clear from the surrounding UI. Required state must be conveyed programmatically as well as visually, meaning the control itself should expose its required status so users who cannot perceive the asterisk still know the field is required. Do not communicate required or disabled state through color alone; combine the marker with the control's own semantics and, where useful, explanatory text.
 
 | Key | Action |
 | --- | --- |
-| `Tab` | Label itself is not focusable and is skipped in the tab order; Tab moves focus straight to the control the Label names. |
-| `Shift+Tab` | Moves focus to the previous focusable element; the Label never receives focus in either direction. |
-| `Space` | When the labeled control is a checkbox, radio, switch, or other Space-activated widget, pressing Space toggles it; the Label does not intercept the key. |
-| `Enter` | With focus on a labeled text field, Enter submits the surrounding form (native behavior) or commits the value; the Label does not handle the key. |
+| `Tab` | Label itself is not in the tab order; focus moves directly to the associated form control, which receives its accessible name from the Label. |
+| `Shift+Tab` | Moves focus backwards past the Label to the previous focusable element, again skipping the Label itself. |
+| `Enter` | When focus is on the associated control and the control treats Enter as activation (for example a button-like control), the name provided by the Label is announced with that control; Label adds no key handling of its own. |
+| `Space` | When the associated control is a checkbox, radio, or switch, pressing Space while the control is focused toggles it; the Label contributes only the accessible name. |
 
-**ARIA**: aria-required (on the associated control), aria-invalid (on the control when validation fails), aria-labelledby (pointing at the Label's id when associating programmatically), aria-describedby (on the control, referencing hint or error text), aria-disabled (on the control, since the disabled Label style alone is not announced)
+**ARIA**: aria-required on the associated control so the requirement conveyed by the required indicator is programmatically available, aria-disabled on the associated control when it is non-interactive, since the disabled prop on Label is a visual state only, aria-labelledby when a native label association cannot be used and the caption text must be referenced by id, aria-label as a fallback for controls that have no visible caption at all, aria-describedby when the caption must be supplemented by hint or error text rendered outside the Label, aria-hidden on purely decorative custom required indicator content when the required state is already announced by the control
 
-**Screen Reader**: The Label element is not entered by screen reader navigation as an interactive stop; instead its text becomes the accessible name of the associated control and is announced when focus lands on that control. Because the default required indicator is a visible text character rendered inside the label element, some screen readers include it in the announced name; the authoritative required announcement comes from the control's own required or aria-required state. The disabled styling applied by the disabled prop is purely visual and is not conveyed to assistive technology, so disabledness must live on the control. Long label text is announced in full, which is another reason to keep captions concise.
+**Screen Reader**: Screen readers do not announce Label as an interactive element; they use it as the accessible name for the control it captions. When focus lands on the associated control, the screen reader announces the label text followed by the control role, and typically appends required or invalid state when the control exposes it. The default required asterisk is generally treated as text content or decoration, which is why the control's own required semantics matter. Custom content passed through the required value is read as part of the label text, so a custom indicator such as a word will be announced verbatim while a symbol may be announced as an arbitrary character or ignored; keep custom indicators meaningful when spoken. Because the disabled prop only changes the visual appearance, screen readers continue to report the control as enabled unless the control itself is disabled.
 
 ## Styling
 
-Label is styled with Griffel, so the supported customization path is a className from makeStyles or mergeClasses applied to the root, plus theme tokens for color and typography. The default foreground is tokens.colorNeutralForeground1; the disabled state uses tokens.colorNeutralForegroundDisabled; the required indicator is drawn in a red family color such as tokens.colorPaletteRedForeground1, which you can override with your own descendant rule if your brand needs a different indicator color. Size maps to typography tokens — tokens.fontSizeBase200 with tokens.lineHeightBase200 for small, tokens.fontSizeBase300 with tokens.lineHeightBase300 for medium, and tokens.fontSizeBase400 with tokens.lineHeightBase400 for large — while weight semibold maps to tokens.fontWeightSemibold and regular maps to tokens.fontWeightRegular. Use tokens.spacingVerticalXS or tokens.spacingVerticalS to create breathing room between the caption and the control below it rather than hard-coded pixel values, and use tokens.fontFamilyBase so labels inherit custom brand fonts. Keep the required indicator gap consistent by relying on the component's own spacing rather than adding margins around the glyph.
+Label accepts a className on its root slot, so customize it with makeStyles and mergeClasses rather than inline styles. The default text color comes from tokens.colorNeutralForeground1, and a secondary caption can use tokens.colorNeutralForeground2. The disabled state maps to tokens.colorNeutralForegroundDisabled, which is intentionally low contrast. Size maps to typography tokens: small uses tokens.fontSizeBase200 with tokens.lineHeightBase200, medium uses tokens.fontSizeBase300 with tokens.lineHeightBase300, and large uses tokens.fontSizeBase400 with tokens.lineHeightBase400. Weight maps to tokens.fontWeightRegular and tokens.fontWeightSemibold. The required indicator is typically colored with a danger token such as tokens.colorPaletteRedForeground1 or tokens.colorStatusDangerForeground1, and the gap between the caption text and the indicator can be tuned with tokens.spacingHorizontalXXS or tokens.spacingHorizontalSNudge. Add tokens.spacingVerticalXS or tokens.spacingVerticalS margins when stacking a label above an input, or let Field handle that spacing. Because size tokens scale with the theme, avoid absolute pixel values so the Label reacts to density and typography overrides.
 
 ## Performance
 
-Label is a stateless presentational component: it holds no internal state, registers no event handlers of its own, and contributes no layout measurement work, so it renders cheaply even in long forms with dozens of captions. Griffel generates atomic CSS once per unique style combination and shares it across every instance, which means repeated Labels with the same size, weight, and state add essentially no styling cost. The only realistic cost is authoring new style objects inside render; define makeStyles outside the component and combine classes with mergeClasses so style recalculation does not happen on every render. Memoization is generally unnecessary, but if a parent re-renders very frequently with new JSX passed to the required prop, consider hoisting that indicator node so the element identity stays stable.
+Label is one of the cheapest components to render: it produces a single root element plus an optional required indicator, holds no internal state, and registers no global listeners or observers. The main cost in large forms comes from sheer count, so prefer rendering labels only for fields that are visible, and avoid building label content inline in a way that creates new object or element identities on every parent render, since that defeats memoization of neighboring rows. Passing a custom element through the required prop is fine, but a memoized element avoids re-creating the subtree on unrelated parent updates. When many fields share identical captions and layouts, extracting a small wrapper row component reduces duplicated work and keeps state local to each field. Virtualizing long forms or tables of fields, rather than optimizing the Label itself, is the effective lever for very large lists.
 
 ## Theming & Tokens
 
-Label consumes theme tokens through Griffel, so it reacts automatically to Provider themes and to nested theme overrides without any prop changes. Foreground color comes from tokens.colorNeutralForeground1 in the default state and tokens.colorNeutralForegroundDisabled in the disabled state, while the required indicator uses a red-family token such as tokens.colorPaletteRedForeground1. Typography is token-driven as well: tokens.fontFamilyBase for the family, tokens.fontSizeBase200, tokens.fontSizeBase300, and tokens.fontSizeBase400 with the matching lineHeight tokens for the three sizes, and tokens.fontWeightRegular or tokens.fontWeightSemibold for weight. Because these resolve to CSS variables emitted by the theme, switching between light and dark themes created with createLightTheme and createDarkTheme updates label colors instantly, and brand-level token overrides propagate to every Label on the page.
+Label consumes Fluent design tokens for typography and color rather than hard-coded values, so it reshapes automatically when the theme or density changes. Foreground color resolves to tokens.colorNeutralForeground1 by default, with tokens.colorNeutralForeground2 for secondary captions and tokens.colorNeutralForegroundDisabled for the disabled state. Sizes resolve to the typography ramp: tokens.fontSizeBase200 and tokens.lineHeightBase200 for small, tokens.fontSizeBase300 and tokens.lineHeightBase300 for medium, and tokens.fontSizeBase400 and tokens.lineHeightBase400 for large. Weight resolves to tokens.fontWeightRegular and tokens.fontWeightSemibold. The required indicator should be colored with a danger or palette token such as tokens.colorPaletteRedForeground1 or tokens.colorStatusDangerForeground1 so it adapts to high-contrast and dark themes. Surrounding spacing, when you lay out the label yourself, should use spacing tokens such as tokens.spacingVerticalXS and tokens.spacingHorizontalXXS. Overriding these tokens through FluentProvider theme changes every Label in the tree at once, which is preferable to per-instance class overrides.
 
 ## Migration Notes
 
-In v9, Label is a standalone, composable component rather than a text prop on each input. Where v8 used a string label prop or a separate Label component with its own props, v9 expects you to render a Label next to the control (or let Field do it) and to express requiredness with the required prop, which accepts a boolean or custom indicator content. The v9 Label also exposes first-class size and weight props for typographic control, and disabled is a purely visual state that should mirror the disabled state of the control it captions. Styling moves from SCSS class overrides to Griffel classes and theme tokens, so custom label styles should be authored with makeStyles and tokens rather than component-scoped class names.
+Moving from earlier Fluent versions, Label is now a standalone component in @fluentui/react-components rather than a styling helper attached to a higher-order field wrapper. The legacy styles and theme props are gone; customization now happens through Griffel classes created with makeStyles and applied via className, using the same design tokens the rest of v9 uses. The required prop keeps its boolean form for the default asterisk but now also accepts custom content, so a custom marker no longer requires a separate wrapper element. The new size prop (small, medium, large) and weight prop (regular, semibold) replace ad-hoc typography overrides. If you previously hand-built label markup, prefer Field, which composes Label with the control, hint text, and validation message and manages the label-to-control association for you; only fall back to a bare Label when you need full control over layout.
 
 ## Edge Cases
 
-- The required prop is evaluated for truthiness: false, undefined, and an empty string all hide the indicator, while any non-empty string — including a whitespace-only string — is rendered as the indicator in place of the default asterisk.
-- The required indicator is rendered by a separate slot after the label text, so it participates in line wrapping and can break onto its own line when the label text is long and the container is narrow.
-- A Label with no association to a control is not focusable and clicking it performs no action, so an orphaned caption can silently break the expected click-to-focus behavior.
-- Combining implicit association (wrapping the control) with explicit association (pointing at a different control's id) produces ambiguous accessible names in some browser and screen reader combinations — choose one association method per label.
-- Inside a Field, the Field supplies and configures its own Label, deriving required and disabled from the Field props; adding another Label with its own required value can result in duplicated caption text or two required indicators.
-- Because the default indicator is a real text character inside the label element, some screen readers include the asterisk in the control's announced name, so the control's own required attribute remains the reliable source of requiredness semantics.
-- The disabled state's contrast is below the required threshold by design, so captions rendered with disabled should be limited to contexts where the control is clearly non-interactive and the reason is communicated elsewhere.
+- Passing a falsy value to required hides the indicator entirely, so a field that is actually mandatory can end up with no visual cue; confirm the value is truthy whenever the control is required.
+- The required prop accepts arbitrary content, including an empty or symbol-only string, which may render nothing visible or be announced as an unintelligible character; prefer content that reads well when spoken.
+- The disabled state intentionally does not meet the required contrast ratio, so relying on it for large portions of a form creates a genuine WCAG problem rather than a stylistic one.
+- Label does not manage the association with the control on its own; if the association is missing, clicking the caption does nothing and screen readers may announce the control without a name.
+- Placing interactive content inside the label text causes that content's activation to also trigger the associated control, which surprises users and can submit or toggle the wrong thing.
+- When a Label is rendered inside Field, the Field supplies size, required, and disabled; setting those props again on the nested Label can produce conflicting styles and duplicated required indicators.
+- A semibold Label at the large size is visually close to a heading, which can make a form look like a document outline; use that combination only where the label genuinely introduces a section.
+- Multiple Labels associated with the same control produce an ambiguous accessible name, and a Label with no control at all is effectively decorative text despite its form semantics.
 
 ## See Also
 

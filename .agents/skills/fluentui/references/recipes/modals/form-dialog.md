@@ -4,442 +4,267 @@
 
 ## Goal
 
-Build a modal Form Dialog in Fluent UI v9: a controlled Dialog whose body is a real <form>, with Field-wired labels and validation, a pending/submitting state, an error banner for failed requests, and predictable reset behaviour every time the dialog closes.
+Build an accessible modal form dialog with Fluent UI v9: a controlled Dialog whose body is a real <form> using Field + Input/Select/Textarea/Checkbox/RadioGroup, inline validation, async submit with a loading state, form-level server errors, and deterministic reset behaviour when the dialog closes.
 
 ## When to Use
 
-Use a Form Dialog when a short, self-contained set of inputs (roughly 1-8 fields) must be completed or dismissed before the user returns to the page: create/rename an item, invite a user, edit a couple of properties. It is the right choice when the task is blocking, has a clear primary action and a cancel path, and needs the modal's built-in focus trap, Escape/backdrop dismissal and focus restoration.
+Use this recipe when a task requires focused, blocking data entry that must be validated and persisted as a unit: create/edit dialogs launched from a toolbar, table row or empty state; short forms (roughly 1-10 fields) where the surrounding page should not change; and any flow where you need a single, explicit primary action plus a guaranteed cancel path. It is also the right pattern when the user must not lose context, e.g. renaming an item or inviting a teammate from a list.
 
 ## When Not to Use
 
-Avoid it for long, multi-step or exploratory flows where users need to reference page content while typing (use a Drawer with type="overlay", or an inline form/panel), for heavy editing surfaces like tables or editors (use a full page), for passive inline edits (Edit/InlineEdit patterns on the page), and for destructive confirmations with no input at all (use a plain Dialog with DialogActions only). Also avoid it for anything that must survive a page refresh - dialogs are for short-lived tasks, not drafts.
+Do not use a form dialog for long, multi-step wizards, complex forms with many sections, or forms users compare against page content - use a full page or an OverlayDrawer/InlineDrawer instead. Do not use it for a single trivial value (use a Popover or TeachingPopover with an Input and a Button) or for inline editing in tables and lists (edit in place with Field + Input). Avoid it for destructive confirmations that contain no input - a plain Dialog with two Buttons is enough, and for internal navigation panels use Drawer/NavDrawer.
 
-A **Form Dialog** is a modal `Dialog` whose body is a real `<form>`. The user fills in a handful of fields and must either submit or dismiss before returning to the page behind the modal. Fluent UI v9 gives you every piece: `Dialog` + `DialogSurface` for the modal shell, `Field` for label/validation wiring, `Input` / `Select` / `Textarea` / `Checkbox` for the controls, and `Button` for the actions.
+A **form dialog** is a modal `Dialog` whose body is a real `<form>`: it collects data with `Field` + controls, validates on submit, shows errors inline, and only closes when the data was saved or the user cancelled.
 
-## Anatomy
+## 1. Required component tree
 
 ```tsx
 <Dialog open={open} onOpenChange={handleOpenChange}>
-  <DialogTrigger disableButtonEnhancement>
-    <Button appearance="primary">Open</Button>
+  <DialogTrigger>
+    <Button appearance="primary">New project</Button>
   </DialogTrigger>
   <DialogSurface>
     <form onSubmit={handleSubmit} noValidate>
       <DialogBody>
-        <DialogTitle>Add contact</DialogTitle>   {/* names the dialog */}
-        <DialogContent>...</DialogContent>       {/* the fields */}
-        <DialogActions>...</DialogActions>       {/* cancel + submit */}
+        <DialogTitle>New project</DialogTitle>
+        <DialogContent>{/* fields */}</DialogContent>
+        <DialogActions>{/* Cancel + Submit */}</DialogActions>
       </DialogBody>
     </form>
   </DialogSurface>
 </Dialog>
 ```
 
-Wrapping `DialogBody` in the `<form>` is the important part: the primary `Button` with `type="submit"` lives *inside* the form, so Enter in any text field submits without a single key handler. Every other button in that form must declare `type="button"` so it cannot submit by accident.
+Responsibilities of each piece:
 
-## 1. Make the dialog controlled
+- **`Dialog`** - owns open state, renders no DOM itself, and funnels every user dismissal (Escape, backdrop click, close triggers) through `onOpenChange`. It also traps focus and restores focus to the trigger when it closes. `Dialog` accepts exactly two children: the trigger and the `DialogSurface`.
+- **`DialogTrigger`** - clones its child (normally a `Button`), injecting the click handler and the `aria-haspopup="dialog"` / `aria-expanded` attributes. Use `action="close"` on triggers that should dismiss the dialog (Cancel).
+- **`DialogSurface`** - the modal box and its backdrop; the only child of `Dialog` that renders visible DOM.
+- **`DialogBody`** - the layout that pins `DialogTitle` and `DialogActions` while `DialogContent` scrolls. Use exactly one per surface.
+- **`DialogTitle`** - rendered as an `<h2>` by default and automatically linked to the surface through `aria-labelledby`. Keep it the first child of `DialogBody`.
+- **`DialogContent`** - the scrollable field region.
+- **`DialogActions`** - the action row; keep the primary action last so the tab order is Cancel -> Submit.
 
-Always own the `open` state. You need it for three things: resetting the fields on close, keeping the dialog open while a save is in flight, and asking before discarding edits.
+The `<form>` wraps `DialogBody`, not just `DialogContent`, so the submit button in `DialogActions` belongs to the form and Enter submits from any field. If you must keep the buttons outside the form, give the form an `id` and set `form="my-form-id"` on the submit `Button`.
+
+## 2. Make the dialog controlled
 
 ```tsx
+const [open, setOpen] = React.useState(false);
+
 <Dialog
   open={open}
   onOpenChange={(_event, data) => {
-    if (!data.open && pending) return;   // busy: ignore Escape and backdrop clicks
-    setOpen(data.open);
-    if (!data.open) resetForm();
+    if (data.open) {
+      setOpen(true);
+    } else if (!isSubmitting) {
+      setOpen(false);
+      resetForm();
+    }
   }}
-/>
+/>;
 ```
 
-`onOpenChange` fires for the trigger button, the Escape key and backdrop clicks, so one handler covers every close path. If you wrap the Cancel button in `DialogTrigger` as well, Cancel flows through exactly the same guard - that is how example 3 asks before throwing away unsaved edits.
+- `onOpenChange` fires for **user** dismissals only. Calling `setOpen(false)` yourself after a successful save does **not** fire it, so reset the form yourself in that path.
+- Ignoring `data.open === false` while a request is in flight stops Escape/backdrop clicks from tearing down the modal mid-save.
+- Uncontrolled usage (`defaultOpen` + trigger) also works, but controlled is strongly preferred for form dialogs because you need to close the dialog programmatically after the request succeeds.
 
-## 2. Wire labels and validation with `Field`
+## 3. Pick a reset strategy
 
-`Field` is the glue between a label and a Fluent control. It renders the `Label`, forwards `required`, and gives the child control an id plus `aria-describedby` / `aria-invalid` for the validation message and hint - so you never hand-write `htmlFor` / `id` for `Input`, `Select` or `Textarea`.
+1. **Reset explicitly** - keep `values`/`errors` in state and clear them in `onOpenChange` and after a successful submit. Best when inputs are `value`-controlled (example 1).
+2. **Unmount the body** - pass `unmountOnClose` to `Dialog` and keep the form state in a child component rendered inside `DialogSurface`. The state disappears with the DOM, which is the cheapest correct answer for `defaultValue`/uncontrolled inputs (examples 2 and 3).
+
+## 4. Wire every control through Field
+
+`Field` renders the label, the hint and the validation message, and generates the ids that tie them together. Use the **render-function form of `children`** so the control receives `id`, `aria-labelledby`, `aria-describedby`, `aria-invalid` and `required`:
 
 ```tsx
 <Field
-  label="Email address"
+  label="Owner email"
   required
-  validationState={emailError ? "error" : "none"}
-  validationMessage={emailError}
+  validationState={errors.email ? 'error' : 'none'}
+  validationMessage={errors.email}
 >
-  <Input type="email" value={email} onChange={onEmailChange} />
+  {(fieldProps) => (
+    <Input
+      {...fieldProps}
+      type="email"
+      value={values.email}
+      onChange={(_event, data) => updateField('email', data.value)}
+    />
+  )}
 </Field>
 ```
 
-Keep an `errors` object next to your values, validate on **submit** (not on every keystroke), and clear a field's error the moment the user edits it. Put `noValidate` on the form and do not lean on native HTML5 validation: the browser bubble is not announced by screen readers, cannot be styled, and paints above the dialog surface.
+- `validationState` defaults to `'none'`. Only switch to `'error'`/`'warning'` after a submit attempt (or on blur) so users are not scolded while typing, and clear the error for a field as soon as it is edited.
+- The same pattern works with `Select`, `Textarea`, `Combobox`, `SpinButton`, `SearchBox`, `Slider` and other single-input controls.
+- Composite controls render a container element, not an input (for example `RadioGroup` renders a `<div>`). Forward only the props that make sense - `id`, `aria-labelledby`, `aria-describedby` - as shown in example 2.
+- `Field`'s `required` prop adds the visual asterisk and flows into the control props. Add `noValidate` to the `<form>` if you want Fluent validation messages only; omit it to also let the browser block submission on empty required controls (example 3).
 
-## 3. Reset state on close
+## 5. Submit, validate, save, close
 
-`Dialog` unmounts its surface content on close by default (`unmountOnClose`), but state that lives in the component *rendering* the `Dialog` survives. Either clear it inside `onOpenChange` (examples 1 and 2), or move the fields into a child component inside `DialogContent` so unmounting throws the state away for free.
+```tsx
+const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
+  event.preventDefault();
+  const nextErrors = validate(values);
+  setErrors(nextErrors);
+  if (Object.keys(nextErrors).length > 0) {
+    focusFirstInvalidField(nextErrors);
+    return;
+  }
+  setIsSubmitting(true);
+  try {
+    await save(values);
+    setOpen(false); // only close on success
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+```
 
-## 4. Submit asynchronously
+- The primary action is a `Button type="submit"` inside `DialogActions`; because it lives inside the `<form>`, Enter from any text field submits too.
+- Give every other button `type="button"` so it can never submit the form.
+- While saving: disable the submit and cancel buttons, change the label ("Saving..."), and optionally add a `Spinner` as the button `icon`.
+- On failure, keep the dialog open. Put the message in a `MessageBar intent="error"` at the top of `DialogContent`, or attach it to the offending `Field` via `validationState`/`validationMessage`.
 
-- Keep a `pending` flag, disable both actions and show a small `Spinner` in `DialogActions`.
-- Guard the handler with `if (pending) return;` so a double click cannot fire two requests.
-- Ignore close requests while pending, otherwise Escape dismisses the dialog mid-request.
-- On failure keep the dialog open, surface the message in a `MessageBar intent="error" politeness="assertive"` at the top of `DialogContent`, and re-enable the actions. Server errors are rarely field-specific, so a banner beats pushing them into a `Field`.
-- On success, close and reset in one step so the next open starts clean.
+## 6. Reading values without per-keystroke state
 
-## 5. Pick the right control
+For short, write-once dialogs you can skip controlled state entirely and read a `FormData` snapshot in the submit handler (example 3). Give each control a `name` and a `defaultValue`, then close the dialog after the request resolves - with `unmountOnClose` the DOM (and therefore the values) is discarded automatically.
 
-`Input` for one-line text, `Select` for a small fixed option set, `Textarea` for free-form notes, `Checkbox` / `Switch` for booleans. Wrap each control in its own `Field` and lay them out with a simple flex column (`gap: 12px` to `16px`) inside `DialogContent`.
+```tsx
+const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget); // read BEFORE awaiting
+  await createTask({ title: String(data.get('title') ?? '') });
+  setOpen(false);
+};
+```
 
-## Verification checklist
+## 7. Focus and keyboard behaviour
 
-- Tab order matches visual order; Enter in a field submits; Escape closes the dialog unless a request is pending or the form is dirty.
-- Submitting empty/invalid data keeps the dialog open and shows a `Field` error next to each offending control.
-- Closing and reopening shows empty (or freshly-loaded) fields.
-- A failing request leaves the dialog open with an error banner, the actions re-enabled and the user's input intact.
-- Every button inside the `<form>` has an explicit `type`.
+- Fluent moves focus into the dialog on open and returns it to the trigger on close; do not fight it with autoFocus unless a specific field must be focused first.
+- When validation fails, focus the **first invalid control** and scroll it into view (`element.focus()` is enough; `Field` already marks it with `aria-invalid`).
+- Escape closes the dialog through `onOpenChange`; ignore that event while a save is in flight.
+- `inertTrapFocus` uses the `inert` attribute for focus containment (supported in all current browsers); omit it if you must support older engines so the default trap implementation is used.
 
 ## Examples
 
-### Validated contact form in a modal dialog
+### Create project dialog (controlled, validated, async submit)
 
-A controlled Dialog containing a <form> with two Inputs inside Fields, validate-on-submit error handling, explicit button types, and a full state reset whenever the dialog closes.
+A fully controlled form dialog with Field-level validation, error clearing on change, focus management for the first invalid field, an async submit with a Spinner, and a reset that runs whenever the dialog closes for any reason.
 
 ```tsx
-import * as React from "react";
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input } from "@fluentui/react-components";
+import * as React from 'react';
+import {
+  Button,
+  Checkbox,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  Field,
+  Input,
+  Option,
+  Select,
+  Spinner,
+  Textarea,
+} from '@fluentui/react-components';
 
-interface ContactValues {
+type FormValues = {
   name: string;
   email: string;
-}
+  plan: string;
+  description: string;
+  notify: boolean;
+};
 
-type ContactErrors = Partial<Record<keyof ContactValues, string>>;
+type FormErrors = Partial<Record<keyof FormValues, string>>;
 
-const initialValues: ContactValues = { name: "", email: "" };
+const initialValues: FormValues = {
+  name: '',
+  email: '',
+  plan: 'starter',
+  description: '',
+  notify: true,
+};
 
-function validate(values: ContactValues): ContactErrors {
-  const errors: ContactErrors = {};
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validate(values: FormValues): FormErrors {
+  const errors: FormErrors = {};
+
   if (!values.name.trim()) {
-    errors.name = "Enter a name.";
+    errors.name = 'Enter a project name.';
   }
+
   if (!values.email.trim()) {
-    errors.email = "Enter an email address.";
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
-    errors.email = "Use the format name@example.com.";
+    errors.email = 'Enter the email address of the project owner.';
+  } else if (!EMAIL_PATTERN.test(values.email)) {
+    errors.email = 'Enter a valid email address, for example ada@example.com.';
   }
+
+  if (values.description.length > 200) {
+    errors.description = `Keep the description under 200 characters (currently ${values.description.length}).`;
+  }
+
   return errors;
 }
 
-export const ContactFormDialog: React.FC = () => {
-  const [open, setOpen] = React.useState(false);
-  const [values, setValues] = React.useState<ContactValues>(initialValues);
-  const [errors, setErrors] = React.useState<ContactErrors>({});
+// Replace with a real request, e.g. `await api.projects.create(values)`.
+async function createProject(values: FormValues): Promise<void> {
+  void values;
+  await new Promise((resolve) => setTimeout(resolve, 800));
+}
 
-  // Clear a field's error as soon as the user starts fixing it.
-  const updateField = (field: keyof ContactValues, value: string) => {
-    setValues((prev) => ({ ...prev, [field]: value }));
-    setErrors((prev) => ({ ...prev, [field]: undefined }));
+export const CreateProjectDialog: React.FC = () => {
+  const [open, setOpen] = React.useState(false);
+  const [values, setValues] = React.useState<FormValues>(initialValues);
+  const [errors, setErrors] = React.useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  // Focus targets used to jump to the first invalid field after a failed submit.
+  const controls = React.useRef<Partial<Record<keyof FormValues, HTMLElement | null>>>({});
+
+  const updateField = <K extends keyof FormValues>(field: K, value: FormValues[K]) => {
+    setValues((previous) => ({ ...previous, [field]: value }));
+    setErrors((previous) => {
+      if (previous[field] === undefined) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[field];
+      return next;
+    });
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const resetForm = () => {
+    setValues(initialValues);
+    setErrors({});
+    setIsSubmitting(false);
+  };
+
+  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
 
     const nextErrors = validate(values);
     setErrors(nextErrors);
-    if (Object.values(nextErrors).some(Boolean)) {
+
+    const firstInvalidField = (Object.keys(nextErrors) as (keyof FormValues)[])[0];
+    if (firstInvalidField) {
+      controls.current[firstInvalidField]?.focus();
       return;
     }
 
-    // Persist `values` here (fetch, context, redux ...).
-    setOpen(false);
-    setValues(initialValues);
-  };
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(_event, data) => {
-        setOpen(data.open);
-        if (!data.open) {
-          // The form state lives here, not in the dialog, so reset it explicitly.
-          setValues(initialValues);
-          setErrors({});
-        }
-      }}
-    >
-      <DialogTrigger disableButtonEnhancement>
-        <Button appearance="primary">Add contact</Button>
-      </DialogTrigger>
-      <DialogSurface>
-        <form onSubmit={handleSubmit} noValidate>
-          <DialogBody>
-            <DialogTitle>Add contact</DialogTitle>
-            <DialogContent>
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <Field
-                  label="Name"
-                  required
-                  validationState={errors.name ? "error" : "none"}
-                  validationMessage={errors.name}
-                >
-                  <Input
-                    value={values.name}
-                    onChange={(_event, data) => updateField("name", data.value)}
-                  />
-                </Field>
-                <Field
-                  label="Email"
-                  required
-                  validationState={errors.email ? "error" : "none"}
-                  validationMessage={errors.email}
-                >
-                  <Input
-                    type="email"
-                    placeholder="name@example.com"
-                    value={values.email}
-                    onChange={(_event, data) => updateField("email", data.value)}
-                  />
-                </Field>
-              </div>
-            </DialogContent>
-            <DialogActions>
-              {/* type="button" keeps Cancel from submitting the form it sits in */}
-              <DialogTrigger disableButtonEnhancement>
-                <Button appearance="secondary" type="button">
-                  Cancel
-                </Button>
-              </DialogTrigger>
-              <Button appearance="primary" type="submit">
-                Save
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </form>
-      </DialogSurface>
-    </Dialog>
-  );
-};
-```
-
-### Async invite form with pending state and error banner
-
-A dialog that submits to an API: re-entrancy guard, Spinner in the actions row, close requests ignored while the request is in flight, request failures shown in an assertive MessageBar with the user's input preserved, plus Select, Textarea and Checkbox wrapped in Field.
-
-```tsx
-import * as React from "react";
-import { Button, Checkbox, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input, MessageBar, Select, Spinner, Textarea } from "@fluentui/react-components";
-
-type MemberRole = "viewer" | "editor" | "admin";
-
-interface InviteDraft {
-  email: string;
-  role: MemberRole;
-  message: string;
-  notify: boolean;
-}
-
-const emptyDraft: InviteDraft = {
-  email: "",
-  role: "editor",
-  message: "",
-  notify: true,
-};
-
-/** Replace with your real API call. */
-async function inviteUser(draft: InviteDraft): Promise<void> {
-  await new Promise((resolve) => window.setTimeout(resolve, 1200));
-  if (draft.email.endsWith("@blocked.example")) {
-    throw new Error("Invites to that domain are blocked. Ask an admin to allow-list it first.");
-  }
-}
-
-export const InviteUserDialog: React.FC = () => {
-  const [open, setOpen] = React.useState(false);
-  const [draft, setDraft] = React.useState<InviteDraft>(emptyDraft);
-  const [emailError, setEmailError] = React.useState<string>();
-  const [submitError, setSubmitError] = React.useState<string>();
-  const [pending, setPending] = React.useState(false);
-
-  const update = <K extends keyof InviteDraft>(field: K, value: InviteDraft[K]) =>
-    setDraft((prev) => ({ ...prev, [field]: value }));
-
-  const reset = () => {
-    setDraft(emptyDraft);
-    setEmailError(undefined);
-    setSubmitError(undefined);
-    setPending(false);
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (pending) {
-      return; // re-entrancy guard: ignore double submits
-    }
-
-    const email = draft.email.trim();
-    if (!email) {
-      setEmailError("Enter the email address of the person you want to invite.");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setEmailError("Use the format name@example.com.");
-      return;
-    }
-
-    setEmailError(undefined);
-    setSubmitError(undefined);
-    setPending(true);
+    setIsSubmitting(true);
     try {
-      await inviteUser({ ...draft, email });
-      reset();
+      await createProject(values);
       setOpen(false);
-    } catch (error) {
-      // Keep the dialog open so the user can retry without retyping anything.
-      setSubmitError(error instanceof Error ? error.message : "The invite could not be sent.");
-      setPending(false);
-    }
-  };
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(_event, data) => {
-        if (!data.open && pending) {
-          return; // never dismiss while the request is in flight
-        }
-        setOpen(data.open);
-        if (!data.open) {
-          reset();
-        }
-      }}
-    >
-      <DialogTrigger disableButtonEnhancement>
-        <Button appearance="primary">Invite user</Button>
-      </DialogTrigger>
-      <DialogSurface>
-        <form onSubmit={handleSubmit} noValidate>
-          <DialogBody>
-            <DialogTitle>Invite a user</DialogTitle>
-            <DialogContent>
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                {submitError && (
-                  <MessageBar intent="error" politeness="assertive">
-                    {submitError}
-                  </MessageBar>
-                )}
-
-                <Field
-                  label="Email address"
-                  required
-                  validationState={emailError ? "error" : "none"}
-                  validationMessage={emailError}
-                >
-                  <Input
-                    type="email"
-                    placeholder="name@example.com"
-                    value={draft.email}
-                    onChange={(_event, data) => {
-                      update("email", data.value);
-                      if (emailError) {
-                        setEmailError(undefined);
-                      }
-                    }}
-                  />
-                </Field>
-
-                <Field label="Role" hint="Admins can manage members and billing.">
-                  <Select
-                    value={draft.role}
-                    onChange={(_event, data) => update("role", data.value as MemberRole)}
-                  >
-                    <option value="viewer">Viewer</option>
-                    <option value="editor">Editor</option>
-                    <option value="admin">Admin</option>
-                  </Select>
-                </Field>
-
-                <Field label="Personal message">
-                  <Textarea
-                    resize="vertical"
-                    rows={3}
-                    value={draft.message}
-                    onChange={(_event, data) => update("message", data.value)}
-                  />
-                </Field>
-
-                <Checkbox
-                  label="Send a welcome email with setup instructions"
-                  checked={draft.notify}
-                  onChange={(_event, data) => update("notify", data.checked === true)}
-                />
-              </div>
-            </DialogContent>
-            <DialogActions>
-              {pending && <Spinner size="tiny" label="Sending..." labelPosition="after" />}
-              <DialogTrigger disableButtonEnhancement>
-                <Button appearance="secondary" type="button" disabled={pending}>
-                  Cancel
-                </Button>
-              </DialogTrigger>
-              <Button appearance="primary" type="submit" disabled={pending}>
-                Send invite
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </form>
-      </DialogSurface>
-    </Dialog>
-  );
-};
-```
-
-### Rename dialog that confirms before discarding edits
-
-Routes Escape, backdrop clicks and the Cancel button through a single onOpenChange guard: while saving the dialog refuses to close, and when the form is dirty it asks the user to keep editing or discard, instead of silently throwing the work away.
-
-```tsx
-import * as React from "react";
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Field, Input } from "@fluentui/react-components";
-
-interface RenameDialogProps {
-  currentName: string;
-  onRename: (nextName: string) => Promise<void>;
-}
-
-export const RenameDialog: React.FC<RenameDialogProps> = ({ currentName, onRename }) => {
-  const [open, setOpen] = React.useState(false);
-  const [name, setName] = React.useState(currentName);
-  const [error, setError] = React.useState<string>();
-  const [pending, setPending] = React.useState(false);
-  const [confirmDiscard, setConfirmDiscard] = React.useState(false);
-
-  const dirty = name.trim() !== currentName;
-
-  const closeAndReset = () => {
-    setOpen(false);
-    setName(currentName);
-    setError(undefined);
-    setConfirmDiscard(false);
-    setPending(false);
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const nextName = name.trim();
-    if (!nextName) {
-      setError("Enter a name.");
-      return;
-    }
-    if (nextName === currentName) {
-      closeAndReset();
-      return;
-    }
-
-    setPending(true);
-    try {
-      await onRename(nextName);
-      closeAndReset();
-    } catch {
-      setError("The new name could not be saved. Try again.");
-      setPending(false);
+      resetForm();
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -449,78 +274,382 @@ export const RenameDialog: React.FC<RenameDialogProps> = ({ currentName, onRenam
       onOpenChange={(_event, data) => {
         if (data.open) {
           setOpen(true);
-          return;
+        } else if (!isSubmitting) {
+          // Escape, backdrop click and the Cancel trigger all land here.
+          setOpen(false);
+          resetForm();
         }
-        if (pending) {
-          return; // never dismiss while saving
-        }
-        if (dirty) {
-          setConfirmDiscard(true); // keep the dialog open and ask first
-          return;
-        }
-        closeAndReset();
       }}
+      inertTrapFocus
     >
-      <DialogTrigger disableButtonEnhancement>
-        <Button>Rename</Button>
+      <DialogTrigger>
+        <Button appearance="primary">New project</Button>
       </DialogTrigger>
+
       <DialogSurface>
         <form onSubmit={handleSubmit} noValidate>
           <DialogBody>
-            <DialogTitle>Rename item</DialogTitle>
-            <DialogContent>
-              <Field
-                label="Name"
-                required
-                hint={`Current name: ${currentName}`}
-                validationState={error ? "error" : "none"}
-                validationMessage={error}
-              >
-                <Input
-                  value={name}
-                  onChange={(_event, data) => {
-                    setName(data.value);
-                    setError(undefined);
-                  }}
-                />
-              </Field>
+            <DialogTitle>New project</DialogTitle>
 
-              {confirmDiscard && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "12px",
-                    marginTop: "12px",
-                  }}
+            <DialogContent>
+              <div style={{ display: 'grid', gap: '16px' }}>
+                <Field
+                  label="Project name"
+                  required
+                  validationState={errors.name ? 'error' : 'none'}
+                  validationMessage={errors.name}
                 >
-                  <span>You have unsaved changes. Close without saving?</span>
-                  <span style={{ display: "flex", gap: "8px" }}>
-                    <Button
-                      appearance="secondary"
-                      type="button"
-                      size="small"
-                      onClick={() => setConfirmDiscard(false)}
+                  {(fieldProps) => (
+                    <Input
+                      {...fieldProps}
+                      ref={(element) => {
+                        controls.current.name = element;
+                      }}
+                      value={values.name}
+                      onChange={(_event, data) => updateField('name', data.value)}
+                    />
+                  )}
+                </Field>
+
+                <Field
+                  label="Owner email"
+                  required
+                  validationState={errors.email ? 'error' : 'none'}
+                  validationMessage={errors.email}
+                >
+                  {(fieldProps) => (
+                    <Input
+                      {...fieldProps}
+                      ref={(element) => {
+                        controls.current.email = element;
+                      }}
+                      type="email"
+                      value={values.email}
+                      onChange={(_event, data) => updateField('email', data.value)}
+                    />
+                  )}
+                </Field>
+
+                <Field label="Plan">
+                  {(fieldProps) => (
+                    <Select
+                      {...fieldProps}
+                      value={values.plan}
+                      onChange={(_event, data) => updateField('plan', data.value)}
                     >
-                      Keep editing
-                    </Button>
-                    <Button appearance="primary" type="button" size="small" onClick={closeAndReset}>
-                      Discard
-                    </Button>
-                  </span>
-                </div>
-              )}
+                      <Option value="starter">Starter</Option>
+                      <Option value="team">Team</Option>
+                      <Option value="enterprise">Enterprise</Option>
+                    </Select>
+                  )}
+                </Field>
+
+                <Field
+                  label="Description"
+                  hint="Optional - shown on the project overview."
+                  validationState={errors.description ? 'error' : 'none'}
+                  validationMessage={errors.description}
+                >
+                  {(fieldProps) => (
+                    <Textarea
+                      {...fieldProps}
+                      ref={(element) => {
+                        controls.current.description = element;
+                      }}
+                      resize="vertical"
+                      value={values.description}
+                      onChange={(_event, data) => updateField('description', data.value)}
+                    />
+                  )}
+                </Field>
+
+                <Checkbox
+                  label="Email the team when the project is created"
+                  checked={values.notify}
+                  onChange={(_event, data) => updateField('notify', data.checked === true)}
+                />
+              </div>
             </DialogContent>
+
             <DialogActions>
-              {/* Cancel uses DialogTrigger, so it flows through the same guard as Escape. */}
-              <DialogTrigger disableButtonEnhancement>
-                <Button appearance="secondary" type="button" disabled={pending}>
+              <DialogTrigger action="close">
+                <Button appearance="secondary" type="button" disabled={isSubmitting}>
                   Cancel
                 </Button>
               </DialogTrigger>
-              <Button appearance="primary" type="submit" disabled={pending}>
-                Save
+              <Button
+                appearance="primary"
+                type="submit"
+                disabled={isSubmitting}
+                icon={isSubmitting ? <Spinner size="tiny" /> : undefined}
+              >
+                {isSubmitting ? 'Creating...' : 'Create project'}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </form>
+      </DialogSurface>
+    </Dialog>
+  );
+};
+```
+
+### Edit profile dialog with server error (unmountOnClose reset)
+
+A dialog whose form state lives inside a child component rendered in DialogSurface. Passing unmountOnClose throws that state away on every dismissal, and a MessageBar surfaces failures returned by the API.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  Radio,
+  RadioGroup,
+  Spinner,
+} from '@fluentui/react-components';
+
+type ProfileValues = {
+  displayName: string;
+  email: string;
+  digest: string;
+};
+
+// Replace with a real request. This mock rejects the "taken" email address so
+// the form-level error path can be exercised.
+async function saveProfile(values: ProfileValues): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  if (values.email.trim().toLowerCase() === 'ada@example.com') {
+    throw new Error('That email address is already in use.');
+  }
+}
+
+type ProfileFormProps = {
+  onSaved: (values: ProfileValues) => void;
+  onCancel: () => void;
+};
+
+const ProfileForm: React.FC<ProfileFormProps> = ({ onSaved, onCancel }) => {
+  // Because DialogSurface unmounts on close, this state is discarded for free
+  // every time the dialog is dismissed.
+  const [values, setValues] = React.useState<ProfileValues>({
+    displayName: 'Ada Lovelace',
+    email: 'ada@example.com',
+    digest: 'daily',
+  });
+  const [serverError, setServerError] = React.useState<string>();
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  const update = <K extends keyof ProfileValues>(field: K, value: ProfileValues[K]) =>
+    setValues((previous) => ({ ...previous, [field]: value }));
+
+  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
+    event.preventDefault();
+    setIsSaving(true);
+    setServerError(undefined);
+    try {
+      await saveProfile(values);
+      onSaved(values);
+    } catch (error) {
+      setServerError(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} noValidate>
+      <DialogBody>
+        <DialogTitle>Edit profile</DialogTitle>
+
+        <DialogContent>
+          {serverError && (
+            <MessageBar intent="error" style={{ marginBottom: '16px' }}>
+              <MessageBarBody>{serverError}</MessageBarBody>
+            </MessageBar>
+          )}
+
+          <div style={{ display: 'grid', gap: '16px' }}>
+            <Field label="Display name" required>
+              {(fieldProps) => (
+                <Input
+                  {...fieldProps}
+                  value={values.displayName}
+                  onChange={(_event, data) => update('displayName', data.value)}
+                />
+              )}
+            </Field>
+
+            <Field label="Email" required>
+              {(fieldProps) => (
+                <Input
+                  {...fieldProps}
+                  type="email"
+                  value={values.email}
+                  onChange={(_event, data) => update('email', data.value)}
+                />
+              )}
+            </Field>
+
+            <Field label="Email digest" hint="How often we email you a summary of your activity.">
+              {(fieldProps) => (
+                // RadioGroup renders a div, so forward only the id/aria props
+                // that Field provides instead of spreading everything.
+                <RadioGroup
+                  id={fieldProps.id}
+                  aria-labelledby={fieldProps['aria-labelledby']}
+                  aria-describedby={fieldProps['aria-describedby']}
+                  value={values.digest}
+                  onChange={(_event, data) => update('digest', data.value)}
+                >
+                  <Radio value="daily" label="Daily" />
+                  <Radio value="weekly" label="Weekly" />
+                  <Radio value="never" label="Never" />
+                </RadioGroup>
+              )}
+            </Field>
+          </div>
+        </DialogContent>
+
+        <DialogActions>
+          <Button appearance="secondary" type="button" onClick={onCancel} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button
+            appearance="primary"
+            type="submit"
+            disabled={isSaving}
+            icon={isSaving ? <Spinner size="tiny" /> : undefined}
+          >
+            {isSaving ? 'Saving...' : 'Save changes'}
+          </Button>
+        </DialogActions>
+      </DialogBody>
+    </form>
+  );
+};
+
+export const EditProfileDialog: React.FC = () => {
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <Dialog open={open} onOpenChange={(_event, data) => setOpen(data.open)} unmountOnClose>
+      <DialogTrigger>
+        <Button>Edit profile</Button>
+      </DialogTrigger>
+      <DialogSurface>
+        <ProfileForm onSaved={() => setOpen(false)} onCancel={() => setOpen(false)} />
+      </DialogSurface>
+    </Dialog>
+  );
+};
+```
+
+### Quick task dialog (uncontrolled inputs + FormData)
+
+The leanest variation: inputs stay uncontrolled via defaultValue, values are read once with FormData in the submit handler, native required validation blocks empty titles, and unmountOnClose clears the fields for the next open.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  Field,
+  Input,
+  Option,
+  Select,
+} from '@fluentui/react-components';
+
+type NewTask = {
+  title: string;
+  due: string;
+  priority: string;
+};
+
+// Replace with a real request.
+async function createTask(task: NewTask): Promise<void> {
+  void task;
+  await new Promise((resolve) => setTimeout(resolve, 500));
+}
+
+export const NewTaskDialog: React.FC = () => {
+  const [open, setOpen] = React.useState(false);
+
+  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
+    event.preventDefault();
+
+    // Read the form once, before awaiting anything.
+    const data = new FormData(event.currentTarget);
+    const task: NewTask = {
+      title: String(data.get('title') ?? ''),
+      due: String(data.get('due') ?? ''),
+      priority: String(data.get('priority') ?? 'normal'),
+    };
+
+    await createTask(task);
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(_event, data) => setOpen(data.open)} unmountOnClose>
+      <DialogTrigger>
+        <Button appearance="primary">New task</Button>
+      </DialogTrigger>
+
+      <DialogSurface>
+        {/* No noValidate here: the required prop passed through Field makes
+            the browser block submission while the title is empty. */}
+        <form onSubmit={handleSubmit}>
+          <DialogBody>
+            <DialogTitle>New task</DialogTitle>
+
+            <DialogContent>
+              <div style={{ display: 'grid', gap: '16px' }}>
+                <Field label="Title" required>
+                  {(fieldProps) => (
+                    <Input {...fieldProps} name="title" placeholder="e.g. Review the pull request" />
+                  )}
+                </Field>
+
+                <Field label="Due date">
+                  {(fieldProps) => <Input {...fieldProps} name="due" type="date" />}
+                </Field>
+
+                <Field label="Priority">
+                  {(fieldProps) => (
+                    <Select {...fieldProps} name="priority" defaultValue="normal">
+                      <Option value="low">Low</Option>
+                      <Option value="normal">Normal</Option>
+                      <Option value="high">High</Option>
+                    </Select>
+                  )}
+                </Field>
+              </div>
+            </DialogContent>
+
+            <DialogActions>
+              <DialogTrigger action="close">
+                <Button appearance="secondary" type="button">
+                  Cancel
+                </Button>
+              </DialogTrigger>
+              <Button appearance="primary" type="submit">
+                Create task
               </Button>
             </DialogActions>
           </DialogBody>
@@ -533,29 +662,40 @@ export const RenameDialog: React.FC<RenameDialogProps> = ({ currentName, onRenam
 
 ## Pitfalls
 
-- Omitting explicit button types. Inside a <form>, a <button> without a type defaults to submit, and DialogTrigger clones your child, so a Cancel or secondary button can end up submitting the form. Put type="submit" on the primary action only and type="button" on everything else.
-- Expecting the form to reset itself. State kept in the component that renders <Dialog> survives closing (the dialog only unmounts its own surface content), so stale values reappear on reopen. Reset in onOpenChange or move the fields into a child component inside DialogContent.
-- Letting Escape or a backdrop click dismiss the dialog while an async submit is running - onOpenChange still fires. Ignore data.open === false while pending is true, and disable the Cancel button, otherwise users lose the result of an in-flight request.
-- Relying on native HTML5 validation (required, type="email" tooltips) inside the dialog. The browser bubble is not announced by screen readers, is not styleable and renders above the surface. Set noValidate on the form and validate through Field's validationState / validationMessage.
-- Putting DialogActions outside the <form>, so Enter inside a text field does nothing. Keep DialogContent and DialogActions inside the same form element so a real type="submit" button exists within it.
-- Disabling the submit button until the form is valid. Users then cannot trigger validation and never learn what is missing. Keep it enabled, validate on submit, and disable only while a request is pending.
-- Firing the request and closing immediately (fire-and-forget). Failures become silent and users believe the data was saved. Keep the dialog open until the promise resolves, then close and reset in the same tick.
-- Rendering the dialog inside an existing <form> on the page. DialogSurface renders in place - it is not portaled by default - and nested forms are invalid HTML, which breaks the outer form. Render the dialog at page level or wrap the surface in a Portal.
+- Forgetting event.preventDefault() in the submit handler: the browser performs a real form submission (navigation/GET) and the dialog unmounts. Always prevent the default as the first line of the handler.
+- Being sloppy with button types: the primary action must be type="submit" to submit the form, and every other button that lives inside the <form> (Cancel, Remove, secondary actions) should be type="button" so it can never trigger the form's submit behaviour.
+- Putting the submit action on a DialogTrigger action="close": the trigger only closes the dialog, so validation and the save request never run. Use a close trigger for Cancel and a submit button for the primary action.
+- Assuming onOpenChange fires when you close programmatically: after a successful save, calling setOpen(false) does not emit onOpenChange(false), so the form is never reset. Either reset explicitly in the success path, or move the form state into a child component inside DialogSurface and pass unmountOnClose to Dialog.
+- Reading event.currentTarget (or the event object) after an await: React clears it once the handler yields. Capture new FormData(event.currentTarget) or the field values before awaiting the request.
+- Rendering Field with plain children instead of the render function: the label gets no htmlFor, so clicking the label does not focus the control and screen readers do not announce the label, hint or error. Always use {(fieldProps) => <Input {...fieldProps} />} for single-input controls, and forward id/aria props manually for composite controls.
+- Showing validation on every keystroke: errors flash while the user is still typing. Validate on submit (or on blur), then clear a field's error as soon as that field changes, and focus the first invalid control so keyboard users are taken straight to the problem.
+- Spreading every Field control prop onto a container-based control such as RadioGroup: Field generates props for an input, and container props like required/size are not valid there. Spread only id, aria-labelledby and aria-describedby, or wrap the whole group in its own labelled region.
+- Closing the dialog before the request settles, or allowing Escape/backdrop dismissal mid-save: the user loses the entered data and any error that comes back. Block the close (ignore onOpenChange(false) while submitting), disable both actions, and only call setOpen(false) after the promise resolves.
 
 ## Accessibility
 
-Modal semantics come for free: DialogSurface renders role="dialog" with aria-modal="true", DialogTitle is wired to the surface as its accessible name, focus is trapped inside the surface, Escape closes it, and focus returns to the element that opened the dialog (so do not unmount or re-create the trigger while the dialog is open). Always render a DialogTitle as the first child of DialogBody; if a visual title is impossible, give DialogSurface an aria-label instead. Field does the form wiring that is easy to get wrong: it associates the Label with the control (htmlFor/id), forwards required as aria-required, sets aria-invalid when validationState is "error", and links validationMessage and hint through aria-describedby - so errors are announced with the control, not just shown in red. Announce non-field failures with <MessageBar intent="error" politeness="assertive"> so screen readers read them immediately; use politeness="polite" for non-blocking hints. Keep the submit button's accessible name stable and descriptive ("Send invite", not "OK", never "..." while pending) and render the Spinner as additional information instead of replacing the label. When the primary action becomes disabled mid-interaction, prefer disabledFocusable over disabled on the submit button so keyboard focus is not dropped to the top of the page while the request runs. Do not add autoFocus to the first input - the modal already moves focus into the dialog and stealing it can prevent the dialog title from being announced. Keep DOM order identical to the visual order of the fields, and make sure the discard-confirmation row (example 3) is reachable by keyboard and, ideally, announced (rendering it as a MessageBar with politeness="assertive" works well) rather than being a purely visual warning.
+Always render exactly one DialogTitle as the first child of DialogBody - Dialog wires it to the surface with aria-labelledby, and without it the modal is announced as an unlabelled dialog. Use the render-function form of Field's children for every single-input control so the label, hint and validation message are programmatically associated (id, aria-labelledby, aria-describedby, aria-invalid, required); for composite controls such as RadioGroup, forward id/aria-labelledby/aria-describedby explicitly, because Field cannot attach them itself. Use DialogActions for the action row so the tab order is predictable (secondary action first, primary action last) and focus returns to the trigger when the dialog closes. Escape must dismiss the dialog - ignore the onOpenChange(false) event only while a save is in flight, otherwise users can get stuck. On failed validation, move focus to the first invalid control and keep the error text visible; text (not just colour) is what conveys the failure, and validationState="error" plus validationMessage supplies that text. Announce asynchronous outcomes: a MessageBar with intent="error" inside DialogContent is exposed as a live region, and while saving the submit button is disabled and relabelled (add a Spinner as its icon for a visible progress cue). Never rely on placeholder text as a label, and keep the modal focus trap enabled (the default; inertTrapFocus opts into the inert-based trap on modern browsers).
 
 ## Components used
 
-- [Dialog](../../components/dialog.md)
 - [Button](../../components/button.md)
+- [Checkbox](../../components/checkbox.md)
+- [Dialog](../../components/dialog.md)
+- [DialogActions](../../components/dialog-actions.md)
+- [DialogBody](../../components/dialog-body.md)
+- [DialogContent](../../components/dialog-content.md)
+- [DialogSurface](../../components/dialog-surface.md)
+- [DialogTitle](../../components/dialog-title.md)
+- [DialogTrigger](../../components/dialog-trigger.md)
 - [Field](../../components/field.md)
 - [Input](../../components/input.md)
-- [Select](../../components/select.md)
-- [Textarea](../../components/textarea.md)
-- [Checkbox](../../components/checkbox.md)
 - [MessageBar](../../components/message-bar.md)
+- [MessageBarBody](../../components/message-bar-body.md)
+- [Option](../../components/option.md)
+- [Radio](../../components/radio.md)
+- [RadioGroup](../../components/radio-group.md)
+- [Select](../../components/select.md)
 - [Spinner](../../components/spinner.md)
+- [Textarea](../../components/textarea.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

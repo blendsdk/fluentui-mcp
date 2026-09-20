@@ -4,545 +4,817 @@
 
 ## Goal
 
-Build a typed, data-driven Fluent UI v9 data table with sortable column headers, row selection, filtering, rich cells, per-row actions, and empty/loading/pagination states, by composing the Table family with form controls and feedback components.
+Build a production-ready data table with Fluent UI v9: typed column definitions, client-side sorting and filtering, multi-row selection with bulk actions, rich cells (avatar, tinted Badge, PresenceBadge), per-row action menus, and a details Dialog — plus a lighter static Table variant for read-only data.
 
 ## When to Use
 
-Use this recipe when you render a homogeneous set of records as rows/columns and need at least one interactive behavior: sorting, row selection, per-row actions, filtering, pagination, or empty/loading states. It is the right level of abstraction for admin surfaces, project/asset lists, team rosters, deployment histories and similar 'one array of objects + a few columns' screens where you own the data pipeline (filter -> sort -> page) and want plain DOM rows with full control over cell content.
+Use this recipe when users must read and act on tabular data: sortable columns, row selection with bulk actions, per-row menus, rich cell content (avatars, badges, statuses), and keyboard navigation across a grid of rows and columns. Also use the Table variant when you only need a semantic, read-only table.
 
 ## When Not to Use
 
-Avoid hand-composing Table when you need column resizing/reordering, virtualized rendering of tens of thousands of rows, or a fully declarative column model with column renderers - use the richer DataGrid component from the same package (or a virtualization library) instead. Also skip it for layout-only grids (use CSS Grid or Card), for two-column master/detail views, and for tiny key/value summaries where a List or definition list reads better.
+Avoid DataGrid when the data is a flat, simple list (use List + ListItem), a set of equal-weight cards (use Card), or hierarchical (use Tree / FlatTree). For a handful of key/value pairs, Field and Text are lighter. For tens of thousands of rows, paginate or virtualize the data before handing it to the grid, and for spreadsheet-style inline editing embed form controls in cells only if you accept the extra focus management.
 
-## Overview
+## Outcome
 
-Fluent UI's `Table` family is a set of composable primitives, not a batteries-included grid. You own the data pipeline; the table owns rendering plus the sort/selection plumbing. This recipe wires both halves together.
+A data table that renders typed rows and columns, sorts and filters on the client, supports multi-row selection with a bulk action, renders rich cells (avatar + text, tinted `Badge`, `PresenceBadge`), exposes a per-row action menu, and opens a details `Dialog` — plus a lighter `Table` variant for read-only data.
 
-**You will build:** a table with a search box, a status filter, sortable columns, multi-row selection with a live count, rich cells (badges and avatars), row actions, empty and loading states, and client-side pagination.
+## Mental model: `DataGrid` is a composition, not a config blob
 
-The pattern is always three layers:
+Five structural pieces, always in the same order:
 
-1. **Data** - one array of records, each with a stable `id`.
-2. **Derived rows** - a `useMemo` that filters, then sorts, then (optionally) slices for the current page.
-3. **Presentation** - `Table` + header/body/row/cell components that render the derived rows.
+1. `DataGrid` — owns table state: `items`, `columns`, row identity (`getRowId`) and the selection/sorting options.
+2. `DataGridHeader` → `DataGridRow` → `DataGridHeaderCell` — the header row.
+3. `DataGridBody` → `DataGridRow` → `DataGridCell` — the body rows.
+4. `DataGridBody` and `DataGridRow` take **render functions** as children, so you decide what each cell renders.
+5. Columns are data, not JSX: build them with `createTableColumn<T>({ columnId, compare, renderHeaderCell, renderCell })` and type the array as `TableColumnDefinition<T>[]`.
 
-All interactive state (query, status filter, sort, page) lives in your component; the table reports back only through `onSortChange` and `onSelectionChange`.
-
-## Anatomy: which component does what
-
-| Component | Role |
-| --- | --- |
-| `Table` | Root. Owns the sort (`sortable`, `onSortChange`) and selection (`selectionMode`, `onSelectionChange`) plumbing and renders the table element. Give it an `aria-label`. |
-| `TableHeader` / `TableRow` / `TableHeaderCell` | Header pieces. `TableHeaderCell` renders a `th`; add `sortable` and `sortDirection` to turn it into a sort control with an indicator. |
-| `TableBody` / `TableRow` / `TableCell` | Body pieces - one `TableRow` per record, with a stable React `key`. |
-| `TableCellLayout` | Lays out the contents of a cell; `truncate` clips long values with an ellipsis. |
-| `TableSelectionCell` | The selection cell: `type="checkbox"` for multiselect, `type="radio"` for single select, `hidden` to omit it from the header row. |
-
-## Step 1 - Model the data
-
-Give every record a stable string id (it is both the React `key` and the value reported back by selection), and put the sortable columns in a typed comparator map so sorting logic never leaks into JSX:
-
-```ts
-type SortColumn = 'name' | 'owner' | 'status' | 'updated';
-type SortDirection = 'ascending' | 'descending';
-
-const comparators: Record<SortColumn, (a: Project, b: Project) => number> = {
-  name: (a, b) => a.name.localeCompare(b.name),
-  owner: (a, b) => a.owner.localeCompare(b.owner),
-  status: (a, b) => a.status.localeCompare(b.status),
-  updated: (a, b) => a.updated.localeCompare(b.updated),
-};
-```
-
-## Step 2 - Derive the visible rows in one useMemo
+The minimum viable grid:
 
 ```tsx
-const rows = React.useMemo(() => {
-  const filtered = projects.filter(/* query + status predicates */);
-  if (!sort) return filtered;
-  const sorted = [...filtered].sort(comparators[sort.column]);
-  return sort.direction === 'descending' ? sorted.reverse() : sorted;
-}, [query, status, sort]);
+<DataGrid items={items} columns={columns} getRowId={(item) => item.id}>
+  <DataGridHeader>
+    <DataGridRow>
+      {({ renderHeaderCell }) => <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>}
+    </DataGridRow>
+  </DataGridHeader>
+  <DataGridBody<Item>>
+    {({ item, rowId }) => (
+      <DataGridRow<Item> key={rowId}>
+        {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+      </DataGridRow>
+    )}
+  </DataGridBody>
+</DataGrid>
 ```
 
-Order matters: **filter -> sort -> slice**. Always copy before sorting (`[...filtered].sort(...)`); never mutate the source array. Keeping the work in `useMemo` also keeps the array identity stable so rows only re-render when they must.
+## 1. Define columns once, typed
 
-## Step 3 - Sorting
-
-Mark the table as `sortable` and keep the reported sort state yourself:
+`columnId` is the identity used by sorting and column sizing, `compare` powers sorting, and the two render functions return the header label and the cell content.
 
 ```tsx
-<Table sortable onSortChange={(_ev, sortState) => setSort({ column: sortState.sortColumn as SortColumn, direction: sortState.sortDirection })}>
+const columns: TableColumnDefinition<TeamMember>[] = [
+  createTableColumn<TeamMember>({
+    columnId: 'name',
+    compare: (a, b) => a.name.localeCompare(b.name),
+    renderHeaderCell: () => 'Name',
+    renderCell: (member) => (
+      <TableCellLayout media={<Avatar name={member.name} />}>{member.name}</TableCellLayout>
+    ),
+  }),
+  // ...one entry per column
+];
 ```
 
-Then feed the direction back into each sortable header so the indicator always matches the data you render:
+Use `TableCellLayout` for text-heavy cells: `media` (avatar, icon, presence badge), `description` (secondary line such as an email or timestamp), `appearance="primary"` for emphasis, and `truncate` for long values.
+
+## 2. Wire up selection
+
+Set `selectionMode` (`"single"` or `"multiselect"`), read the new selection in `onSelectionChange` (`data.selectedItems` is a `Set` of row ids), and render the selection cell through the `selectionCell` slot on **both** the header row and each body row:
 
 ```tsx
-<TableHeaderCell sortable sortDirection={sortDirectionFor('name')}>Name</TableHeaderCell>
+<DataGrid
+  items={items}
+  columns={columns}
+  getRowId={(item) => item.id}
+  selectionMode="multiselect"
+  onSelectionChange={(_event, data) => setSelectedRows(data.selectedItems)}
+>
+  <DataGridHeader>
+    <DataGridRow selectionCell={<DataGridSelectionCell type="checkbox" />}>
+      {/* header cells */}
+    </DataGridRow>
+  </DataGridHeader>
+  <DataGridBody<Item>>
+    {({ item, rowId }) => (
+      <DataGridRow<Item> key={rowId} selectionCell={<DataGridSelectionCell type="checkbox" />}>
+        {/* body cells */}
+      </DataGridRow>
+    )}
+  </DataGridBody>
+</DataGrid>
 ```
 
-`sortDirectionFor` is a two-line helper: return `sort.direction` when `sort.column` matches, otherwise `undefined`. Columns that are not sortable simply omit the `sortable` prop.
+Use `selectionMode="single"` with `<DataGridSelectionCell type="radio" />` when a row is a single choice. Drive bulk actions from the selection count and keep the bulk button disabled while nothing is selected.
 
-## Step 4 - Selection
+## 3. Sorting: show the direction *and* reorder the data
 
-Set `selectionMode` on `Table` (`"multiselect"` or `"single"`) and render a `TableSelectionCell` in each body row. For multiselect, add one to the header row as well (select-all). For single selection, use `type="radio"` and mark the header cell `hidden`:
+Sorting has two halves and both are required:
+
+- **Header affordance** — mark the grid `sortable` and give each header cell `sortable` plus the current `sortDirection` for its own `columnId`; the header cell renders the sort glyph from that prop.
+- **Row order** — the grid renders exactly the array you pass as `items`, so keep the sort state in React and pass the sorted array.
 
 ```tsx
-<Table selectionMode="multiselect" onSelectionChange={(_ev, data) => setSelectedItems(new Set<string | number>(data.selectedItems))}>
+const [sortState, setSortState] = React.useState<{ columnId: string | number | undefined; direction: 'ascending' | 'descending' }>({
+  columnId: 'name',
+  direction: 'ascending',
+});
+
+const sortedItems = React.useMemo(() => {
+  const compare = columns.find((column) => column.columnId === sortState.columnId)?.compare;
+  if (!compare) {
+    return filteredItems;
+  }
+  const sorted = [...filteredItems].sort(compare); // copy: never sort the source array in place
+  return sortState.direction === 'ascending' ? sorted : sorted.reverse();
+}, [filteredItems, sortState]);
 ```
-
-The table owns the selection state; the callback is a notification carrying `data.selectedItems` (a `Set` of row ids). Mirror it into your own state to drive a selection count, bulk-action buttons, or a disabled state. Clicking anywhere in a selectable row toggles it, so any control inside the row must call `event.stopPropagation()`.
-
-## Step 5 - Rich cells
-
-Keep cells one idea deep and let layout primitives do the work:
-
-- Text cells: `TableCellLayout truncate` around a plain string.
-- Status cells: a `Badge` with `appearance="tint"` and a semantic `color` (`success`, `warning`, `subtle`, ...).
-- People cells: `Avatar name={...} size={28}` next to a two-line `Text` stack (`weight="semibold"` for the name, `size={200}` for the secondary line). Wrap the stack in `TableCellLayout` and use `display: flex` on an inner `div` to keep the avatar inline.
-- Action cells: `Button appearance="subtle"` - real, focusable buttons rather than clickable rows.
-
-## Step 6 - Empty and loading states
-
-Keep the header visible and render a single full-width row inside `TableBody`:
 
 ```tsx
-<TableRow>
-  <TableCell colSpan={5}>
-    <TableCellLayout>No projects match the current filters.</TableCellLayout>
-  </TableCell>
-</TableRow>
+{({ renderHeaderCell, columnId }) => (
+  <DataGridHeaderCell
+    sortable
+    sortDirection={sortState.columnId === columnId ? sortState.direction : undefined}
+    onClick={() => toggleSort(columnId)}
+  >
+    {renderHeaderCell()}
+  </DataGridHeaderCell>
+)}
 ```
 
-When filters caused the emptiness, add a "Clear filters" `Button` in the same cell. While data loads, swap the row for a `Spinner` plus a sentence ("Loading deployments...") so the state is not conveyed by motion alone.
+If your grid reports sort changes through `onSortChange`, copy that payload back into your state so the header glyph and the rendered order can never disagree.
 
-## Step 7 - Pagination
+## 4. Filtering and the empty state
 
-Sort and filter first, then slice: `const pageRows = rows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)`. Put the range summary and Previous/Next `Button`s *outside* the table, and clamp the current page (`Math.min(page, pageCount - 1)`) so filtering can never leave you on a page that no longer exists.
+Filter before the data reaches the grid. Keep the search `Input` outside the table and label it:
 
-## Recap
+```tsx
+const filteredItems = React.useMemo(() => {
+  const term = query.trim().toLowerCase();
+  if (!term) {
+    return teamMembers;
+  }
+  return teamMembers.filter((member) =>
+    [member.name, member.email, member.team].some((value) => value.toLowerCase().includes(term)),
+  );
+}, [query]);
+```
 
-`Table` + `TableHeader`/`TableBody` + `TableRow`/`TableCell`/`TableCellLayout` + `TableSelectionCell` is enough for a production-quality list view when you pair it with `Input`/`Select` for filters, `Badge`/`Avatar`/`Text` for cell content, `Button` for actions, and `Spinner` for async states. See the examples for the complete, copy-pasteable versions.
+When the filtered list is empty, render a `MessageBar` instead of the grid — a grid that shows only its header looks broken.
+
+## 5. Rich cells
+
+Rich cells are just JSX: put an `Avatar` in `TableCellLayout.media`, a secondary line in `description`, and use `Badge` / `PresenceBadge` for status. Keep the status text next to the color so the meaning never depends on hue alone.
+
+```tsx
+renderCell: (member) => (
+  <TableCellLayout description={member.lastActive}>
+    <PresenceBadge status={member.presence} />
+  </TableCellLayout>
+)
+```
+
+## 6. Row actions and details
+
+Give actions their own column. A `Menu` on a `Button` keeps rows compact; label the trigger with the row identity so screen readers do not hear identical buttons:
+
+```tsx
+renderCell: (project) => (
+  <Menu>
+    <MenuTrigger disableButtonEnhancement>
+      <Button appearance="subtle" aria-label={`More actions for ${project.name}`}>Actions</Button>
+    </MenuTrigger>
+    <MenuPopover>
+      <MenuList>
+        <MenuItem onClick={() => setDetails(project)}>View details</MenuItem>
+        <MenuItem>Duplicate</MenuItem>
+      </MenuList>
+    </MenuPopover>
+  </Menu>
+)
+```
+
+Mark cells that contain controls with `focusMode="group"` (`<DataGridCell focusMode="group">`) so the cell is one focus target. For details, keep a `Project | null` piece of state and drive a controlled `Dialog` (`open={details !== null}` plus `onOpenChange`); the dialog traps focus and restores it to the trigger when it closes.
+
+## 7. Static tables: use `Table` instead
+
+If the table is read-only — no selection, no sorting, no grid keyboard navigation — compose `Table` + `TableHeader` / `TableBody` / `TableRow` / `TableCell` / `TableHeaderCell` directly and skip the render-function API. `TableCellLayout`, `Avatar`, `Badge` and `TableCellActions` (row actions revealed on hover/focus) work the same way.
+
+## Putting it together
+
+The examples below are complete: a sortable, filterable, selectable team directory; a project portfolio with row menus and a details dialog; and a static flight board built with `Table`.
 
 ## Examples
 
-### Sortable, filterable, selectable project table
+### Sortable, filterable and selectable team directory (DataGrid)
 
-The full recipe: typed records, a search box and status filter, sortable headers driven by Table's sort props, multiselect rows with a live selection count, badge cells, and an empty state with a 'Clear filters' recovery action.
-
-```tsx
-import * as React from 'react';
-import { Badge, Button, Input, Select, Table, TableBody, TableCell, TableCellLayout, TableHeader, TableHeaderCell, TableRow, TableSelectionCell, Text } from '@fluentui/react-components';
-
-type ProjectStatus = 'active' | 'paused' | 'archived';
-
-interface Project {
-  id: string;
-  name: string;
-  owner: string;
-  status: ProjectStatus;
-  updated: string;
-}
-
-const projects: Project[] = [
-  { id: 'p-1', name: 'Fluent UI v9 rollout', owner: 'Katri Athokas', status: 'active', updated: '2024-06-03' },
-  { id: 'p-2', name: 'Design token audit', owner: 'Ben Adams', status: 'active', updated: '2024-05-21' },
-  { id: 'p-3', name: 'Accessibility sweep', owner: 'Carole Poland', status: 'paused', updated: '2024-04-02' },
-  { id: 'p-4', name: 'Legacy theme migration', owner: 'Katri Athokas', status: 'archived', updated: '2024-01-19' },
-  { id: 'p-5', name: 'Documentation rewrite', owner: 'Diego Siciliani', status: 'active', updated: '2024-06-11' },
-];
-
-type SortColumn = 'name' | 'owner' | 'status' | 'updated';
-type SortDirection = 'ascending' | 'descending';
-
-const comparators: Record<SortColumn, (a: Project, b: Project) => number> = {
-  name: (a, b) => a.name.localeCompare(b.name),
-  owner: (a, b) => a.owner.localeCompare(b.owner),
-  status: (a, b) => a.status.localeCompare(b.status),
-  updated: (a, b) => a.updated.localeCompare(b.updated),
-};
-
-const statusColor: Record<ProjectStatus, 'success' | 'warning' | 'subtle'> = {
-  active: 'success',
-  paused: 'warning',
-  archived: 'subtle',
-};
-
-export const ProjectsTable = () => {
-  const [query, setQuery] = React.useState('');
-  const [status, setStatus] = React.useState<'all' | ProjectStatus>('all');
-  const [sort, setSort] = React.useState<{ column: SortColumn; direction: SortDirection } | null>(null);
-  const [selectedItems, setSelectedItems] = React.useState<Set<string | number>>(new Set<string | number>());
-
-  const rows = React.useMemo(() => {
-    const needle = query.trim().toLowerCase();
-
-    const filtered = projects.filter(
-      (project) =>
-        (status === 'all' || project.status === status) &&
-        (needle === '' ||
-          project.name.toLowerCase().includes(needle) ||
-          project.owner.toLowerCase().includes(needle)),
-    );
-
-    if (!sort) {
-      return filtered;
-    }
-
-    const sorted = [...filtered].sort(comparators[sort.column]);
-    return sort.direction === 'descending' ? sorted.reverse() : sorted;
-  }, [query, status, sort]);
-
-  const sortDirectionFor = (column: SortColumn): SortDirection | undefined =>
-    sort?.column === column ? sort.direction : undefined;
-
-  const clearFilters = () => {
-    setQuery('');
-    setStatus('all');
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <Input
-          aria-label="Filter projects"
-          placeholder="Filter by name or owner"
-          value={query}
-          onChange={(_ev, data) => setQuery(data.value)}
-        />
-        <Select
-          aria-label="Filter by status"
-          onChange={(_ev, data) => setStatus(data.value as 'all' | ProjectStatus)}
-        >
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="archived">Archived</option>
-        </Select>
-        <Text size={200}>{selectedItems.size} selected</Text>
-      </div>
-
-      <Table
-        aria-label="Projects"
-        sortable
-        selectionMode="multiselect"
-        onSortChange={(_ev, sortState) =>
-          setSort({ column: sortState.sortColumn as SortColumn, direction: sortState.sortDirection })
-        }
-        onSelectionChange={(_ev, data) => setSelectedItems(new Set<string | number>(data.selectedItems))}
-      >
-        <TableHeader>
-          <TableRow>
-            <TableSelectionCell type="checkbox" />
-            <TableHeaderCell sortable sortDirection={sortDirectionFor('name')}>
-              Name
-            </TableHeaderCell>
-            <TableHeaderCell sortable sortDirection={sortDirectionFor('owner')}>
-              Owner
-            </TableHeaderCell>
-            <TableHeaderCell sortable sortDirection={sortDirectionFor('status')}>
-              Status
-            </TableHeaderCell>
-            <TableHeaderCell sortable sortDirection={sortDirectionFor('updated')}>
-              Last updated
-            </TableHeaderCell>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={5}>
-                <TableCellLayout>
-                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                    <Text>No projects match the current filters.</Text>
-                    <Button appearance="secondary" onClick={clearFilters}>
-                      Clear filters
-                    </Button>
-                  </div>
-                </TableCellLayout>
-              </TableCell>
-            </TableRow>
-          ) : (
-            rows.map((project) => (
-              <TableRow key={project.id}>
-                <TableSelectionCell type="checkbox" />
-                <TableCell>
-                  <TableCellLayout truncate>{project.name}</TableCellLayout>
-                </TableCell>
-                <TableCell>
-                  <TableCellLayout truncate>{project.owner}</TableCellLayout>
-                </TableCell>
-                <TableCell>
-                  <TableCellLayout>
-                    <Badge appearance="tint" color={statusColor[project.status]}>
-                      {project.status}
-                    </Badge>
-                  </TableCellLayout>
-                </TableCell>
-                <TableCell>
-                  <TableCellLayout truncate>
-                    {new Date(project.updated).toLocaleDateString()}
-                  </TableCellLayout>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </div>
-  );
-};
-```
-
-### Compact table with rich cells, row actions, and pagination
-
-A read-only table with avatar + two-line person cells, badge presence indicators, a truncated email exposed via Tooltip, a subtle per-row action button, and client-side pagination with a range summary.
+A full client-side data table: typed columns created with createTableColumn, rich cells (Avatar, Badge, PresenceBadge), a filter Input, an empty state with MessageBar, multi-row selection with a bulk action, and sortable header cells that reorder the items passed to the grid.
 
 ```tsx
 import * as React from 'react';
-import { Avatar, Badge, Button, Table, TableBody, TableCell, TableCellLayout, TableHeader, TableHeaderCell, TableRow, Text, Tooltip } from '@fluentui/react-components';
+import {
+  Avatar,
+  Badge,
+  Button,
+  DataGrid,
+  DataGridBody,
+  DataGridCell,
+  DataGridHeader,
+  DataGridHeaderCell,
+  DataGridRow,
+  DataGridSelectionCell,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  PresenceBadge,
+  TableCellLayout,
+  Text,
+  createTableColumn,
+  type TableColumnDefinition,
+} from '@fluentui/react-components';
 
-type Presence = 'online' | 'away' | 'offline';
+type Presence = 'available' | 'away' | 'busy' | 'offline';
+type Access = 'Owner' | 'Contributor' | 'Viewer';
 
-interface Member {
+type TeamMember = {
   id: string;
   name: string;
   email: string;
   role: string;
+  team: string;
   presence: Presence;
-  joined: string;
-}
-
-const members: Member[] = [
-  { id: 'm-1', name: 'Katri Athokas', email: 'katri.athokas@contoso.com', role: 'Design engineer', presence: 'online', joined: '2022-02-14' },
-  { id: 'm-2', name: 'Ben Adams', email: 'ben.adams@contoso.com', role: 'Frontend engineer', presence: 'away', joined: '2021-09-01' },
-  { id: 'm-3', name: 'Carole Poland', email: 'carole.poland@contoso.com', role: 'Program manager', presence: 'offline', joined: '2020-11-23' },
-  { id: 'm-4', name: 'Diego Siciliani', email: 'diego.siciliani@contoso.com', role: 'Accessibility lead', presence: 'online', joined: '2023-03-30' },
-  { id: 'm-5', name: 'Isaiah Langer', email: 'isaiah.langer@contoso.com', role: 'Product designer', presence: 'online', joined: '2019-07-08' },
-  { id: 'm-6', name: 'Jane Doe', email: 'jane.doe@contoso.com', role: 'Data scientist', presence: 'away', joined: '2024-01-05' },
-];
-
-const PAGE_SIZE = 4;
-
-const presenceColor: Record<Presence, 'success' | 'warning' | 'subtle'> = {
-  online: 'success',
-  away: 'warning',
-  offline: 'subtle',
+  access: Access;
+  lastActive: string;
 };
 
-export const TeamRoster = () => {
-  const [page, setPage] = React.useState(0);
-  const [lastViewed, setLastViewed] = React.useState<string | null>(null);
+const teamMembers: TeamMember[] = [
+  {
+    id: 'ada',
+    name: 'Ada Lovelace',
+    email: 'ada@contoso.com',
+    role: 'Principal Engineer',
+    team: 'Platform',
+    presence: 'available',
+    access: 'Owner',
+    lastActive: '2 minutes ago',
+  },
+  {
+    id: 'grace',
+    name: 'Grace Hopper',
+    email: 'grace@contoso.com',
+    role: 'Staff Engineer',
+    team: 'Compilers',
+    presence: 'busy',
+    access: 'Contributor',
+    lastActive: '1 hour ago',
+  },
+  {
+    id: 'margaret',
+    name: 'Margaret Hamilton',
+    email: 'margaret@contoso.com',
+    role: 'Engineering Manager',
+    team: 'Flight Software',
+    presence: 'available',
+    access: 'Owner',
+    lastActive: '5 minutes ago',
+  },
+  {
+    id: 'linus',
+    name: 'Linus Torvalds',
+    email: 'linus@contoso.com',
+    role: 'Engineer',
+    team: 'Kernel',
+    presence: 'away',
+    access: 'Contributor',
+    lastActive: 'Yesterday',
+  },
+  {
+    id: 'alan',
+    name: 'Alan Turing',
+    email: 'alan@contoso.com',
+    role: 'Researcher',
+    team: 'Algorithms',
+    presence: 'offline',
+    access: 'Viewer',
+    lastActive: '3 days ago',
+  },
+];
 
-  const pageCount = Math.max(1, Math.ceil(members.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount - 1);
-  const firstIndex = currentPage * PAGE_SIZE;
-  const pageMembers = members.slice(firstIndex, firstIndex + PAGE_SIZE);
+const accessColor: Record<Access, 'brand' | 'informative' | 'subtle'> = {
+  Owner: 'brand',
+  Contributor: 'informative',
+  Viewer: 'subtle',
+};
+
+const columns: TableColumnDefinition<TeamMember>[] = [
+  createTableColumn<TeamMember>({
+    columnId: 'name',
+    compare: (a, b) => a.name.localeCompare(b.name),
+    renderHeaderCell: () => 'Name',
+    renderCell: (member) => (
+      <TableCellLayout media={<Avatar name={member.name} size={32} />}>{member.name}</TableCellLayout>
+    ),
+  }),
+  createTableColumn<TeamMember>({
+    columnId: 'role',
+    compare: (a, b) => a.role.localeCompare(b.role),
+    renderHeaderCell: () => 'Role',
+    renderCell: (member) => <TableCellLayout description={member.email}>{member.role}</TableCellLayout>,
+  }),
+  createTableColumn<TeamMember>({
+    columnId: 'team',
+    compare: (a, b) => a.team.localeCompare(b.team),
+    renderHeaderCell: () => 'Team',
+    renderCell: (member) => member.team,
+  }),
+  createTableColumn<TeamMember>({
+    columnId: 'access',
+    compare: (a, b) => a.access.localeCompare(b.access),
+    renderHeaderCell: () => 'Access',
+    renderCell: (member) => (
+      <Badge appearance="tint" color={accessColor[member.access]}>
+        {member.access}
+      </Badge>
+    ),
+  }),
+  createTableColumn<TeamMember>({
+    columnId: 'presence',
+    compare: (a, b) => a.presence.localeCompare(b.presence),
+    renderHeaderCell: () => 'Status',
+    renderCell: (member) => (
+      <TableCellLayout description={member.lastActive}>
+        <PresenceBadge status={member.presence} />
+      </TableCellLayout>
+    ),
+  }),
+];
+
+type SortDirection = 'ascending' | 'descending';
+
+type SortState = {
+  columnId: string | number | undefined;
+  direction: SortDirection;
+};
+
+export const TeamDirectory = () => {
+  const [query, setQuery] = React.useState('');
+  const [selectedRows, setSelectedRows] = React.useState<Set<string | number>>(new Set());
+  const [sortState, setSortState] = React.useState<SortState>({ columnId: 'name', direction: 'ascending' });
+
+  const filteredItems = React.useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) {
+      return teamMembers;
+    }
+    return teamMembers.filter((member) =>
+      [member.name, member.email, member.role, member.team].some((value) => value.toLowerCase().includes(term)),
+    );
+  }, [query]);
+
+  const items = React.useMemo(() => {
+    const column = columns.find((candidate) => candidate.columnId === sortState.columnId);
+    const compare = column?.compare;
+    if (!compare) {
+      return filteredItems;
+    }
+    const sorted = [...filteredItems].sort(compare);
+    return sortState.direction === 'ascending' ? sorted : sorted.reverse();
+  }, [filteredItems, sortState]);
+
+  const toggleSort = (columnId: string | number) => {
+    setSortState((previous) => ({
+      columnId,
+      direction: previous.columnId === columnId && previous.direction === 'ascending' ? 'descending' : 'ascending',
+    }));
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <Table aria-label="Team roster">
-        <TableHeader>
-          <TableRow>
-            <TableHeaderCell>Member</TableHeaderCell>
-            <TableHeaderCell>Role</TableHeaderCell>
-            <TableHeaderCell>Presence</TableHeaderCell>
-            <TableHeaderCell>Joined</TableHeaderCell>
-            <TableHeaderCell>Actions</TableHeaderCell>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {pageMembers.map((member) => (
-            <TableRow key={member.id}>
-              <TableCell>
-                <TableCellLayout truncate>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Avatar name={member.name} size={28} />
-                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                      <Text weight="semibold" truncate>
-                        {member.name}
-                      </Text>
-                      <Tooltip content={member.email} relationship="description">
-                        <Text size={200} truncate>
-                          {member.email}
-                        </Text>
-                      </Tooltip>
-                    </div>
-                  </div>
-                </TableCellLayout>
-              </TableCell>
-              <TableCell>
-                <TableCellLayout truncate>{member.role}</TableCellLayout>
-              </TableCell>
-              <TableCell>
-                <TableCellLayout>
-                  <Badge appearance="tint" color={presenceColor[member.presence]}>
-                    {member.presence}
-                  </Badge>
-                </TableCellLayout>
-              </TableCell>
-              <TableCell>
-                <TableCellLayout truncate>
-                  {new Date(member.joined).toLocaleDateString()}
-                </TableCellLayout>
-              </TableCell>
-              <TableCell>
-                <TableCellLayout>
-                  <Button appearance="subtle" onClick={() => setLastViewed(member.name)}>
-                    View
-                  </Button>
-                </TableCellLayout>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <Text size={200}>
-          Showing {firstIndex + 1}-{Math.min(firstIndex + PAGE_SIZE, members.length)} of {members.length}
-        </Text>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button appearance="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
-            Previous
-          </Button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <Input
+          aria-label="Filter team members"
+          placeholder="Filter by name, email, role or team"
+          value={query}
+          onChange={(_event, data) => setQuery(data.value)}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Text>{selectedRows.size} selected</Text>
           <Button
-            appearance="secondary"
-            disabled={currentPage >= pageCount - 1}
-            onClick={() => setPage(currentPage + 1)}
+            appearance="primary"
+            disabled={selectedRows.size === 0}
+            onClick={() => {
+              // Run your bulk action here; read the row ids from `selectedRows`.
+            }}
           >
-            Next
+            Assign to project
           </Button>
         </div>
       </div>
 
-      {lastViewed ? <Text size={200}>Last viewed: {lastViewed}</Text> : null}
+      {items.length === 0 ? (
+        <MessageBar intent="info">
+          <MessageBarBody>No team members match "{query}".</MessageBarBody>
+        </MessageBar>
+      ) : (
+        <DataGrid
+          items={items}
+          columns={columns}
+          sortable
+          getRowId={(member) => member.id}
+          selectionMode="multiselect"
+          onSelectionChange={(_event, data) => setSelectedRows(data.selectedItems)}
+          onSortChange={(_event, nextSortState) =>
+            setSortState({
+              columnId: nextSortState.sortColumn,
+              direction: nextSortState.sortDirection ?? 'ascending',
+            })
+          }
+        >
+          <DataGridHeader>
+            <DataGridRow selectionCell={<DataGridSelectionCell type="checkbox" />}>
+              {({ renderHeaderCell, columnId }) => (
+                <DataGridHeaderCell
+                  sortable
+                  sortDirection={sortState.columnId === columnId ? sortState.direction : undefined}
+                  onClick={() => toggleSort(columnId)}
+                >
+                  {renderHeaderCell()}
+                </DataGridHeaderCell>
+              )}
+            </DataGridRow>
+          </DataGridHeader>
+          <DataGridBody<TeamMember>>
+            {({ item, rowId }) => (
+              <DataGridRow<TeamMember> key={rowId} selectionCell={<DataGridSelectionCell type="checkbox" />}>
+                {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+              </DataGridRow>
+            )}
+          </DataGridBody>
+        </DataGrid>
+      )}
     </div>
   );
 };
 ```
 
-### Loading and empty states inside the table body
+### Row action menus and a details dialog (DataGrid)
 
-Async data with a Spinner row while loading and an explanatory full-width row when there is nothing to show, keeping the header and column widths stable throughout.
+A project portfolio grid whose action column renders a Menu per row and whose 'View details' item opens a controlled Dialog inside a DialogSurface. Shows focusMode="group" for cells that contain controls and per-row aria-labels for the menu trigger.
 
 ```tsx
 import * as React from 'react';
-import { Spinner, Table, TableBody, TableCell, TableCellLayout, TableHeader, TableHeaderCell, TableRow, Text } from '@fluentui/react-components';
+import {
+  Avatar,
+  Badge,
+  Button,
+  DataGrid,
+  DataGridBody,
+  DataGridCell,
+  DataGridHeader,
+  DataGridHeaderCell,
+  DataGridRow,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  Divider,
+  Menu,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+  TableCellLayout,
+  Text,
+  createTableColumn,
+  type TableColumnDefinition,
+} from '@fluentui/react-components';
 
-interface Deployment {
+type ProjectStatus = 'On track' | 'At risk' | 'Blocked';
+
+type Project = {
   id: string;
-  environment: string;
-  version: string;
-  status: string;
-}
+  name: string;
+  owner: string;
+  ownerEmail: string;
+  status: ProjectStatus;
+  dueDate: string;
+  budget: string;
+};
 
-const loadDeployments = (): Promise<Deployment[]> =>
-  new Promise((resolve) => {
-    setTimeout(() => {
-      resolve([
-        { id: 'd-1', environment: 'Production', version: '9.46.0', status: 'Succeeded' },
-        { id: 'd-2', environment: 'Staging', version: '9.47.0-rc.1', status: 'Running' },
-        { id: 'd-3', environment: 'Canary', version: '9.47.0-rc.1', status: 'Queued' },
-      ]);
-    }, 1200);
-  });
+const projects: Project[] = [
+  {
+    id: 'atlas',
+    name: 'Atlas Replatform',
+    owner: 'Priya Nair',
+    ownerEmail: 'priya@contoso.com',
+    status: 'On track',
+    dueDate: 'Mar 14',
+    budget: '$420k',
+  },
+  {
+    id: 'beacon',
+    name: 'Beacon Mobile App',
+    owner: 'Marcus Reid',
+    ownerEmail: 'marcus@contoso.com',
+    status: 'At risk',
+    dueDate: 'Apr 02',
+    budget: '$265k',
+  },
+  {
+    id: 'cascade',
+    name: 'Cascade Data Migration',
+    owner: 'Dana Whitfield',
+    ownerEmail: 'dana@contoso.com',
+    status: 'Blocked',
+    dueDate: 'Mar 28',
+    budget: '$180k',
+  },
+];
 
-export const DeploymentsTable = () => {
-  const [deployments, setDeployments] = React.useState<Deployment[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
+const statusColor: Record<ProjectStatus, 'success' | 'warning' | 'danger'> = {
+  'On track': 'success',
+  'At risk': 'warning',
+  Blocked: 'danger',
+};
 
-  React.useEffect(() => {
-    let cancelled = false;
+export const ProjectPortfolio = () => {
+  const [details, setDetails] = React.useState<Project | null>(null);
 
-    loadDeployments().then((result) => {
-      if (!cancelled) {
-        setDeployments(result);
-        setIsLoading(false);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const columns: TableColumnDefinition<Project>[] = [
+    createTableColumn<Project>({
+      columnId: 'name',
+      compare: (a, b) => a.name.localeCompare(b.name),
+      renderHeaderCell: () => 'Project',
+      renderCell: (project) => (
+        <TableCellLayout media={<Avatar name={project.owner} />} description={project.owner}>
+          {project.name}
+        </TableCellLayout>
+      ),
+    }),
+    createTableColumn<Project>({
+      columnId: 'status',
+      compare: (a, b) => a.status.localeCompare(b.status),
+      renderHeaderCell: () => 'Status',
+      renderCell: (project) => (
+        <Badge appearance="tint" color={statusColor[project.status]}>
+          {project.status}
+        </Badge>
+      ),
+    }),
+    createTableColumn<Project>({
+      columnId: 'dueDate',
+      compare: (a, b) => a.dueDate.localeCompare(b.dueDate),
+      renderHeaderCell: () => 'Due date',
+      renderCell: (project) => project.dueDate,
+    }),
+    createTableColumn<Project>({
+      columnId: 'budget',
+      renderHeaderCell: () => 'Budget',
+      renderCell: (project) => project.budget,
+    }),
+    createTableColumn<Project>({
+      columnId: 'actions',
+      renderHeaderCell: () => 'Actions',
+      renderCell: (project) => (
+        <Menu>
+          <MenuTrigger disableButtonEnhancement>
+            <Button appearance="subtle" aria-label={`More actions for ${project.name}`}>
+              Actions
+            </Button>
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              <MenuItem onClick={() => setDetails(project)}>View details</MenuItem>
+              <MenuItem>Duplicate</MenuItem>
+              <MenuItem>Archive</MenuItem>
+            </MenuList>
+          </MenuPopover>
+        </Menu>
+      ),
+    }),
+  ];
 
   return (
-    <Table aria-label="Deployments">
-      <TableHeader>
-        <TableRow>
-          <TableHeaderCell>Environment</TableHeaderCell>
-          <TableHeaderCell>Version</TableHeaderCell>
-          <TableHeaderCell>Status</TableHeaderCell>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {isLoading ? (
-          <TableRow>
-            <TableCell colSpan={3}>
-              <TableCellLayout>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Spinner size="tiny" />
-                  <Text>Loading deployments...</Text>
-                </div>
-              </TableCellLayout>
-            </TableCell>
-          </TableRow>
-        ) : deployments.length === 0 ? (
-          <TableRow>
-            <TableCell colSpan={3}>
-              <TableCellLayout>
-                <Text>No deployments yet. Push to the main branch to trigger one.</Text>
-              </TableCellLayout>
-            </TableCell>
-          </TableRow>
-        ) : (
-          deployments.map((deployment) => (
-            <TableRow key={deployment.id}>
-              <TableCell>
-                <TableCellLayout truncate>{deployment.environment}</TableCellLayout>
-              </TableCell>
-              <TableCell>
-                <TableCellLayout truncate>{deployment.version}</TableCellLayout>
-              </TableCell>
-              <TableCell>
-                <TableCellLayout truncate>{deployment.status}</TableCellLayout>
-              </TableCell>
-            </TableRow>
-          ))
-        )}
-      </TableBody>
-    </Table>
+    <>
+      <DataGrid items={projects} columns={columns} getRowId={(project) => project.id}>
+        <DataGridHeader>
+          <DataGridRow>
+            {({ renderHeaderCell }) => <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>}
+          </DataGridRow>
+        </DataGridHeader>
+        <DataGridBody<Project>>
+          {({ item, rowId }) => (
+            <DataGridRow<Project> key={rowId}>
+              {({ renderCell }) => <DataGridCell focusMode="group">{renderCell(item)}</DataGridCell>}
+            </DataGridRow>
+          )}
+        </DataGridBody>
+      </DataGrid>
+
+      <Dialog
+        open={details !== null}
+        onOpenChange={(_event, data) => {
+          if (!data.open) {
+            setDetails(null);
+          }
+        }}
+      >
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>{details?.name ?? 'Project details'}</DialogTitle>
+            <DialogContent>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <Text weight="semibold">{details?.status}</Text>
+                <Text>
+                  Owner: {details?.owner} ({details?.ownerEmail})
+                </Text>
+                <Divider />
+                <Text>
+                  Due {details?.dueDate} · Budget {details?.budget}
+                </Text>
+              </div>
+            </DialogContent>
+            <DialogActions>
+              <DialogTrigger disableButtonEnhancement>
+                <Button appearance="secondary">Close</Button>
+              </DialogTrigger>
+              <Button appearance="primary" onClick={() => setDetails(null)}>
+                Open workspace
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+    </>
   );
 };
 ```
 
+### Read-only flight board (static Table)
+
+The same rich-cell styling without grid interactivity: Table, TableHeader, TableRow, TableHeaderCell, TableBody, TableCell, TableCellLayout and hover-revealed TableCellActions — the right choice when there is no sorting, selection or grid keyboard navigation to support.
+
+```tsx
+import {
+  Avatar,
+  Badge,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableCellActions,
+  TableCellLayout,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
+} from '@fluentui/react-components';
+
+type FlightStatus = 'On time' | 'Boarding' | 'Delayed';
+
+type Flight = {
+  id: string;
+  number: string;
+  airline: string;
+  route: string;
+  departure: string;
+  gate: string;
+  status: FlightStatus;
+};
+
+const flights: Flight[] = [
+  {
+    id: 'ba118',
+    number: 'BA 118',
+    airline: 'British Airways',
+    route: 'LHR → JFK',
+    departure: '09:40',
+    gate: 'A12',
+    status: 'Boarding',
+  },
+  {
+    id: 'af1680',
+    number: 'AF 1680',
+    airline: 'Air France',
+    route: 'CDG → BER',
+    departure: '11:05',
+    gate: 'C3',
+    status: 'On time',
+  },
+  {
+    id: 'lh441',
+    number: 'LH 441',
+    airline: 'Lufthansa',
+    route: 'FRA → ORD',
+    departure: '12:25',
+    gate: 'B7',
+    status: 'Delayed',
+  },
+];
+
+const statusColor: Record<FlightStatus, 'informative' | 'success' | 'warning'> = {
+  'On time': 'success',
+  Boarding: 'informative',
+  Delayed: 'warning',
+};
+
+export const FlightBoard = () => (
+  <Table aria-label="Flights departing today">
+    <TableHeader>
+      <TableRow>
+        <TableHeaderCell>Flight</TableHeaderCell>
+        <TableHeaderCell>Route</TableHeaderCell>
+        <TableHeaderCell>Departure</TableHeaderCell>
+        <TableHeaderCell>Gate</TableHeaderCell>
+        <TableHeaderCell>Status</TableHeaderCell>
+        <TableHeaderCell>Actions</TableHeaderCell>
+      </TableRow>
+    </TableHeader>
+    <TableBody>
+      {flights.map((flight) => (
+        <TableRow key={flight.id}>
+          <TableCell>
+            <TableCellLayout media={<Avatar name={flight.airline} shape="square" />} description={flight.airline}>
+              {flight.number}
+            </TableCellLayout>
+          </TableCell>
+          <TableCell>{flight.route}</TableCell>
+          <TableCell>{flight.departure}</TableCell>
+          <TableCell>{flight.gate}</TableCell>
+          <TableCell>
+            <Badge appearance="tint" color={statusColor[flight.status]}>
+              {flight.status}
+            </Badge>
+          </TableCell>
+          <TableCell>
+            <TableCellActions>
+              <Button appearance="subtle" size="small" aria-label={`Check in for flight ${flight.number}`}>
+                Check in
+              </Button>
+            </TableCellActions>
+          </TableCell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </Table>
+);
+```
+
 ## Pitfalls
 
-- Sorting or filtering the source array in place: `rows.sort(...)` mutates the array you treat as your source of truth. Always copy first - `[...filtered].sort(comparators[column])` - and reverse the copy for descending order.
-- Using the array index as the React `key` (or as the row id for selection): as soon as rows are sorted, filtered, or paginated, an index no longer identifies the same record, so selection and reconciliation drift. Use a stable `record.id`.
-- Forgetting to feed `sortDirection` back into `TableHeaderCell`: the indicator then disagrees with the order of the data you render, which is worse than showing no indicator. Derive `sortDirection` from the exact state object you used to sort the rows.
-- Marking non-sortable columns as `sortable`, or leaving the sort behavior on the table but rendering header text in a plain `TableCell`: sort affordances must be `TableHeaderCell sortable` inside a `sortable` `Table` so the toggle is routed through `onSortChange`.
-- Rendering an empty `TableBody` when a filter matches nothing: the user sees a header with no explanation. Render one row whose `TableCell` spans every column (`colSpan`) with a message, plus a recovery `Button` when filters caused the emptiness.
-- Placing interactive controls inside a selectable row without `event.stopPropagation()`: the click bubbles to the row and toggles selection as a side effect of pressing the row action.
-- Trying to reset selection through props: the `Table` owns selection state and reports changes through `onSelectionChange`. Mirror `data.selectedItems` into your own state for counts and bulk-action UI instead of writing it back; if you need full control, render your own `Checkbox` in a `TableCell` and own the state end to end.
-- Letting a single long value dictate column widths: wrap text cells in `TableCellLayout truncate` and expose the full value through a `Tooltip` or `title` rather than letting the table scroll horizontally.
-- Sorting or filtering only the current page: sort and filter the full set first, then slice for pagination, otherwise the next page shows rows in an order unrelated to the header indicator. Clamp the page index so a shrinking result set cannot leave you on an out-of-range page.
+- Missing or unstable row identity: always pass getRowId and set key={rowId} on DataGridRow. Without a unique id, selection and sorting attach to the wrong row and React logs key warnings.
+- Half-wired selection: selectionCell={<DataGridSelectionCell type="checkbox" />} must be on the header DataGridRow (select-all) AND on every body DataGridRow. Putting it inside renderCell, or omitting it from the header, leaves the selection column partially wired.
+- Showing the sort glyph without reordering: header cells only render the affordance when marked sortable, and a sort direction that does not match the items array is a lie. The grid renders exactly the array you pass, so sort a copy and pass the sorted result (mirror onSortChange back into that state).
+- Sorting in place: items.sort(compare) mutates the array you were given and reverse() mutates too. Spread first (`[...items].sort(compare)`) and reverse the copy, otherwise unrelated state or props change behind your back.
+- Memoized columns closing over stale values: if the column array lives in React.useMemo, list every value its renderCell functions read (selection, sort state, callbacks, translated labels) or cells will render old data — or define the columns inside the component, as the portfolio example does.
+- Skipping the item generic: type the render functions with the row type (`<DataGridBody<Item>>` and `<DataGridRow<Item>>`) so renderCell(item) is typed; without it, item is untyped and cell bugs surface at runtime.
+- No empty state: with zero items the grid still renders its header, which looks broken. Branch before the grid and show a MessageBar (or a single empty row).
+- Controls without focus grooming: cells that contain buttons or menus should set focusMode="group" on DataGridCell so the cell is a single focus target, and every trigger needs an aria-label that names the row — otherwise keyboard and screen reader users must tab through every control of every row.
 
 ## Accessibility
 
-Always name the table: pass `aria-label` (or `aria-labelledby`) to `Table`, otherwise assistive technology announces an unnamed table and users cannot tell which list they landed in. Render column headers with `TableHeaderCell` (a real `th`) instead of styling a body cell - screen reader table navigation depends on it. Filter controls need their own accessible names: a `placeholder` is not a label, so pass `aria-label` to `Input` and `Select` (or associate a visible `Label`). Selection is handled by `TableSelectionCell`, which renders the checkbox/radio affordance and keeps the checked state in sync with the table's selection model; if you hand-roll selection with `Checkbox` inside a `TableCell` instead, give each one a unique `aria-label` such as `Select ${row.name}`. Never encode status in color alone - the `Badge` examples always render the status text next to the tint. Truncated values are visually clipped, so expose the full value (a `Tooltip` as in the roster example, or a `title` attribute) and never truncate the only copy of essential information. Loading and empty states are rendered as text inside the body so they are announced in place of the missing rows; pair a `Spinner` with a sentence rather than relying on the animation. Keep row actions as real focusable `Button`s, and when a row is also selectable call `event.stopPropagation()` in the action handler so activating the button does not toggle row selection. Because sortable header cells report their state through `sortDirection`, the current sort is exposed to assistive technology without extra markup. If you add pagination, keep the Previous/Next buttons disabled (not hidden) at the ends so the control set stays predictable for keyboard users.
+Give every table an accessible name: aria-label on DataGrid / Table, or an aria-labelledby pointing at a visible heading.
+
+Selection: the grid renders the checkbox (or radio) affordance and exposes select-all on the header row. Keep the selection cell as the first cell of every row so row and column counts stay predictable, and treat data.selectedItems as read-only — replace the whole Set instead of mutating it.
+
+Sorting: expose the state through the header cell (sortable plus sortDirection) so the announced sort state matches reality and the sort control stays keyboard operable. Do not hand-roll an icon-only click target for sorting.
+
+Rows with controls: use focusMode="group" on DataGridCell so keyboard users land on the cell instead of tabbing through every control in every row, and label generic or icon-only triggers with the row identity (aria-label={`More actions for ${project.name}`}) — repeated unlabeled "Actions" buttons are noise for screen reader users.
+
+Announce state changes: render a MessageBar when a bulk action completes or a filter matches nothing, and reserve politeness="assertive" for errors.
+
+Never encode status with color alone — the Badge and PresenceBadge cells in this recipe always carry a text label ("On track", "Blocked", "Viewer"), and the Avatar is paired with a visible name.
+
+The details Dialog moves focus into the surface and returns it to the trigger when it closes; keep the trigger mounted while the dialog is open and avoid opening it from inside a keyboard trap.
 
 ## Components used
 
-- [Table](../../components/table.md)
 - [Avatar](../../components/avatar.md)
 - [Badge](../../components/badge.md)
 - [Button](../../components/button.md)
+- [DataGrid](../../components/data-grid.md)
+- [DataGridBody](../../components/data-grid-body.md)
+- [DataGridCell](../../components/data-grid-cell.md)
+- [DataGridHeader](../../components/data-grid-header.md)
+- [DataGridHeaderCell](../../components/data-grid-header-cell.md)
+- [DataGridRow](../../components/data-grid-row.md)
+- [DataGridSelectionCell](../../components/data-grid-selection-cell.md)
+- [Dialog](../../components/dialog.md)
+- [DialogActions](../../components/dialog-actions.md)
+- [DialogBody](../../components/dialog-body.md)
+- [DialogContent](../../components/dialog-content.md)
+- [DialogSurface](../../components/dialog-surface.md)
+- [DialogTitle](../../components/dialog-title.md)
+- [DialogTrigger](../../components/dialog-trigger.md)
+- [Divider](../../components/divider.md)
 - [Input](../../components/input.md)
-- [Select](../../components/select.md)
-- [Spinner](../../components/spinner.md)
+- [Menu](../../components/menu.md)
+- [MenuItem](../../components/menu-item.md)
+- [MenuList](../../components/menu-list.md)
+- [MenuPopover](../../components/menu-popover.md)
+- [MenuTrigger](../../components/menu-trigger.md)
+- [MessageBar](../../components/message-bar.md)
+- [MessageBarBody](../../components/message-bar-body.md)
+- [PresenceBadge](../../components/presence-badge.md)
+- [Table](../../components/table.md)
+- [TableBody](../../components/table-body.md)
+- [TableCell](../../components/table-cell.md)
+- [TableCellActions](../../components/table-cell-actions.md)
+- [TableCellLayout](../../components/table-cell-layout.md)
+- [TableHeader](../../components/table-header.md)
+- [TableHeaderCell](../../components/table-header-cell.md)
+- [TableRow](../../components/table-row.md)
 - [Text](../../components/text.md)
-- [Tooltip](../../components/tooltip.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

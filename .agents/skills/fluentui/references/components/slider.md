@@ -7,9 +7,9 @@
 
 ## Overview
 
-Slider is a form input that lets users select a single numeric value by dragging a thumb along a rail or by using the keyboard. It renders a root element containing a rail (the visual track showing the selectable min-to-max range), a draggable thumb, and a hidden native range input that carries the form semantics. The value is bounded by min and max, can be constrained to discrete increments with step, and can be laid out horizontally or vertically. Slider supports both uncontrolled usage through defaultValue and fully controlled usage through value plus onChange, and it ships in small and medium sizes.
+Slider is a form input that lets a person select a single numeric value from a continuous or stepped range by dragging a thumb along a rail, clicking anywhere on the rail, or using the keyboard. It renders as a compound component with four slots: a root wrapper, a rail that visually communicates the minimum and maximum bounds, a draggable thumb that carries the slider role semantics, and a hidden native input that is the primary slot — meaning every native HTML attribute placed on the Slider (such as id, name, form, aria-label, onFocus, or data attributes) is forwarded to that input, while className and style stay on the root. The component supports both controlled usage through value plus onChange and uncontrolled usage through defaultValue, along with min, max, step, size, disabled, and vertical orientation. It is intended for approximate, relative adjustments (volume, brightness, zoom, price range, opacity) rather than precise numeric entry.
 
-**When to use**: Use Slider when the precise numeric value matters less than the relative position within a range and when adjusting should feel immediate and continuous — volume, brightness, zoom level, opacity, or a weight in a range. It is a good fit for settings panels and media controls where users explore values interactively. Prefer Spinbutton or Input when users must enter an exact number, when the range has no meaningful intermediate values, or when the value must be typed precisely. Prefer Select or Radio when there are only a handful of discrete named options, Switch for binary on/off states, and Rating when the scale is a subjective star-style judgement. Because Slider always needs a visible label to be understandable, it is best used in a labeled form row rather than as a standalone floating control.
+**When to use**: Use Slider when the exact number matters less than the relative position within a range and you want the adjustment to feel direct and continuous — for example volume, brightness, opacity, zoom level, playback position, or a budget/price filter. Use it when an immediate visual preview of the effect is valuable, since dragging gives live feedback before the person commits. Prefer SpinButton or Input when the user must enter or read an exact value with precision (quantities, IDs, currency amounts, coordinates), because typing is faster and less error-prone than dragging for exact numbers. Prefer Rating or RatingDisplay for discrete opinion scales, RadioGroup or Select for a small set of named, non-numeric choices, and Switch or Checkbox when the choice is binary. Slider is most valuable when paired with a Label and, ideally, a live readout of the current value.
 
 ## Props Reference
 
@@ -27,15 +27,15 @@ Slider is a form input that lets users select a single numeric value by dragging
 
 ### Prop Guidance
 
-- **defaultValue**: Use for an uncontrolled Slider where the component owns the value and you only need the initial position. Mutually exclusive with value. Ideal for simple settings that are read on submit rather than tracked in React state. `20`
-- **value**: Use when the parent owns the state and needs to react to every change, such as synchronizing the slider with a numeric readout or another control. Must be paired with onChange, and must not be combined with defaultValue. `160`
-- **onChange**: Fires on every individual step of a drag or key press and receives the change event plus a data object whose value is the new number. Use it to update controlled state or to reflect the value elsewhere, and keep the handler light because it runs very frequently during dragging. `(ev, data) => setSliderValue(data.value)`
-- **min**: Sets the lowest selectable value and therefore the left edge of a horizontal rail or the bottom edge of a vertical rail. Defaults to 0. Set it to the true lower bound of the domain so the rail's position carries meaning. `20`
-- **max**: Sets the highest selectable value and therefore the right edge of a horizontal rail or the top edge of a vertical rail. Defaults to 100. Always keep it larger than min, and verify that the span is divisible by step so the maximum is actually reachable. `200`
-- **step**: Controls the increment between selectable values; the slider snaps to the closest available value on drag and moves by this amount on each arrow press. Must be a positive number. Choose a step that divides the range evenly to avoid unreachable endpoints. `3`
-- **size**: Selects the visual scale of the rail and thumb. medium is the default and should be used in standard forms and touch-friendly layouts; small is for dense surfaces such as filter panels where vertical space is at a premium. `small`
-- **vertical**: Renders the slider along the block axis with the smallest value at the bottom and the largest at the top. Use it when the layout is column-oriented or when pairing the slider with a vertically aligned visual, and remember to give the container a defined height. `true`
-- **disabled**: Renders the slider as unavailable: it does not respond to clicks, dragging, or keyboard input, and no change events fire. Use it while a dependent choice is unresolved, and pair it with visible text explaining what must happen first. `true`
+- **value**: Use for a controlled Slider where the value lives in state, a store, or a form library. Mutually exclusive with defaultValue, and it must be updated in onChange or the control will appear frozen and revert visually. Pair it with aria-valuetext when the displayed value needs wording or units. `value with onChange updating state`
+- **defaultValue**: Use for an uncontrolled Slider whose value only needs to be read on submit or is otherwise not driven by parent state. This avoids re-rendering the parent on every step and is the simplest option for settings panels. Must fall within min and max and, when step is set, snap to the nearest legal step. `defaultValue set to 20 on a 0-100 range`
+- **onChange**: Fires on every individual step — during dragging and on each arrow-key press — and receives the event plus a data object containing the new value. Keep the handler cheap and store the value in state when the Slider is controlled. Do not perform expensive side effects such as network calls here. `onChange that reads the new value from the second argument`
+- **min**: Sets the lowest selectable value. Keep it consistent with the meaning of the data — 0 for percentages, negative values only when negatives are legitimate. Must be less than max. Pair visible bounds with aria-hidden Labels when showing numbers next to the rail. `min set to 10`
+- **max**: Sets the highest selectable value. Together with min it defines the range that the rail represents and that aria-valuemin/aria-valuemax announce, so choose round, meaningful endpoints. Must be greater than min. `max set to 50`
+- **step**: Controls the increment size and the snapping granularity. Must be a positive number; use larger steps (for example 5 or 10) when fine precision is not useful, and keep step a divisor of the min-to-max span so the endpoints are reachable. When step is provided the value snaps to the closest available step. `step set to 3 on a 0-12 range`
+- **size**: Chooses between medium, the default, and small for denser surfaces such as toolbars, side panels, and compact property grids. Size changes only visual scale, not behavior or range. `size set to small`
+- **disabled**: Renders the Slider non-interactive; it will not change or fire events on click or keyboard press. Use it for temporarily unavailable settings, and communicate why the setting is unavailable in nearby text rather than relying on the dimmed appearance alone. `disabled with a defaultValue of 30`
+- **vertical**: Renders the Slider bottom-to-top with the smallest value at the bottom, which suits volume faders, mixers, and dashboards. Reserve vertical orientation for cases where the surrounding layout is vertical, and make sure the containing element gives it a defined height, since a vertical Slider in an auto-height container has nothing to stretch into. `vertical on a 0-10 range`
 
 ### Slots
 
@@ -143,103 +143,110 @@ Disabled.parameters = {
 
 ### Do's
 
-- Pair the Slider with a visible Label whose htmlFor matches the id passed to the Slider; the id is applied to the primary input slot, so the label correctly names the control.
-- Use defaultValue for uncontrolled sliders and value only when the parent component owns the state — never both at once.
-- Set min and max to the real domain of the value so the rail communicates meaningful endpoints rather than an arbitrary 0–100 scale.
-- Choose a step that divides the span of the range evenly so every intended value is reachable by dragging and by keyboard.
-- Provide aria-valuetext when the raw number needs units or formatting (for example a currency or percentage reading) so assistive technology announces something meaningful.
-- Use vertical when the slider sits beside a chart, in a compact toolbar, or in a column layout where vertical space is plentiful and horizontal space is tight.
-- Keep the default medium size for most form rows and switch to small only in genuinely dense interfaces such as filter sidebars or table headers.
-- Read the new number from the onChange data argument rather than from the event target, and clamp or round it yourself when persisting controlled state.
+- Always give the Slider an accessible name: render a Label with htmlFor pointing at the same id passed to the Slider, or supply aria-label / aria-labelledby directly, since the id lands on the primary input slot.
+- Choose min, max, and step so that the default and every reachable value are meaningful — for example step of 5 on a 0-100 percentage scale rather than step of 1 when precision is irrelevant.
+- Provide a human-readable readout of the current value next to the slider (or in the label itself) so users, including those who cannot see the thumb position, know what they selected.
+- Use aria-valuetext when the raw number is not self-explanatory — the Controlled example sets aria-valuetext to a phrase describing the value so screen readers announce units or context instead of a bare integer.
+- Add context around min and max in custom layouts by rendering the numeric bounds as separate Labels marked aria-hidden, as the MinMax example does, so the bounds are visible without being announced twice.
+- Pick size to match the density of the surrounding UI — medium for standard forms and small for toolbars, side panels, or compact settings lists.
+- Prefer defaultValue for sliders whose value only matters at submit time; this keeps the component uncontrolled and avoids re-rendering the parent on every step.
+- Keep onChange handlers lightweight; move expensive work such as network requests or heavy recomputation to a commit action (a Button, or a debounced effect) rather than doing it on each step.
 
 ### Don'ts
 
-- Don't pass value and defaultValue together — they are mutually exclusive and the component will warn, since it cannot be both controlled and uncontrolled.
-- Don't pass a step of zero or a negative step; step must be a positive number for the rail to snap to discrete values.
-- Don't set a max that is smaller than min — the range becomes empty and the thumb position is undefined.
-- Don't use Slider alone when users need to hit an exact figure; complement it with a Spinbutton or Input for precise entry.
-- Don't perform expensive work (network calls, heavy derived state, array sorting) inside onChange, because it fires on every individual step while the user drags.
-- Don't assume className and style behave like other native props — they are the only two that stay on the root slot while everything else lands on the hidden input.
-- Don't rely on placeholder-style hints or surrounding context to explain what the slider controls; every Slider needs a persistent, associated label.
-- Don't use disabled as a way to communicate that a value is out of scope without also explaining why in nearby text — a greyed rail is silent to users who cannot see it.
+- Do not pass both value and defaultValue — they are mutually exclusive; value makes the Slider controlled and defaultValue only applies to the uncontrolled case.
+- Do not set value without updating it in onChange, because the Slider will be pinned to the stale value and the thumb will snap back as soon as the user releases or moves it.
+- Do not leave the Slider without a label and rely on nearby visual text; associate a Label through htmlFor and id, or add aria-label, otherwise assistive technology announces an unnamed slider.
+- Do not use a Slider for entering exact numbers such as quantities, account values, or coordinates; use SpinButton or Input instead.
+- Do not set step to zero or a negative number — the step must be a positive value, otherwise the component cannot snap correctly.
+- Do not set min greater than max, or a defaultValue outside the min/max range, because the value will be clamped or snapped to the nearest legal value and will not match what you passed in.
+- Do not use disabled as the only way to communicate that a setting is unavailable; explain the reason in nearby text so the state is understandable.
+- Do not over-style the thumb and rail with hard-coded colors, because it breaks theming, high-contrast, and disabled appearance; use Fluent design tokens instead.
 
 ## Anti-Patterns
 
-### Mixing controlled and uncontrolled values
+### Mixing controlled and uncontrolled usage
 
-❌ Passing both value and defaultValue puts the Slider in an ambiguous state: React state and the component's internal state both try to own the same value, producing warnings and a thumb that jumps or refuses to move.
+❌ Passing both value and defaultValue creates ambiguity about the source of truth; the two props are mutually exclusive, and the control may appear to ignore updates or snap unexpectedly when the controlled value is stale.
 
-✅ Pick one model. Use defaultValue alone when nothing outside the component cares about the value; use value plus onChange exclusively when the parent owns the state. Never supply both.
+✅ Choose one model. Use value together with onChange state for controlled scenarios, or defaultValue alone for uncontrolled scenarios, and never pass both on the same element.
 
-### Unlabeled sliders
+### Controlled slider without a state update
 
-❌ A bare rail gives assistive technology an unnamed slider widget and gives sighted users no clue what the number represents. The thumb exposes a slider role, so an accessible name is mandatory, not optional.
+❌ When value is provided but onChange does not write the new value back to state, the thumb can be dragged but visually returns to the old value on release. The Slider appears broken even though the component is behaving correctly.
 
-✅ Always render a visible Label associated through htmlFor and the id passed to the Slider, or supply aria-label or aria-labelledby when a visible label genuinely cannot be shown.
+✅ Always update the bound state from the value carried in the onChange data object, as the Controlled example does, or switch to defaultValue and drop the value prop entirely.
 
-### Heavy work inside onChange
+### Unlabeled slider relying on visual proximity
 
-❌ onChange fires on every individual step, which can be dozens of times per second during a drag. Doing network requests, expensive derivations, or broad state updates there causes jank and can flood downstream systems.
+❌ A Slider with no associated Label, aria-label, or aria-labelledby is announced as an unnamed slider, so screen reader and voice-control users cannot tell what is being adjusted. Nearby visual text does not create an accessible name.
 
-✅ Keep the handler to a cheap state update of the numeric value. Debounce or defer any expensive side effect, and derive expensive output from the committed value rather than from each intermediate step.
+✅ Render a Label with htmlFor matching the id passed to the Slider, or set aria-label / aria-labelledby on the component. Remember the id is forwarded to the primary input slot, which is what the Label must point at.
 
-### Using a slider for exact numeric entry
+### Using a Slider for exact numeric entry
 
-❌ Dragging a rail cannot reliably land on a specific figure such as 1,247.33, and users on assistive technology must press an arrow key many times to traverse a wide range.
+❌ Dragging a slider is imprecise: users cannot reliably land on a specific value inside a wide range, which leads to overshoot and repeated correction, particularly for values like quantities or account numbers.
 
-✅ Combine the Slider with an Input or Spinbutton that shows and accepts the exact value, keeping both bound to the same state, or drop the slider entirely if precision is the primary need.
+✅ Use SpinButton or Input when an exact value is required, and keep Slider for approximate, relative adjustments where close enough is genuinely close enough.
 
-### Expecting className to style the input
+### Expensive work on every step
 
-❌ All native props except className and style are forwarded to the hidden input slot, so people often assume a class placed on the Slider targets the interactive element, and their overrides silently miss the rail or thumb.
+❌ The onChange callback fires on every individual step while dragging, so triggering a request, parsing a large dataset, or rebuilding a heavy tree inside it will fire dozens of times per drag and stall the UI.
 
-✅ Style through the root and its descendant parts with makeStyles and Griffel selectors, and recolor behavior with theme tokens such as tokens.colorCompoundBrandBackground rather than trying to reach the input directly.
+✅ Keep onChange to cheap state updates, and defer heavy work to an explicit commit action such as a Button, an effect that reacts to a settled value, or debouncing outside the Slider.
+
+### Rendering a value with no units or context
+
+❌ A raw integer on its own is ambiguous — the number 20 could mean 20 percent, 20 seconds, or 20 pixels — and screen readers announce only the bare number, leaving users unable to interpret the setting.
+
+✅ Show units next to the value in the visible UI and set aria-valuetext with a descriptive phrase, as the Controlled example does when it announces that the value is a specific number.
 
 ## Accessibility
 
-**Requirements**: Every Slider must have an accessible name. The simplest route is a visible Label wired through htmlFor to the id you give the Slider, since the id is forwarded to the primary input slot. If no visible label is possible, supply aria-label or aria-labelledby on the Slider. The thumb exposes role of slider, so the range must be internally consistent: min must be less than max and step must be positive. When the numeric value is not self-explanatory, supply aria-valuetext so the announced value includes units or a human-readable form. Ensure the surrounding layout gives the slider enough target size — the medium size should be preferred in touch contexts, and small should be avoided where pointer accuracy is limited. Contrast of the rail, the filled portion, and the thumb must remain sufficient in all themes, including high contrast mode.
+**Requirements**: The Slider must have an accessible name (via Label + htmlFor and a matching id, or aria-label / aria-labelledby), and it exposes its value range through aria-valuemin, aria-valuemax, and aria-valuenow on the slider-role thumb. Supply aria-valuetext when the numeric value needs units or phrasing to be understood. Because all native props are forwarded to the hidden input slot, standard form semantics (id, name, form, required-adjacent validation, autocomplete) attach there, and the id must match the Label's htmlFor for the name to be announced. Color contrast of the rail fill, thumb, and focus indicator must meet WCAG 1.4.11 non-text contrast (3:1) in all themes, and no meaning may be conveyed by color alone — pair the slider with a textual value. Targets must remain large enough to drag comfortably (WCAG 2.5.8 minimum target size), and the vertical orientation must also expose aria-orientation so assistive technology announces correct arrow-key expectations.
 
 | Key | Action |
 | --- | --- |
-| `Tab` | Moves focus to the Slider so it can be adjusted with the keyboard; the focused slider exposes its current value to assistive technology. |
-| `ArrowRight` | Increases the value by one step when the slider is horizontal. |
-| `ArrowLeft` | Decreases the value by one step when the slider is horizontal. |
-| `ArrowUp` | Increases the value by one step; this is the primary increment key for a vertical slider, where larger values sit toward the top. |
-| `ArrowDown` | Decreases the value by one step; this is the primary decrement key for a vertical slider. |
-| `Home` | Jumps the value to the minimum of the range. |
-| `End` | Jumps the value to the maximum of the range. |
-| `PageUp` | Increases the value by a larger interval than a single step, approximating a coarse jump across the range. |
-| `PageDown` | Decreases the value by a larger interval than a single step, approximating a coarse jump across the range. |
+| `Tab` | Moves focus to the Slider's input; the thumb visually indicates focus. |
+| `Right Arrow` | Increases the value by one step (moves the thumb toward max). |
+| `Up Arrow` | Increases the value by one step; for a vertical Slider this moves the thumb upward toward max. |
+| `Left Arrow` | Decreases the value by one step (moves the thumb toward min). |
+| `Down Arrow` | Decreases the value by one step; for a vertical Slider this moves the thumb downward toward min. |
+| `Home` | Jumps the value to min. |
+| `End` | Jumps the value to max. |
+| `Page Up` | Increases the value by a larger increment than a single step. |
+| `Page Down` | Decreases the value by a larger increment than a single step. |
 
-**ARIA**: aria-valuetext, aria-label, aria-labelledby, aria-valuenow, aria-valuemin, aria-valuemax, aria-disabled
+**ARIA**: aria-label, aria-labelledby, aria-valuenow, aria-valuemin, aria-valuemax, aria-valuetext, aria-orientation, aria-disabled, aria-hidden (used on decorative min/max Labels in custom layouts)
 
-**Screen Reader**: Assistive technology treats the thumb as a slider widget: it announces the accessible name from the associated label or aria-label, the current value, and the min and max bounds. When aria-valuetext is provided, that string is announced instead of the bare number, which is how you add units or phrasing. Keyboard adjustments are announced as value changes on each arrow press, Home and End announce the range endpoints, and disabled sliders are skipped or announced as unavailable. Because the native input is visually hidden while the thumb carries the slider role, all naming and value semantics must be attached through the Slider itself rather than to the rail or thumb markup you might style.
+**Screen Reader**: Screen readers encounter the element carrying role set to slider and announce its accessible name, the current value, and the bounds, for example a name followed by the current value within the min-to-max range. When aria-valuetext is present it is announced in place of the raw number, which is how the Controlled example communicates a verbose phrasing of the value. Each keyboard arrow press or drag emits a value-change announcement, so value changes are spoken continuously while the user holds an arrow key. A disabled Slider is announced as dimmed and does not respond to click or keyboard events. Numeric bounds rendered purely as decoration should be hidden with aria-hidden so they are not read as duplicate labels.
 
 ## Styling
 
-className and style are the only props that land on the root slot; every other native property, including id and aria attributes, is forwarded to the hidden input. That means custom styling should be written with makeStyles and Griffel descendant selectors that reach the exported slot classes, for example styling the rail and thumb through the part class names under the Slider root (the rail part, the thumb part, and the input part). Recolor the filled track and thumb with tokens.colorCompoundBrandBackground, tokens.colorCompoundBrandBackgroundHover, and tokens.colorCompoundBrandBackgroundPressed, and the unfilled rail with tokens.colorNeutralStrokeAccessible so the accent follows the brand ramp in both light and dark themes. Use tokens.borderRadiusCircular for a round thumb, tokens.strokeWidthThick for rail thickness, and tokens.durationUltraFast with tokens.curveAccelerateMid for the thumb transition. For vertical sliders, remember the control grows along the block axis, so give the wrapper an explicit block size and use spacing tokens such as tokens.spacingVerticalS to separate the label and the rail. Size differences are already tokenized, so prefer the small and medium size prop over hand-written dimensions.
+Style the Slider with makeStyles from @fluentui/react-components so classes are atomic and theme-aware. The rail's filled portion is driven by brand tokens such as tokens.colorCompoundBrandBackground, with tokens.colorCompoundBrandBackgroundHover and tokens.colorCompoundBrandBackgroundPressed for pointer interaction states, and the unfilled portion reads as tokens.colorNeutralBackground1 with tokens.colorNeutralStroke1 or tokens.colorNeutralStrokeAccessible for the boundary. The thumb uses a neutral surface fill (tokens.colorNeutralBackground1) with tokens.colorNeutralStrokeAccessible as its border, and tokens.borderRadiusCircular to keep it circular at any size. Disabled styling should draw from tokens.colorNeutralBackgroundDisabled, tokens.colorNeutralStrokeDisabled, and tokens.colorNeutralForegroundDisabled rather than hard-coded greys. Use tokens.spacingHorizontalS / tokens.spacingVerticalM to space a Slider away from its Label and readout, tokens.strokeWidthThick and tokens.strokeWidthThin for rail thickness, and tokens.durationNormal with tokens.curveEasyEase for transitions on the thumb and fill. When building custom slider-and-readout rows, wrap the pieces in your own flex container and give the value text a fixed width or tabular numerals so the layout does not jump as the number changes width. Avoid inline style objects that change per render, since they defeat Griffel class reuse.
 
 ## Performance
 
-An uncontrolled Slider driven by defaultValue is the cheapest option because adjusting the thumb never re-renders React — the native range input updates the DOM directly. A controlled Slider re-renders on every step of the drag, so keep the surrounding tree small and avoid recreating callbacks or style objects on each render; memoize the handler and any sibling components that do not depend on the value. Because the drag interaction is handled by the underlying native input rather than by pointer-move listeners written in JavaScript, there is no per-frame React work beyond the state update you choose to make. Avoid heavy work in onChange, and if a value feeds an expensive chart or list, derive it from the committed value rather than from each intermediate step.
+Slider uses a hidden native input as its primary slot, so value handling and keyboard stepping ride on native browser behavior and stay cheap. The main cost is re-rendering: a controlled Slider updates state on every individual step, which re-renders the Slider and its parent on every arrow press or drag movement. For settings that only need to be read at submit time, use defaultValue so the parent does not re-render during interaction. Keep onChange handlers free of expensive work such as data fetching, large array transformations, or layout measurement, since they run once per step. Prefer makeStyles for styling so Griffel can share atomic classes across Slider instances instead of emitting per-instance inline styles, and avoid recreating inline style or class objects on each render. Styling complexity is modest — root, rail, thumb, and input — so avoid deeply nested custom wrappers that force layout recalculation on every value change, especially in vertical layouts where the rail height participates in layout.
 
 ## Theming & Tokens
 
-Slider is fully token driven. The filled portion of the rail and the thumb use the compound brand tokens — tokens.colorCompoundBrandBackground for the resting state, tokens.colorCompoundBrandBackgroundHover on hover, and tokens.colorCompoundBrandBackgroundPressed while dragging — so redefining the brand ramp automatically re-skins the control. The unfilled rail uses tokens.colorNeutralStrokeAccessible with tokens.colorNeutralStroke1Hover and tokens.colorNeutralStroke1Pressed for interaction feedback, and the surface behind the rail uses tokens.colorNeutralBackground1. Disabled sliders fall back to tokens.colorNeutralBackgroundDisabled, tokens.colorNeutralStrokeDisabled, and tokens.colorNeutralForegroundDisabled. Shape and motion come from tokens.borderRadiusCircular and the duration and curve tokens such as tokens.durationUltraFast and tokens.curveAccelerateMid, so switching to a reduced-motion or high-contrast theme changes the control without any code changes. Because class-level overrides sit on the root while native props sit on the input, theming is best done by overriding these tokens or by styling the exported slot parts rather than by restyling the input element.
+Slider draws its appearance entirely from Fluent design tokens resolved through the nearest FluentProvider, so it adapts automatically to light, dark, and high-contrast themes as well as brand variants. The active fill of the rail is built from tokens.colorCompoundBrandBackground with tokens.colorCompoundBrandBackgroundHover and tokens.colorCompoundBrandBackgroundPressed for pointer states, and the inactive rail uses tokens.colorNeutralBackground1 against tokens.colorNeutralStroke1 or tokens.colorNeutralStrokeAccessible borders. The thumb fill is tokens.colorNeutralBackground1 with tokens.colorNeutralStrokeAccessible as its outline, shaped with tokens.borderRadiusCircular. Disabled Sliders resolve to tokens.colorNeutralBackgroundDisabled, tokens.colorNeutralStrokeDisabled, and tokens.colorNeutralForegroundDisabled. Focus indication uses the standard focus token family so it stays visible in forced-colors mode, and rail thickness derives from tokens.strokeWidthThick / tokens.strokeWidthThin while transitions use tokens.durationNormal and tokens.curveEasyEase. Any custom styling should reference these same tokens rather than literal color values so the Slider keeps matching the active theme.
 
 ## Migration Notes
 
-The v9 Slider is a full rewrite of the v8 component. It is uncontrolled by default through defaultValue and controlled through value, and value and defaultValue are now mutually exclusive. Snapping to discrete increments is the default behavior driven by step, so the older opt-in snapping flag is gone. Value display is no longer part of the component: the v8 props for showing the value, formatting the value, and labeling the slider inline were removed, and you should render your own Label, Text, or formatting alongside the Slider instead. The origin-from-zero option for centering the fill was also removed. The change callback now reports the value in its data argument and fires on every individual step as the user drags, replacing the separate commit-time callback. Component-level styling APIs from v8 are replaced by Griffel makeStyles and theme tokens.
+Coming from Fluent UI React v8, the callback shape changed: v9 calls onChange with the event first and a data object second, so the numeric value is read from the data object rather than as a second argument. v9 also adds defaultValue, which makes uncontrolled usage possible without re-rendering a parent on every step, and adds a size option of small or medium. v8-only conveniences such as an inline value readout, origin-from-zero behavior, and explicit snap-to-step handling are not part of the v9 prop surface; reproduce a readout by rendering your own Label or Text next to the Slider, and rely on step for snapping. Accessibility props in v8 that accepted an aria label shorthand are replaced in v9 by standard DOM attributes, which are forwarded to the primary input slot.
 
 ## Edge Cases
 
-- Passing both value and defaultValue is unsupported; the component warns and the two sources of truth fight over the thumb position.
-- If step does not divide the span between min and max evenly, the top of the rail is unreachable — for example a range of 0 to 10 with step 3 tops out at 9, so the rail visibly stops short of its end.
-- The id, name, and any aria attributes you pass land on the hidden input slot, while className and style stay on the root; this split surprises people who try to query or style the interactive element directly.
-- A vertical slider grows along the block axis, so an unconstrained container collapses it to zero height; the wrapper needs an explicit block size for the rail to be visible.
-- A disabled slider neither changes nor fires onChange on click or key press, so any dependent UI must handle the frozen value rather than waiting for an event.
-- In a controlled setup the component clamps and snaps the displayed value, but your own state is not automatically clamped — if you store an out-of-range number the input will normalize it while your state and the thumb disagree.
-- Changing min or max after mount while a controlled value sits outside the new range pushes the thumb to the nearest boundary without invoking onChange, so the parent state can drift from what is displayed.
+- Because className and style stay on the root slot while every other native prop is forwarded to the primary input slot, attributes intended for the interactive element — such as id, name, form, and aria-label — behave differently from styling props. Passing an id is required for a Label with htmlFor to correctly name the Slider.
+- Vertical orientation places the smallest value at the bottom. In a container without an explicit height, a vertical Slider has no defined extent to render into, so always give the wrapper a height; remember that Up Arrow increases and Down Arrow decreases the value in this orientation.
+- When step is provided, the value snaps to the closest available step, so defaultValue or value values that do not align to the grid will be adjusted on mount and the rendered position may differ from what was passed.
+- Passing both value and defaultValue is not supported; the props are mutually exclusive, and relying on either one winning produces inconsistent behavior between renders.
+- A disabled Slider will not change or fire events on click or keyboard press, and onChange never runs, so any UI that depends on that callback to stay in sync will appear frozen rather than merely dimmed.
+- When displaying min and max numbers beside the rail in a custom layout, those Labels should be marked aria-hidden, as the MinMax example does, so the same numbers are not announced on top of the slider's own value and range information.
+- onChange fires on every individual step, meaning a single drag can produce a long series of calls; code that assumes one call per interaction, such as validation that shows an error immediately, can flash messages while the user is still dragging.
+- Setting min greater than max, or step to zero or a negative number, produces an unusable range; validate these values when they are computed from data rather than hard-coded.
 
 ## See Also
 

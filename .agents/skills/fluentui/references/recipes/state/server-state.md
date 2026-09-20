@@ -4,840 +4,795 @@
 
 ## Goal
 
-Compose Fluent UI React v9 components into a reusable pattern for rendering data that lives on a server: one hook that owns request lifecycle/cancellation/cache, and one boundary component that maps loading, refreshing, error-with-cache, error-without-cache, empty and success states onto Spinner, Skeleton, MessageBar, Badge, Button and Progress.
+Render server-backed data in a Fluent UI React v9 app with consistent, accessible handling of first load, background refresh, blocking and non-blocking errors, empty results, and mutations — using a small cancellable fetch layer plus Fluent components for every state.
 
 ## When to Use
 
-Use this recipe whenever a view renders data that is fetched from an API and can be slow, fail, be re-fetched, or be mutated by the user: lists and directories with search/filter, dashboards that poll, detail pages with refresh, and any screen that must show a retry affordance. Also use it when you want a single, consistent visual language for loading/error/empty across an application, or when you need optimistic updates with rollback.
+Any screen whose content comes from an API: list and detail views, dashboards, tables, live/polled views, and forms that submit to a server and can return validation errors. Use it when you want one consistent, accessible treatment of loading/error/empty/success that (a) never blanks out data the user is already reading, (b) survives rapid navigation without race conditions, and (c) can sit on top of any data layer (fetch, TanStack Query, SWR, RTK Query).
 
 ## When Not to Use
 
-Do not use it for purely local UI state (open/closed, hover, selected tab) - that is just React state, optionally styled with Fluent components. Do not use the Skeleton-first-load path for sub-100ms synchronous data. Do not hand-roll this if your app already standardizes on a data-fetching library: keep the AsyncStateBoundary mapping but feed it the library's data/error/isPending/isFetching values instead of useServerState. Finally, do not use MessageBar + retry as a substitute for a blocking Dialog when the failure means the user cannot continue at all (for example, a failed authentication step).
+Do not use it for purely client-side state (open/closed flags, wizard steps, form drafts) — use React state/context or the built-in state of components such as Accordion or TabList instead. Do not use it as a substitute for a real cache/normalization layer: if several screens share the same entities, put a query cache under this recipe rather than duplicating useServerResource calls. Do not use it for static or build-time data that never changes at runtime.
 
-Fluent UI React v9 ships no data-fetching layer. What it ships is a set of *state presentation* components - `Skeleton`, `Spinner`, `MessageBar`, `Badge`, `Button`, `ProgressBar` - plus the layout components you render results with. A server-state recipe is the glue between the two: **one hook** that owns the request lifecycle and **one boundary component** that maps that lifecycle onto Fluent UI. Write the mapping once and every screen in the app renders loading, refreshing, error and empty states the same way.
+Fluent UI React v9 is a presentation layer. It ships every component you need to *show* remote data and none of the machinery to *fetch* it — there is no `useQuery`, no cache, and no retry policy. This recipe therefore has two halves:
 
-## Model the states you actually have
+1. **A four-line fetch layer** (`useServerResource`) that owns cancellation, ordering, and the loading/refresh distinction.
+2. **A render layer** (`AsyncBoundary`) that maps that state onto Fluent components so every remote screen looks and behaves the same.
 
-Server state is not a boolean. Model it as a status union plus a cached payload so impossible combinations cannot occur:
+## The five states — and why they are not one boolean
 
-| Situation | status | data | Fluent UI |
-| --- | --- | --- | --- |
-| First load | `loading` | `undefined` | `Skeleton` rows that reserve the final layout |
-| Background revalidation | `refreshing` | previous payload | `Badge` in a `role="status"` region; rows stay on screen |
-| Failure, nothing cached | `error` | `undefined` | `MessageBar intent="error"` + primary `Button` "Try again" |
-| Failure, cache exists | `error` | previous payload | `MessageBar intent="warning"` above the stale rows + outline "Retry" |
-| Success, zero rows | `success` | empty collection | `Text` empty state - never an error |
-| Success | `success` | payload | `children(data)` |
+| State | What the user sees | Condition |
+| --- | --- | --- |
+| First load | `Skeleton` shaped like the final content, or a labelled `Spinner` when the shape is unknown | `isInitialLoading && !data` |
+| Refresh | Existing data stays on screen, a small `Spinner` sits inside the refresh control, region has `aria-busy` | `isRefreshing && data` |
+| Blocking error | `MessageBar intent='error' politeness='assertive'` with a retry `Button` in `MessageBarActions` | `error && !data` |
+| Stale error | `MessageBar intent='warning'` above the previously loaded data | `error && data` |
+| Empty | `Text` heading + body, centred | `!error && data && isEmpty(data)` |
+| Success | Your real content (`Table`, `Card`, `List`, …) | otherwise |
 
-Two rules make everything else predictable:
+The most important distinction in the whole recipe is `isInitialLoading` versus `isRefreshing`. Collapsing them into a single `isLoading` is what makes a refresh blank the screen and feel like a page reload.
 
-1. **Never clear `data` on a failed refetch.** Stale data beats an error page.
-2. **`isInitialLoading` and `isFetching` are different booleans.** Only the first one shows skeletons; the second shows the subtle "refreshing" affordance.
+## 1. Model the resource once
 
-## Step 1 - let one hook own the request
+Expose a single record, `ServerResource<T>`, with `data`, `error`, `isInitialLoading`, `isRefreshing`, `updatedAt`, and `refresh`. Because it is a plain object, it can be produced by your own hook or derived from a library's return value in one line of adapter code.
 
-`useServerState(fetcher, deps)` takes a fetcher that receives an `AbortSignal` plus a dependency list, and returns `{ data, error, status, isFetching, isInitialLoading, reload, mutate }`.
+## 2. Make the fetch layer cancellable and ordered
 
-Implementation decisions worth copying:
+Two bugs appear the moment users can navigate or click faster than the network responds:
 
-- The fetcher lives in a **ref**, not in the effect dependencies. That lets callers pass inline arrow functions without triggering a request on every render; `deps` alone decides when to fetch.
-- Each effect run creates its own `AbortController` **and** its own `isCurrent` flag. The cleanup aborts the network call and makes that run's `.then` handlers no-ops - this is what prevents the classic out-of-order response bug.
-- `status` only becomes `refreshing` if it was already `success`, which is what keeps the previous payload on screen.
-- `mutate` patches the cached payload locally, which is the hook point for optimistic writes.
-- `reload` is a stable callback (it bumps an attempt counter), so it is safe as an interval dependency or an `onClick` handler.
+- **Out-of-order responses.** Request A (slow) resolves after request B (fast) and overwrites fresher data. Fix it with a monotonic request id: only the newest request may write to state.
+- **Work after unmount.** Fix it with an `AbortController` created per request, aborted in the effect cleanup and before every new request. Pass `controller.signal` to `fetch`.
 
-## Step 2 - map status to components in exactly one place
+Also check `response.ok` — `fetch` resolves on 4xx/5xx, so without this check an error payload is rendered as success.
 
-`AsyncStateBoundary` is a generic render-prop component. It receives the whole `ServerState` object and a `children(data)` function, so the typed payload flows to the caller with no casts. Keep this file free of business logic: it decides *how a state looks*, never *what to fetch*.
+## 3. Render with an `AsyncBoundary`
 
-## Step 3 - queries are dependencies
+`AsyncBoundary` takes the resource plus a render-prop child and applies the precedence table above. Two design rules make it reusable:
 
-Debounce text input, then hand the **debounced** value to `deps`:
+- The `skeleton` prop is a `ReactNode` supplied by the caller, so the placeholder can match the real layout (a table skeleton for a table, a card skeleton for a card). Layout stability matters more than a pretty placeholder.
+- Refresh failures never destroy the payload. If `data` exists and `error` appears afterwards, the boundary keeps the data and adds a warning bar.
 
-```tsx
-const [query, setQuery] = React.useState('');
-const debouncedQuery = useDebouncedValue(query, 300);
-const state = useServerState<User[]>(
-  (signal) => fetchUsers(debouncedQuery, team, signal),
-  [debouncedQuery, team],
-);
-```
+## 4. Keep refresh controls outside the boundary
 
-Debouncing reduces traffic; cancellation makes the result **correct**. Without `abort()` a slow response for `a` can land after a fast response for `ab`, and the list silently shows results that do not match the input. Note that the `deps` array must keep a constant length across renders - React requires it, and so does this hook.
+Put the Refresh `Button`, `updatedAt` stamp and any count `Badge` in the page header — not inside the success branch of the boundary. If the refresh control lives inside the region that un-mounts on reload, focus is lost and the button flickers. Show progress by putting a tiny `Spinner` in the button's `icon` slot and setting `disabled={isRefreshing}`.
 
-## Step 4 - mutations are optimistic, then reconciled or rolled back
+## 5. When the shape is unknown, prefer a delayed spinner
 
-1. Capture the previous value, then `mutate` the row locally so the UI responds instantly.
-2. Await the server and **reconcile** with the record it returns (servers normalize data: ids, timestamps, computed fields).
-3. On failure, roll back to the captured snapshot and report it with `MessageBar intent="error"`. Do not use a blocking `Dialog` for a failed toggle.
+`Spinner` accepts `delay` in milliseconds. Use `delay={300}` so requests that finish in 80 ms never flash a spinner, and reserve `Skeleton` for the common case where you know the layout.
 
-Track the ids with an in-flight mutation so the acting `Button` can show a `Spinner` in its `icon` slot and be disabled while its own write is pending.
+## 6. Map any data library onto the same record
 
-## Step 5 - revalidation, polling and visibility
+| Library concept | `ServerResource<T>` field |
+| --- | --- |
+| `isPending` / `isLoading` | `isInitialLoading` |
+| `isFetching` / `isValidating` | `isRefreshing` |
+| `data` | `data` |
+| `error` | `error` |
+| `refetch()` / `mutate()` | `refresh` |
+| `dataUpdatedAt` | `updatedAt` |
 
-Because `reload` is stable, polling is a three-line effect: an interval that calls `reload`, paused while `document.visibilityState !== 'visible'`, plus an immediate `reload()` when the tab becomes visible again so data is fresh the moment the user looks at it. The same stable `reload` powers pull-to-refresh style buttons and "Retry" actions.
+Keeping the adapter at this boundary means your components never import a data library, and swapping libraries is a single-file change.
 
-## Component cheat sheet
+## 7. Polling and live data
 
-- `Skeleton` - first load only. Reserve the final layout so content does not jump.
-- `Spinner` - short, inline, local progress. `size="extra-tiny"` reads well inside a `Button` `icon` slot.
-- `Badge` - coarse status at a glance: Up to date / Refreshing, or a row's own status field.
-- `MessageBar` - request-level failures and confirmations. `intent="error"` + `politeness="assertive"` when there is nothing to show; `intent="warning"` over stale data; `intent="success"` for a completed optimistic write.
-- `Button` - retry, refresh, and the optimistic action itself. Disable it (`disabled`, or `disabledFocusable` to keep focus stable) while its own request is pending.
-- `ProgressBar` - server-driven numeric values: job completion, quota used, SLO budget consumed.
-- `Card`, `Text`, `Avatar`, `Badge` - presentation of the rows. They are not state components; they live inside `children(data)`.
-- `Switch` - a convenient way to exercise failure paths in a demo or a dev story.
+Drive polling from `refresh` in an effect that (a) clears its interval on unmount, (b) skips ticks while `document.visibilityState !== 'visible'`, (c) refetches immediately when the tab becomes visible again, and (d) can be paused by the user. Because `refresh` keeps previous data, a background poll is visually silent — the only visible change is the timestamp.
 
-## Adapting to a data-fetching library
+## 8. Mutations are a separate resource
 
-The boundary is deliberately decoupled from the fetching mechanism. If you already use a query library, keep `AsyncStateBoundary` and feed it an object shaped like `ServerState<T>` built from the library's data / error / pending / fetching values. Every screen keeps the identical Fluent UI treatment, and you can migrate the fetching layer without touching presentation.
+Do not fold a POST into the read resource. Keep a local `isSubmitting` flag, disable the submit `Button` (with a `Spinner` in its `icon` slot), and map server-side field errors onto `Field`'s `validationState='error'` + `validationMessage` so the markup a screen reader reads is identical to client-side validation. Anything that is not a field error goes into a form-level `MessageBar`; success is announced politely. After success, call `refresh()` on the affected resources — that is your cache invalidation.
+
+## 9. Announce transitions
+
+Wrap a status string in `AriaLiveAnnouncer`, keep errors `politeness='assertive'` and progress/success `politeness='polite'`, and mark the content region with `aria-busy={isRefreshing}`. Screen-reader users then hear *Loading*, *Loaded 12 users*, or *Loading users failed* exactly once per transition.
 
 ## Examples
 
-### useServerState + AsyncStateBoundary (loading, error, empty, stale)
+### useServerResource + AsyncBoundary (the core of the recipe)
 
-The reusable core of the recipe: a hook that owns request lifecycle, cancellation and stale-while-revalidate, plus a generic boundary component that maps every server state onto Skeleton, Spinner, MessageBar, Badge and Button. The file ends with a runnable ProjectsPanel that fetches a mock API, shows skeleton rows on first load, a retryable error bar when nothing is cached, a warning bar over stale rows when a refetch fails, an empty state, and an inline spinner inside the Refresh button.
+A cancellable, race-safe fetch hook with a stale-while-revalidate flag, plus the boundary component that renders skeleton, spinner, blocking error with retry, stale-data warning, empty state, and success — followed by a demo panel that wires them together.
 
 ```tsx
-// useServerState.tsx
-// The reusable half of the recipe: one hook that owns the request lifecycle,
-// plus a boundary component that maps server state onto Fluent UI components.
+// ----------------------------------------------------------------
+// useServerResource.ts
+// ----------------------------------------------------------------
 import * as React from 'react';
-import { Badge, Button, Card, MessageBar, Skeleton, Spinner, Text } from '@fluentui/react-components';
 
-const styles: Record<string, React.CSSProperties> = {
-  page: { display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720, padding: 16 },
-  stack: { display: 'flex', flexDirection: 'column', gap: 12 },
-  inline: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  between: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  skeletonRow: { display: 'flex', alignItems: 'center', gap: 12 },
-  skeletonText: { display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 },
-};
-
-/* ------------------------------------------------------------------ */
-/* 1. The hook                                                        */
-/* ------------------------------------------------------------------ */
-
-export type ServerStateStatus = 'idle' | 'loading' | 'refreshing' | 'success' | 'error';
-
-export interface ServerState<T> {
-  /** Last successful payload. Kept during re-fetches so the UI never flashes empty. */
+export interface ServerResource<T> {
   data: T | undefined;
-  /** Error from the most recent attempt, if there was one. */
   error: Error | undefined;
-  status: ServerStateStatus;
-  /** Any request in flight, including background revalidation. */
-  isFetching: boolean;
-  /** Nothing to render yet: show skeletons, not a refresh indicator. */
+  /** True only while the first payload is in flight and nothing is cached yet. */
   isInitialLoading: boolean;
-  /** Re-run the fetcher with the current arguments. Stable identity. */
-  reload: () => void;
-  /** Optimistic local write into the cached payload. */
-  mutate: (updater: (current: T | undefined) => T | undefined) => void;
+  /** True while re-fetching with data already on screen (stale-while-revalidate). */
+  isRefreshing: boolean;
+  /** Epoch milliseconds of the last successful payload. */
+  updatedAt: number | undefined;
+  /** Re-run the fetcher; existing data stays visible. Identity is stable. */
+  refresh: () => void;
 }
 
-export function useServerState<T>(
-  fetcher: (signal: AbortSignal) => Promise<T>,
-  deps: React.DependencyList = [],
-): ServerState<T> {
-  const [data, setData] = React.useState<T | undefined>(undefined);
-  const [error, setError] = React.useState<Error | undefined>(undefined);
-  const [status, setStatus] = React.useState<ServerStateStatus>('idle');
-  const [attempt, setAttempt] = React.useState(0);
+type InternalState<T> = Omit<ServerResource<T>, 'refresh'>;
 
-  // Keep the newest fetcher in a ref. Callers pass inline arrow functions, and a
-  // new function identity must never be a reason to hit the network again.
-  const fetcherRef = React.useRef(fetcher);
-  React.useEffect(() => {
-    fetcherRef.current = fetcher;
+export function useServerResource<T>(
+  key: string,
+  fetcher: (signal: AbortSignal) => Promise<T>,
+): ServerResource<T> {
+  const [state, setState] = React.useState<InternalState<T>>({
+    data: undefined,
+    error: undefined,
+    isInitialLoading: true,
+    isRefreshing: false,
+    updatedAt: undefined,
   });
 
-  React.useEffect(() => {
-    const controller = new AbortController();
-    let isCurrent = true;
+  // Keep the newest fetcher in a ref so an inline arrow does not re-trigger requests.
+  const fetcherRef = React.useRef(fetcher);
+  fetcherRef.current = fetcher;
 
-    // Stale-while-revalidate: only the first ever load is a hard 'loading'.
-    setStatus((previous) =>
-      previous === 'success' || previous === 'refreshing' ? 'refreshing' : 'loading',
-    );
-    setError(undefined);
+  // Monotonic request id: only the newest response may write to state.
+  const requestIdRef = React.useRef(0);
+  const controllerRef = React.useRef<AbortController | null>(null);
+
+  const run = React.useCallback(() => {
+    const requestId = ++requestIdRef.current;
+    controllerRef.current?.abort();
+
+    const controller = new AbortController();
+    controllerRef.current = controller;
+
+    setState(previous => ({
+      ...previous,
+      error: undefined,
+      isInitialLoading: previous.data === undefined,
+      isRefreshing: previous.data !== undefined,
+    }));
 
     fetcherRef.current(controller.signal).then(
-      (result) => {
-        if (!isCurrent) {
-          return; // a newer request already superseded this one
+      data => {
+        if (requestId !== requestIdRef.current || controller.signal.aborted) {
+          return; // superseded by a newer request, or cancelled
         }
-        setData(result);
-        setStatus('success');
+        setState({
+          data,
+          error: undefined,
+          isInitialLoading: false,
+          isRefreshing: false,
+          updatedAt: Date.now(),
+        });
       },
-      (reason: unknown) => {
-        if (!isCurrent || controller.signal.aborted) {
+      (cause: unknown) => {
+        if (requestId !== requestIdRef.current || controller.signal.aborted) {
           return;
         }
-        setError(reason instanceof Error ? reason : new Error(String(reason)));
-        setStatus('error');
+        setState(previous => ({
+          ...previous,
+          error: cause instanceof Error ? cause : new Error(String(cause)),
+          isInitialLoading: false,
+          isRefreshing: false,
+        }));
       },
     );
+  }, []);
 
-    return () => {
-      isCurrent = false; // stop updating state from this response
-      controller.abort(); // and cancel the request itself
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, attempt]);
+  React.useEffect(() => {
+    run();
+    // Abort on unmount and whenever the request identity changes.
+    return () => controllerRef.current?.abort();
+  }, [key, run]);
 
-  const isFetching = status === 'loading' || status === 'refreshing';
-
-  return {
-    data,
-    error,
-    status,
-    isFetching,
-    isInitialLoading: isFetching && data === undefined,
-    reload: React.useCallback(() => setAttempt((value) => value + 1), []),
-    mutate: React.useCallback(
-      (updater: (current: T | undefined) => T | undefined) =>
-        setData((current) => updater(current)),
-      [],
-    ),
-  };
+  return React.useMemo(() => ({ ...state, refresh: run }), [state, run]);
 }
 
-/* ------------------------------------------------------------------ */
-/* 2. Loading placeholder that reserves the final layout              */
-/* ------------------------------------------------------------------ */
+// ----------------------------------------------------------------
+// AsyncBoundary.tsx
+// ----------------------------------------------------------------
+import {
+  Button,
+  MessageBar,
+  MessageBarActions,
+  MessageBarBody,
+  MessageBarTitle,
+  Skeleton,
+  SkeletonItem,
+  Spinner,
+  Text,
+} from '@fluentui/react-components';
+import type { ServerResource } from './useServerResource';
 
-export function LoadingRows({ count = 3 }: { count?: number }) {
-  return (
-    <div style={styles.stack} role="status" aria-label="Loading">
-      {Array.from({ length: count }, (_, index) => (
-        <div key={index} style={styles.skeletonRow}>
-          <Skeleton shape="circle" animation="wave" />
-          <div style={styles.skeletonText}>
-            <Skeleton animation="wave" width="40%" />
-            <Skeleton animation="wave" width="70%" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* 3. One place that maps status -> Fluent UI                         */
-/* ------------------------------------------------------------------ */
-
-export interface AsyncStateBoundaryProps<T> {
-  state: ServerState<T>;
-  children: (data: T) => React.ReactNode;
-  /** Optional predicate: when it returns true the empty state is rendered. */
+export interface AsyncBoundaryProps<T> {
+  resource: ServerResource<T>;
+  /** First-load placeholder. Match the final layout so nothing shifts. */
+  skeleton?: React.ReactNode;
+  loadingLabel?: string;
+  /** Return true when the payload loaded successfully but has nothing to show. */
   isEmpty?: (data: T) => boolean;
   emptyTitle?: string;
-  emptyDescription?: string;
-  /** Replaces the default skeleton list on first load. */
-  loadingFallback?: React.ReactNode;
-  errorTitle?: string;
+  emptyMessage?: string;
+  children: (data: T) => React.ReactNode;
 }
 
-export function AsyncStateBoundary<T>({
-  state,
-  children,
+export function AsyncBoundary<T>({
+  resource,
+  skeleton,
+  loadingLabel = 'Loading…',
   isEmpty,
-  emptyTitle = 'There is nothing here yet',
-  emptyDescription,
-  loadingFallback,
-  errorTitle = "We couldn't load this data",
-}: AsyncStateBoundaryProps<T>) {
-  const { data, error, status, isFetching, isInitialLoading, reload } = state;
+  emptyTitle = 'Nothing here yet',
+  emptyMessage = 'Content will appear as soon as it is available.',
+  children,
+}: AsyncBoundaryProps<T>) {
+  const { data, error, isInitialLoading, isRefreshing, refresh } = resource;
 
-  // Failure with nothing cached: blocking error state with a way out.
-  if (status === 'error' && data === undefined) {
-    return (
-      <MessageBar intent="error" politeness="assertive">
-        <div style={styles.stack}>
-          <Text weight="semibold">{errorTitle}</Text>
-          <Text>{error?.message}</Text>
-          <div>
-            <Button appearance="primary" onClick={reload}>
-              Try again
-            </Button>
-          </div>
-        </div>
-      </MessageBar>
+  // 1. First load: nothing cached yet.
+  if (isInitialLoading && data === undefined) {
+    return skeleton ? (
+      <>{skeleton}</>
+    ) : (
+      <Spinner labelPosition='below' size='medium' delay={300}>
+        {loadingLabel}
+      </Spinner>
     );
   }
 
-  // First load: skeletons instead of a spinner, so nothing jumps when data arrives.
-  if (isInitialLoading) {
-    return <>{loadingFallback ?? <LoadingRows />}</>;
+  // 2. Failure with nothing to fall back to.
+  if (error && data === undefined) {
+    return (
+      <MessageBar intent='error' politeness='assertive'>
+        <MessageBarBody>
+          <MessageBarTitle>We could not load this content</MessageBarTitle>
+          {error.message}
+        </MessageBarBody>
+        <MessageBarActions>
+          <Button appearance='secondary' onClick={refresh}>
+            Try again
+          </Button>
+        </MessageBarActions>
+      </MessageBar>
+    );
   }
 
   if (data === undefined) {
     return null;
   }
 
+  // 3. Success, but empty.
+  if (isEmpty?.(data)) {
+    return (
+      <div style={{ display: 'grid', gap: 4, justifyItems: 'center', padding: 32 }}>
+        <Text size={400} weight='semibold' block>
+          {emptyTitle}
+        </Text>
+        <Text size={200} block>
+          {emptyMessage}
+        </Text>
+      </div>
+    );
+  }
+
+  // 4. Success, optionally with a non-blocking warning over stale data.
   return (
-    <div style={styles.stack} aria-busy={isFetching}>
-      {/* Failure with cached data: keep the rows, warn, offer a retry. */}
-      {status === 'error' ? (
-        <MessageBar intent="warning" politeness="polite">
-          <div style={styles.inline}>
-            <Text>Showing the last data we loaded. {error?.message}</Text>
-            <Button size="small" appearance="outline" onClick={reload}>
+    <>
+      {error ? (
+        <MessageBar intent='warning'>
+          <MessageBarBody>
+            <MessageBarTitle>Showing previously loaded data</MessageBarTitle>
+            {`The latest refresh failed: ${error.message}`}
+          </MessageBarBody>
+          <MessageBarActions>
+            <Button appearance='secondary' onClick={refresh} disabled={isRefreshing}>
               Retry
             </Button>
-          </div>
+          </MessageBarActions>
         </MessageBar>
       ) : null}
-
-      {/* Stable text inside a polite live region: nothing is announced when it does not change. */}
-      <div style={styles.inline} role="status" aria-live="polite">
-        <Badge appearance="tint" color={isFetching ? 'informative' : 'success'}>
-          {isFetching ? 'Refreshing' : 'Up to date'}
-        </Badge>
-      </div>
-
-      {isEmpty && isEmpty(data) ? (
-        <div style={styles.stack}>
-          <Text weight="semibold">{emptyTitle}</Text>
-          {emptyDescription ? <Text size={200}>{emptyDescription}</Text> : null}
-        </div>
-      ) : (
-        children(data)
-      )}
-    </div>
+      <div aria-busy={isRefreshing}>{children(data)}</div>
+    </>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* 4. Usage                                                           */
-/* ------------------------------------------------------------------ */
-
-interface Project {
-  id: string;
-  name: string;
-  owner: string;
-  status: 'On track' | 'At risk' | 'Blocked';
-}
-
-const PROJECTS: Project[] = [
-  { id: 'p1', name: 'Design tokens v3', owner: 'Ada Lovelace', status: 'On track' },
-  { id: 'p2', name: 'Search relevance', owner: 'Grace Hopper', status: 'At risk' },
-  { id: 'p3', name: 'Billing migration', owner: 'Alan Turing', status: 'Blocked' },
-];
-
-/** Stand-in for a real API call; the signal makes it cancellable, exactly like fetch(). */
-function fetchProjects(signal: AbortSignal): Promise<Project[]> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => resolve(PROJECTS), 1200);
-    signal.addEventListener('abort', () => {
-      clearTimeout(timer);
-      reject(new DOMException('The request was aborted', 'AbortError'));
-    });
-  });
-}
-
-export function ProjectsPanel() {
-  const projects = useServerState<Project[]>(fetchProjects, []);
-
-  return (
-    <div style={styles.page}>
-      <div style={styles.between}>
-        <Text size={500} weight="semibold">
-          Projects
-        </Text>
-        <Button
-          appearance="subtle"
-          icon={projects.isFetching ? <Spinner size="extra-tiny" /> : undefined}
-          disabled={projects.isFetching}
-          onClick={projects.reload}
-        >
-          Refresh
-        </Button>
-      </div>
-
-      <AsyncStateBoundary
-        state={projects}
-        isEmpty={(rows) => rows.length === 0}
-        emptyTitle="No projects"
-        emptyDescription="New projects show up here as soon as they are created."
-      >
-        {(rows) => (
-          <div style={styles.stack}>
-            {rows.map((row) => (
-              <Card key={row.id} appearance="outline" size="small">
-                <div style={styles.between}>
-                  <Text weight="semibold">{row.name}</Text>
-                  <Badge
-                    appearance="tint"
-                    color={
-                      row.status === 'On track'
-                        ? 'success'
-                        : row.status === 'At risk'
-                          ? 'warning'
-                          : 'danger'
-                    }
-                  >
-                    {row.status}
-                  </Badge>
-                </div>
-                <Text size={200}>{row.owner}</Text>
-              </Card>
-            ))}
-          </div>
-        )}
-      </AsyncStateBoundary>
-    </div>
-  );
-}
-```
-
-### Debounced query + filter with optimistic follow toggle and rollback
-
-A people directory that consumes the hook and boundary from Example 1. Typing debounces the query and feeds it into deps so the hook aborts superseded requests; the team Select is another dependency. Each row's Follow button performs an optimistic write: it flips locally, reconciles with the server response, and rolls back to the captured snapshot when the write fails (user u3 always fails so the rollback is observable). Results are announced through a MessageBar that auto-dismisses, and the pending row shows an extra-tiny Spinner inside the Button icon slot.
-
-```tsx
-// UserDirectory.tsx
-// Example 2: debounced query + filter, request cancellation, optimistic writes.
-// Imports the files created in Example 1 (useServerState.tsx).
-import * as React from 'react';
-import { Avatar, Badge, Button, Card, Input, MessageBar, Select, Spinner, Text } from '@fluentui/react-components';
-import { AsyncStateBoundary, useServerState } from './useServerState';
-
-const styles: Record<string, React.CSSProperties> = {
-  page: { display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720, padding: 16 },
-  stack: { display: 'flex', flexDirection: 'column', gap: 12 },
-  toolbar: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
-  row: { display: 'flex', alignItems: 'center', gap: 12 },
-  grow: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 },
-};
-
-/* --- domain --------------------------------------------------------- */
-
-type Team = 'all' | 'Design' | 'Engineering' | 'Research';
+// ----------------------------------------------------------------
+// UsersPanel.tsx  — demo usage
+// ----------------------------------------------------------------
+import { Skeleton as SkeletonRoot, SkeletonItem as SkeletonBar } from '@fluentui/react-components';
 
 interface User {
   id: string;
   name: string;
   email: string;
-  team: Exclude<Team, 'all'>;
-  following: boolean;
 }
 
-const TEAMS: Team[] = ['all', 'Design', 'Engineering', 'Research'];
-
-const USERS: User[] = [
-  { id: 'u1', name: 'Ada Lovelace', email: 'ada@contoso.com', team: 'Engineering', following: true },
-  { id: 'u2', name: 'Grace Hopper', email: 'grace@contoso.com', team: 'Engineering', following: false },
-  { id: 'u3', name: 'Yuki Tanaka', email: 'yuki@contoso.com', team: 'Design', following: false },
-  { id: 'u4', name: 'Priya Raman', email: 'priya@contoso.com', team: 'Research', following: true },
-  { id: 'u5', name: 'Marco Silva', email: 'marco@contoso.com', team: 'Design', following: false },
-];
-
-/* --- fake API ------------------------------------------------------- */
-
-function wait(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener('abort', () => {
-      clearTimeout(timer);
-      reject(new DOMException('The request was aborted', 'AbortError'));
-    });
-  });
+async function fetchUsers(signal: AbortSignal): Promise<User[]> {
+  const response = await fetch('/api/users', { signal });
+  if (!response.ok) {
+    throw new Error(`GET /api/users failed with ${response.status}`);
+  }
+  return (await response.json()) as User[];
 }
 
-function fetchUsers(query: string, team: Team, signal: AbortSignal): Promise<User[]> {
-  return wait(700, signal).then(() => {
-    const term = query.trim().toLowerCase();
-    return USERS.filter(
-      (user) =>
-        (team === 'all' || user.team === team) &&
-        (term.length === 0 ||
-          user.name.toLowerCase().includes(term) ||
-          user.email.toLowerCase().includes(term)),
-    ).map((user) => ({ ...user }));
-  });
-}
-
-/** Writes for these ids are rejected on purpose so the rollback path is visible. */
-const REJECTED_WRITE_IDS = new Set(['u3']);
-
-function saveFollowing(userId: string, following: boolean, signal: AbortSignal): Promise<User> {
-  return wait(500, signal).then(() => {
-    if (REJECTED_WRITE_IDS.has(userId)) {
-      throw new Error('The server rejected this change. Nothing was saved.');
-    }
-    const user = USERS.find((candidate) => candidate.id === userId);
-    if (!user) {
-      throw new Error('Unknown user ' + userId);
-    }
-    user.following = following;
-    return { ...user };
-  });
-}
-
-/* --- helpers -------------------------------------------------------- */
-
-function useDebouncedValue<T>(value: T, delay = 300): T {
-  const [debounced, setDebounced] = React.useState(value);
-  React.useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
-}
-
-type Notice = { intent: 'success' | 'error'; message: string } | undefined;
-
-/* --- view ----------------------------------------------------------- */
-
-export function UserDirectory() {
-  const [query, setQuery] = React.useState('');
-  const [team, setTeam] = React.useState<Team>('all');
-  const [pendingIds, setPendingIds] = React.useState<string[]>([]);
-  const [notice, setNotice] = React.useState<Notice>(undefined);
-
-  const debouncedQuery = useDebouncedValue(query, 300);
-
-  // deps is the query contract: a new debounced query or team re-runs the
-  // fetcher, and the hook aborts the superseded request for us.
-  const state = useServerState<User[]>(
-    (signal) => fetchUsers(debouncedQuery, team, signal),
-    [debouncedQuery, team],
+function UsersSkeleton() {
+  return (
+    <SkeletonRoot animation='wave'>
+      <div style={{ display: 'grid', gap: 12 }}>
+        {Array.from({ length: 5 }, (_, index) => (
+          <SkeletonBar key={index} shape='rectangle' style={{ height: 20 }} />
+        ))}
+      </div>
+    </SkeletonRoot>
   );
-  const { mutate } = state;
+}
 
-  const mountedRef = React.useRef(true);
-  const writeControllerRef = React.useRef<AbortController | null>(null);
-
-  React.useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (writeControllerRef.current) {
-        writeControllerRef.current.abort();
-      }
-    };
-  }, []);
-
-  // Auto-dismiss the confirmation bar so notices do not pile up.
-  React.useEffect(() => {
-    if (!notice) {
-      return;
-    }
-    const timer = setTimeout(() => setNotice(undefined), 4000);
-    return () => clearTimeout(timer);
-  }, [notice]);
-
-  const toggleFollowing = React.useCallback(
-    async (user: User) => {
-      const nextValue = !user.following;
-      const previousValue = user.following;
-
-      setNotice(undefined);
-      setPendingIds((ids) => (ids.includes(user.id) ? ids : [...ids, user.id]));
-
-      // 1. Optimistic write: the row flips before the request leaves.
-      mutate((current) =>
-        current?.map((row) => (row.id === user.id ? { ...row, following: nextValue } : row)),
-      );
-
-      if (!writeControllerRef.current) {
-        writeControllerRef.current = new AbortController();
-      }
-      const signal = writeControllerRef.current.signal;
-
-      try {
-        const saved = await saveFollowing(user.id, nextValue, signal);
-
-        // 2. Reconcile with the server's version of the row.
-        mutate((current) =>
-          current?.map((row) => (row.id === saved.id ? { ...row, ...saved } : row)),
-        );
-
-        if (mountedRef.current) {
-          setNotice({ intent: 'success', message: 'Saved.' });
-        }
-      } catch (reason) {
-        if (signal.aborted) {
-          return;
-        }
-        // 3. Roll back to the snapshot captured before the write.
-        mutate((current) =>
-          current?.map((row) =>
-            row.id === user.id ? { ...row, following: previousValue } : row,
-          ),
-        );
-        if (mountedRef.current) {
-          setNotice({
-            intent: 'error',
-            message: reason instanceof Error ? reason.message : 'The change could not be saved.',
-          });
-        }
-      } finally {
-        if (mountedRef.current) {
-          setPendingIds((ids) => ids.filter((id) => id !== user.id));
-        }
-      }
-    },
-    [mutate],
-  );
+export function UsersPanel() {
+  // The string key is the request identity; an inline fetcher is safe because
+  // useServerResource keeps it in a ref instead of depending on its identity.
+  const users = useServerResource<User[]>('users:list', fetchUsers);
 
   return (
-    <div style={styles.page}>
-      <Text size={500} weight="semibold">
-        People
-      </Text>
-
-      <div style={styles.toolbar}>
-        <Input
-          type="search"
-          value={query}
-          placeholder="Search by name or email"
-          aria-label="Search people"
-          contentBefore={<span aria-hidden="true">&#128269;</span>}
-          onChange={(_event, data) => setQuery(data.value)}
-        />
-        <Select value={team} onChange={(_event, data) => setTeam(data.value as Team)}>
-          {TEAMS.map((option) => (
-            <option key={option} value={option}>
-              {option === 'all' ? 'All teams' : option}
-            </option>
+    <AsyncBoundary
+      resource={users}
+      skeleton={<UsersSkeleton />}
+      loadingLabel='Loading users'
+      isEmpty={list => list.length === 0}
+      emptyTitle='No users yet'
+      emptyMessage='Invite a teammate to get started.'
+    >
+      {list => (
+        <ul style={{ margin: 0, paddingLeft: 20 }}>
+          {list.map(user => (
+            <li key={user.id}>
+              {user.name} — {user.email}
+            </li>
           ))}
-        </Select>
-      </div>
+        </ul>
+      )}
+    </AsyncBoundary>
+  );
+}
+```
 
-      {notice ? (
-        <MessageBar intent={notice.intent} politeness="polite">
-          {notice.message}
-        </MessageBar>
-      ) : null}
+### Users page: table, skeleton rows, refresh control, live announcements
 
-      <AsyncStateBoundary
-        state={state}
-        isEmpty={(users) => users.length === 0}
-        emptyTitle="No matches"
-        emptyDescription="Nothing matched that search. Try another name or clear the team filter."
-      >
-        {(users) => (
-          <div style={styles.stack}>
-            {users.map((user) => (
-              <Card key={user.id} appearance="outline" size="small">
-                <div style={styles.row}>
-                  <Avatar name={user.name} />
-                  <div style={styles.grow}>
-                    <Text weight="semibold">{user.name}</Text>
-                    <Text size={200}>{user.email}</Text>
-                  </div>
-                  <Badge appearance="tint" color="informative">
-                    {user.team}
-                  </Badge>
-                  <Button
-                    appearance={user.following ? 'primary' : 'outline'}
-                    icon={pendingIds.includes(user.id) ? <Spinner size="extra-tiny" /> : undefined}
-                    onClick={() => {
-                      void toggleFollowing(user);
-                    }}
-                  >
-                    {user.following ? 'Following' : 'Follow'}
-                  </Button>
-                </div>
-              </Card>
+A full server-backed page built on Example 1. The refresh control and last-updated stamp live in the header (outside the boundary) so they survive reloads; the table skeleton mirrors the real table; an AriaLiveAnnouncer reports each transition to screen readers.
+
+```tsx
+// UsersPage.tsx — depends on AsyncBoundary and useServerResource from Example 1.
+import * as React from 'react';
+import {
+  AriaLiveAnnouncer,
+  Badge,
+  Button,
+  Skeleton,
+  SkeletonItem,
+  Spinner,
+  Table,
+  TableBody,
+  TableCell,
+  TableCellLayout,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
+  Text,
+  Tooltip,
+} from '@fluentui/react-components';
+import { AsyncBoundary } from './AsyncBoundary';
+import { useServerResource } from './useServerResource';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'editor' | 'viewer';
+}
+
+const columns = ['Name', 'Email', 'Role'] as const;
+
+async function fetchUsers(signal: AbortSignal): Promise<User[]> {
+  const response = await fetch('/api/users', { signal });
+  if (!response.ok) {
+    throw new Error(`GET /api/users failed with ${response.status}`);
+  }
+  return (await response.json()) as User[];
+}
+
+/** Skeleton that mirrors the live table so the layout does not shift on load. */
+function TableSkeleton() {
+  return (
+    <Skeleton animation='wave'>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {columns.map(column => (
+              <TableHeaderCell key={column}>{column}</TableHeaderCell>
             ))}
-          </div>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 5 }, (_, rowIndex) => (
+            <TableRow key={rowIndex}>
+              {columns.map(column => (
+                <TableCell key={column}>
+                  <SkeletonItem shape='rectangle' style={{ height: 16 }} />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Skeleton>
+  );
+}
+
+export function UsersPage() {
+  const users = useServerResource<User[]>('users:list', fetchUsers);
+  const { data, error, isInitialLoading, isRefreshing, updatedAt, refresh } = users;
+
+  const announcement = isInitialLoading
+    ? 'Loading users'
+    : error
+      ? `Loading users failed. ${error.message}`
+      : `Loaded ${data?.length ?? 0} users`;
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <AriaLiveAnnouncer>
+        <span>{announcement}</span>
+      </AriaLiveAnnouncer>
+
+      <header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Fluent typography inside a native heading keeps the outline semantical. */}
+        <h2 style={{ margin: 0 }}>
+          <Text size={500} weight='semibold'>
+            Users
+          </Text>
+        </h2>
+        {data ? (
+          <Badge appearance='tint' color='brand'>
+            {data.length}
+          </Badge>
+        ) : null}
+
+        <span style={{ flex: 1 }} />
+
+        {updatedAt ? (
+          <Text size={200}>Updated {new Date(updatedAt).toLocaleTimeString()}</Text>
+        ) : null}
+
+        <Tooltip content='Fetch the latest data from the server' relationship='description'>
+          <Button
+            appearance='secondary'
+            onClick={refresh}
+            disabled={isRefreshing}
+            icon={isRefreshing ? <Spinner size='extra-tiny' /> : undefined}
+          >
+            {isRefreshing ? 'Refreshing…' : 'Refresh'}
+          </Button>
+        </Tooltip>
+      </header>
+
+      <AsyncBoundary
+        resource={users}
+        skeleton={<TableSkeleton />}
+        loadingLabel='Loading users'
+        isEmpty={list => list.length === 0}
+        emptyTitle='No users yet'
+        emptyMessage='Users appear here as soon as they are provisioned.'
+      >
+        {list => (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {columns.map(column => (
+                  <TableHeaderCell key={column}>{column}</TableHeaderCell>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.map(user => (
+                <TableRow key={user.id}>
+                  <TableCell>
+                    <TableCellLayout>{user.name}</TableCellLayout>
+                  </TableCell>
+                  <TableCell>
+                    <TableCellLayout truncate>{user.email}</TableCellLayout>
+                  </TableCell>
+                  <TableCell>
+                    <Badge appearance='outline'>{user.role}</Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
-      </AsyncStateBoundary>
+      </AsyncBoundary>
     </div>
   );
 }
 ```
 
-### Polling dashboard with stale-data fallback and inline refresh spinner
+### Mutation form with server-side field validation
 
-Background revalidation on top of the same hook: a usePolling effect calls the stable reload on an interval, pauses while the tab is hidden, and catches up immediately when it becomes visible again. Because the boundary distinguishes isInitialLoading from isFetching, the metric cards never flash back to skeletons - only the Badge changes. A Switch flips a flag in the fetcher to simulate a server outage, which exercises the warning-over-stale-data path, and Progress renders the server-driven values.
+A create form that separates the write resource from the read resource: pending state disables the submit Button and swaps in a Spinner, HTTP 422 responses are mapped onto Field validationState/validationMessage so the accessible markup matches client validation, and transport failures land in a politeness='assertive' MessageBar.
 
 ```tsx
-// LiveMetrics.tsx
-// Example 3: polling with visibility awareness plus a triggerable failure path.
-// Imports the files created in Example 1 (useServerState.tsx).
+// CreateUserForm.tsx
 import * as React from 'react';
-import { Button, Card, ProgressBar, Skeleton, Spinner, Switch, Text } from '@fluentui/react-components';
-import { AsyncStateBoundary, useServerState } from './useServerState';
+import {
+  Button,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarActions,
+  MessageBarBody,
+  MessageBarTitle,
+  Spinner,
+} from '@fluentui/react-components';
 
-const styles: Record<string, React.CSSProperties> = {
-  page: { display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720, padding: 16 },
-  stack: { display: 'flex', flexDirection: 'column', gap: 12 },
-  between: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: 12,
-  },
-};
-
-/* --- fake API ------------------------------------------------------- */
-
-type MetricColor = 'brand' | 'success' | 'warning' | 'error';
-
-interface Metric {
-  id: string;
-  label: string;
-  value: number;
-  max: number;
-  color: MetricColor;
+interface CreateUserInput {
+  name: string;
+  email: string;
 }
 
-interface MetricsPayload {
-  updatedAt: number;
-  metrics: Metric[];
+type FieldErrors = Partial<Record<keyof CreateUserInput, string>>;
+
+class ValidationError extends Error {
+  readonly fieldErrors: FieldErrors;
+
+  constructor(fieldErrors: FieldErrors) {
+    super('The server rejected the submitted values.');
+    this.name = 'ValidationError';
+    this.fieldErrors = fieldErrors;
+  }
 }
 
-const METRIC_DEFINITIONS: Array<Omit<Metric, 'value'>> = [
-  { id: 'cpu', label: 'CPU utilization', max: 100, color: 'brand' },
-  { id: 'memory', label: 'Memory pressure', max: 100, color: 'warning' },
-  { id: 'latency', label: 'Latency budget used', max: 100, color: 'error' },
-  { id: 'slo', label: 'Requests within SLO', max: 100, color: 'success' },
-];
-
-function wait(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener('abort', () => {
-      clearTimeout(timer);
-      reject(new DOMException('The request was aborted', 'AbortError'));
-    });
+async function createUser(input: CreateUserInput): Promise<{ id: string }> {
+  const response = await fetch('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
   });
+
+  if (response.status === 422) {
+    const payload = (await response.json()) as { errors: FieldErrors };
+    throw new ValidationError(payload.errors);
+  }
+  if (!response.ok) {
+    throw new Error(`POST /api/users failed with ${response.status}`);
+  }
+  return (await response.json()) as { id: string };
 }
 
-function fetchMetrics(signal: AbortSignal, simulateOutage: boolean): Promise<MetricsPayload> {
-  return wait(600, signal).then(() => {
-    if (simulateOutage) {
-      throw new Error('The metrics service returned 500.');
+export interface CreateUserFormProps {
+  onCreated?: (id: string) => void;
+}
+
+export function CreateUserForm({ onCreated }: CreateUserFormProps) {
+  const [values, setValues] = React.useState<CreateUserInput>({ name: '', email: '' });
+  const [fieldErrors, setFieldErrors] = React.useState<FieldErrors>({});
+  const [formError, setFormError] = React.useState<Error | undefined>(undefined);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [createdId, setCreatedId] = React.useState<string | undefined>(undefined);
+  const isMountedRef = React.useRef(true);
+
+  React.useEffect(
+    () => () => {
+      isMountedRef.current = false;
+    },
+    [],
+  );
+
+  const handleChange =
+    (field: keyof CreateUserInput) =>
+    (_event: React.ChangeEvent<HTMLInputElement>, data: { value: string }) => {
+      setValues(current => ({ ...current, [field]: data.value }));
+      // Clear the server error as soon as the user edits the field.
+      setFieldErrors(current => ({ ...current, [field]: undefined }));
+    };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSubmitting) {
+      return;
     }
-    return {
-      updatedAt: Date.now(),
-      metrics: METRIC_DEFINITIONS.map((metric) => ({
-        ...metric,
-        value: Math.round(metric.max * (0.3 + Math.random() * 0.6)),
-      })),
-    };
-  });
+
+    setIsSubmitting(true);
+    setFormError(undefined);
+    setCreatedId(undefined);
+
+    try {
+      const created = await createUser(values);
+      if (!isMountedRef.current) return;
+      setValues({ name: '', email: '' });
+      setFieldErrors({});
+      setCreatedId(created.id);
+      onCreated?.(created.id);
+    } catch (cause) {
+      if (!isMountedRef.current) return;
+      if (cause instanceof ValidationError) {
+        setFieldErrors(cause.fieldErrors);
+      } else {
+        setFormError(cause instanceof Error ? cause : new Error(String(cause)));
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsSubmitting(false);
+      }
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 16, maxWidth: 480 }}>
+      {formError ? (
+        <MessageBar intent='error' politeness='assertive'>
+          <MessageBarBody>
+            <MessageBarTitle>Could not create the user</MessageBarTitle>
+            {formError.message}
+          </MessageBarBody>
+          <MessageBarActions>
+            <Button appearance='transparent' onClick={() => setFormError(undefined)}>
+              Dismiss
+            </Button>
+          </MessageBarActions>
+        </MessageBar>
+      ) : null}
+
+      {createdId ? (
+        <MessageBar intent='success' politeness='polite'>
+          <MessageBarBody>
+            <MessageBarTitle>User created</MessageBarTitle>
+            {`Server id: ${createdId}`}
+          </MessageBarBody>
+        </MessageBar>
+      ) : null}
+
+      <Field
+        label='Name'
+        required
+        validationState={fieldErrors.name ? 'error' : 'none'}
+        validationMessage={fieldErrors.name}
+      >
+        <Input
+          value={values.name}
+          onChange={handleChange('name')}
+          disabled={isSubmitting}
+        />
+      </Field>
+
+      <Field
+        label='Email'
+        required
+        validationState={fieldErrors.email ? 'error' : 'none'}
+        validationMessage={fieldErrors.email}
+      >
+        <Input
+          type='email'
+          value={values.email}
+          onChange={handleChange('email')}
+          disabled={isSubmitting}
+        />
+      </Field>
+
+      <Button
+        type='submit'
+        appearance='primary'
+        disabled={isSubmitting}
+        icon={isSubmitting ? <Spinner size='extra-tiny' /> : undefined}
+      >
+        {isSubmitting ? 'Creating…' : 'Create user'}
+      </Button>
+    </form>
+  );
+}
+```
+
+### Polling resource with visibility handling and pause/resume
+
+Drives useServerResource.refresh from an interval that stops while the tab is hidden, refetches on the visibilitychange event, and can be paused by the user. Shows that background polling is visually silent because previous data stays on screen.
+
+```tsx
+// LiveOrders.tsx — depends on AsyncBoundary and useServerResource from Example 1.
+import * as React from 'react';
+import { Badge, Button, Skeleton, SkeletonItem, Spinner, Text } from '@fluentui/react-components';
+import { AsyncBoundary } from './AsyncBoundary';
+import { useServerResource } from './useServerResource';
+
+interface Order {
+  id: string;
+  status: 'open' | 'shipped';
+  total: number;
 }
 
-/* --- polling -------------------------------------------------------- */
+async function fetchOrders(signal: AbortSignal): Promise<Order[]> {
+  const response = await fetch('/api/orders', { signal });
+  if (!response.ok) {
+    throw new Error(`GET /api/orders failed with ${response.status}`);
+  }
+  return (await response.json()) as Order[];
+}
 
-function usePolling(refetch: () => void, intervalMs: number) {
+function OrderSkeleton() {
+  return (
+    <Skeleton animation='wave'>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {Array.from({ length: 4 }, (_, index) => (
+          <SkeletonItem key={index} shape='rectangle' />
+        ))}
+      </div>
+    </Skeleton>
+  );
+}
+
+export function LiveOrders() {
+  const orders = useServerResource<Order[]>('orders:live', fetchOrders);
+  const [isPaused, setIsPaused] = React.useState(false);
+  const { refresh } = orders;
+
   React.useEffect(() => {
-    let timerId: number | undefined;
+    if (isPaused) {
+      return;
+    }
 
-    const stop = () => {
-      if (timerId !== undefined) {
-        window.clearInterval(timerId);
-        timerId = undefined;
+    const intervalId = window.setInterval(() => {
+      // Never poll a hidden tab: it wastes the user's battery and data plan.
+      if (document.visibilityState === 'visible') {
+        refresh();
       }
-    };
-
-    const start = () => {
-      stop();
-      timerId = window.setInterval(() => {
-        if (document.visibilityState === 'visible') {
-          refetch();
-        }
-      }, intervalMs);
-    };
+    }, 15000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        refetch(); // catch up immediately instead of waiting a full interval
-        start();
-      } else {
-        stop(); // a hidden tab is not worth polling
+        refresh();
       }
     };
-
-    start();
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      stop();
+      window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [refetch, intervalMs]);
-}
-
-/* --- view ----------------------------------------------------------- */
-
-export function LiveMetrics() {
-  const simulateOutageRef = React.useRef(false);
-
-  const state = useServerState<MetricsPayload>(
-    (signal) => fetchMetrics(signal, simulateOutageRef.current),
-    [],
-  );
-  const { reload } = state;
-
-  usePolling(reload, 10000);
+  }, [isPaused, refresh]);
 
   return (
-    <div style={styles.page}>
-      <div style={styles.between}>
-        <Text size={500} weight="semibold">
-          Service health
-        </Text>
+    <div style={{ display: 'grid', gap: 12 }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <h2 style={{ margin: 0 }}>
+          <Text size={500} weight='semibold'>
+            Live orders
+          </Text>
+        </h2>
+        <Badge appearance='tint' color={isPaused ? 'informative' : 'success'}>
+          {isPaused ? 'Paused' : 'Live · 15s'}
+        </Badge>
+
+        <span style={{ flex: 1 }} />
+
         <Button
-          appearance="subtle"
-          icon={state.isFetching ? <Spinner size="extra-tiny" /> : undefined}
-          disabledFocusable={state.isFetching}
-          onClick={reload}
+          appearance='secondary'
+          onClick={refresh}
+          disabled={orders.isRefreshing}
+          icon={orders.isRefreshing ? <Spinner size='extra-tiny' /> : undefined}
         >
           Refresh now
         </Button>
-      </div>
+        <Button appearance='subtle' onClick={() => setIsPaused(previous => !previous)}>
+          {isPaused ? 'Resume polling' : 'Pause polling'}
+        </Button>
+      </header>
 
-      <Switch
-        onChange={(_event, data) => {
-          simulateOutageRef.current = data.checked;
-          reload();
-        }}
+      <AsyncBoundary
+        resource={orders}
+        skeleton={<OrderSkeleton />}
+        loadingLabel='Loading orders'
+        isEmpty={list => list.length === 0}
+        emptyTitle='No open orders'
+        emptyMessage='New orders appear here automatically.'
       >
-        Simulate a server outage
-      </Switch>
-
-      <AsyncStateBoundary
-        state={state}
-        loadingFallback={
-          <div style={styles.grid}>
-            {METRIC_DEFINITIONS.map((metric) => (
-              <Skeleton key={metric.id} animation="wave" shape="rectangle" />
+        {list => (
+          <ul style={{ margin: 0, paddingLeft: 20 }}>
+            {list.map(order => (
+              <li key={order.id}>
+                {order.id} — {order.status} — ${order.total.toFixed(2)}
+              </li>
             ))}
-          </div>
-        }
-      >
-        {(payload) => (
-          <div style={styles.stack}>
-            <Text size={200}>
-              Last updated {new Date(payload.updatedAt).toLocaleTimeString()} - polled every 10s
-            </Text>
-            <div style={styles.grid}>
-              {payload.metrics.map((metric) => (
-                <Card key={metric.id} appearance="outline" size="small">
-                  <Text weight="semibold">{metric.label}</Text>
-                  <Text size={600} weight="semibold">
-                    {metric.value}%
-                  </Text>
-                  <ProgressBar
-                    value={metric.value}
-                    max={metric.max}
-                    color={metric.color}
-                    thickness="medium"
-                    shape="rounded"
-                  />
-                </Card>
-              ))}
-            </div>
-          </div>
+          </ul>
         )}
-      </AsyncStateBoundary>
+      </AsyncBoundary>
     </div>
   );
 }
@@ -845,33 +800,46 @@ export function LiveMetrics() {
 
 ## Pitfalls
 
-- Not cancelling in-flight requests. If the effect cleanup does not call controller.abort() and flip an isCurrent flag, a slow response for an old query can resolve after a fast response for the new one and overwrite it - the list silently shows results that do not match the input. Both halves are needed: abort() cancels the network call, the flag prevents the .then from touching state.
-- Putting the fetcher in the effect dependency array. Callers naturally write (signal) => fetchUsers(query, signal) inline, which changes identity on every render and would refetch forever. Keep the fetcher in a ref and invalidate only through the explicit deps array. Related: the deps array must keep a constant length across renders, or React throws.
-- Clearing data on refetch or on error. If a refetch sets data back to undefined, the boundary falls back to skeletons and the screen flashes on every poll. Keep the previous payload (stale-while-revalidate) and branch on isInitialLoading (nothing to show yet) versus isFetching (refresh in place). Likewise, a failed refetch must not delete good cached data.
-- Forgetting to debounce query inputs. A request per keystroke is wasteful, and it multiplies the number of superseded responses competing to write state. Debounce the value, treat the debounced value as the dependency, and keep cancellation as the correctness safety net behind the traffic optimization.
-- Optimistic writes without rollback or reconciliation. Always capture the previous value before mutating, restore it in the catch branch, and re-apply the record the server returns on success (servers normalize ids, timestamps and computed fields). Skipping reconciliation leaves the UI permanently out of sync with the server after a partial update.
-- Showing a blocking error UI for a failed background refresh. Turning a poll failure into a full error state throws away perfectly good data and disrupts the user. Reserve the intent="error" MessageBar with the primary Try again button for when nothing is cached; use intent="warning" above the stale rows plus an outline Retry otherwise.
-- Editing state after unmount, or resolving writes after the component is gone. Malformed or late responses trigger setState on an unmounted tree; keep a mounted ref (set to true in the effect body so StrictMode's double-invoke works) and abort pending mutation requests in the same cleanup that aborts the query.
-- Using a Spinner as the only first-load affordance. A centered spinner collapses the layout and then dumps a full page of content on screen; use Skeleton placeholders sized like the final rows so the page does not jump when data lands. Reserve Spinner for short, inline, local waits such as the icon slot of a refresh button.
-- Letting MessageBar notifications pile up or auto-dismiss errors too eagerly. Success and warning confirmations should auto-dismiss (about 4 seconds is a good default) and be replaced rather than stacked; errors that require a decision must stay until resolved or explicitly dismissed.
+- Collapsing loading and refreshing into one boolean. If a re-fetch clears data, the whole view is replaced by a skeleton and the user loses their place. Track isInitialLoading (no data yet) and isRefreshing (data on screen) as separate fields, and only render a skeleton for the former.
+- Ignoring out-of-order responses. Two fast navigations can leave a slow first request resolving last and overwriting the newer payload. Guard every state write with a monotonic request id and drop responses that are not the newest.
+- Not aborting requests on unmount or key change. Create one AbortController per request, pass signal to fetch, and abort both in the effect cleanup and before starting the next request, otherwise you leak connections and write state after the component is gone.
+- Forgetting that fetch resolves on HTTP errors. A 500 with a JSON error body will render as a successful payload unless you check response.ok and throw. Treat 4xx as permanent (do not silently retry) and 5xx as retryable.
+- Flashing spinners on fast responses. Pass Spinner delay (for example 300 ms) so sub-300 ms requests never show a flash, and prefer Skeleton placeholders that match the final layout so nothing shifts when data arrives.
+- Conflating empty with error or loading. A successful empty array must render an empty state, not an error bar and not an eternal spinner; give AsyncBoundary an explicit isEmpty predicate and an empty branch.
+- Letting a failed refresh destroy good data. Keep the last successful payload, show a MessageBar intent='warning' above it, and disable the retry button while the retry is running so users cannot queue a retry storm.
+- Putting the refresh control inside the region that reloads. If the button, the count badge, or the updated-at stamp live in the boundary's success branch, they unmount during every reload, losing focus and flickering. Keep them in the page header and drive them from the same resource.
+- Using an unstable request key. Deriving a key from a new object or array on every render re-triggers the effect in a loop. Keys must be primitives such as 'users:list' or `users:${id}`.
+- Polling without visibility or pause controls. An interval that keeps firing in hidden tabs burns battery and server capacity, and users on metered connections need a way to pause live updates.
+- Folding mutations into the read resource. A POST should have its own isSubmitting state, its own error surface, and an explicit refresh of the affected resources after success; mixing them makes the loading region flicker and hides field-level validation.
+- Doing client validation and server validation differently. Map server field errors into the same Field validationState/validationMessage path used by local rules so the UI and the announced markup stay identical regardless of where the rule ran.
+- Announcing nothing. Without a live region and aria-busy, a screen-reader user has no indication that data arrived or that a refresh failed; the visual spinner is invisible to them.
 
 ## Accessibility
 
-1) Announce state changes, not renders. Put the refreshing indicator in a container with role="status" (implicit aria-live="polite") whose text is stable - 'Refreshing' vs 'Up to date' - so assistive tech only announces a change when the value actually changes. 2) Use politeness appropriately on MessageBar: politeness="assertive" for a hard failure that replaces the content (the user must know the screen is empty), politeness="polite" for success confirmations and for the warning bar shown over stale data, which must not interrupt. 3) Never steal focus for a background update. Revalidation must not move focus; if a user-initiated action fails, keep focus on the control that triggered it and let the MessageBar announce the failure. 4) Mark the content region busy: aria-busy={isFetching} tells assistive tech that the region is being updated, without pushing new content into the announcement queue. 5) Skeletons are decorative. Wrap them in a status container with an accessible label (aria-label="Loading") so the waiting state is perceivable, and make sure the skeleton row count roughly matches the final row count to limit layout shift for low-vision users. 6) Keep the accessible name of an in-flight button stable. When you put a Spinner in Button's icon slot, the visible text label stays the same, so screen reader users still hear 'Follow' or 'Refresh now'; do not swap the label to 'Loading' and back. 7) Prefer disabledFocusable to disabled on controls that disable themselves while awaiting a request (the polling dashboard's Refresh now button does this): an aria-disabled button stays in the tab order, so keyboard users do not lose their place when the button disables under their focus. 8) Give inputs a programmatic name: the directory's search field carries both a placeholder and aria-label, and the team filter is a real select, so both are reachable and labelled in browse and forms mode.
+Announce every state transition exactly once. Wrap a short status string in AriaLiveAnnouncer (for example 'Loading users', 'Loaded 12 users', 'Loading users failed') and keep it in the DOM across renders so the text change is detected. Reserve politeness='assertive' for blocking errors on MessageBar and use politeness='polite' for success and progress so you never interrupt the user mid-sentence. Give loading regions aria-busy={isRefreshing} instead of unmounting them; the content stays in the accessibility tree while the refresh runs, which keeps virtual cursors and focus stable. Spinners and skeletons are decorative: a bare Spinner should be paired with visible text (or an explicit label) while the live region carries the meaning, and Skeleton markup must never be announced. Do not swap a focused MessageBar for a spinner on retry — that destroys focus; keep the bar mounted and disable its retry Button while the retry is in flight (as AsyncBoundary does with the stale-data warning). Tables rendered from server data must keep real TableHeaderCell elements so column headers are announced with each cell, and every error message should include the action that failed plus the underlying reason. Field-level server errors rendered through Field's validationState='error' and validationMessage produce the same aria-describedby wiring as client-side validation, so screen-reader users get the message whether the rule ran in the browser or on the server. Avoid auto-refreshing data the user is actively editing: a poll that replaces a form's server payload can silently discard typed input.
 
 ## Components used
 
-- [Avatar](../../components/avatar.md)
+- [AriaLiveAnnouncer](../../components/aria-live-announcer.md)
 - [Badge](../../components/badge.md)
 - [Button](../../components/button.md)
-- [Card](../../components/card.md)
+- [Field](../../components/field.md)
 - [Input](../../components/input.md)
 - [MessageBar](../../components/message-bar.md)
-- [Progress](../../components/progress.md)
-- [Select](../../components/select.md)
+- [MessageBarActions](../../components/message-bar-actions.md)
+- [MessageBarBody](../../components/message-bar-body.md)
+- [MessageBarTitle](../../components/message-bar-title.md)
 - [Skeleton](../../components/skeleton.md)
+- [SkeletonItem](../../components/skeleton-item.md)
 - [Spinner](../../components/spinner.md)
-- [Switch](../../components/switch.md)
+- [Table](../../components/table.md)
+- [TableBody](../../components/table-body.md)
+- [TableCell](../../components/table-cell.md)
+- [TableCellLayout](../../components/table-cell-layout.md)
+- [TableHeader](../../components/table-header.md)
+- [TableHeaderCell](../../components/table-header-cell.md)
+- [TableRow](../../components/table-row.md)
 - [Text](../../components/text.md)
+- [Tooltip](../../components/tooltip.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

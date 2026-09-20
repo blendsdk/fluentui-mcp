@@ -4,83 +4,177 @@
 
 ## Goal
 
-Build responsive FluentUI React v9 layouts that reflow across phone, tablet, and desktop widths by combining Griffel `makeStyles` media queries with breakpoint-driven component props (Card, Divider, Field) and a `matchMedia` hook for structural changes such as a navigation rail that collapses into a disclosure panel.
+Build a Fluent UI React v9 layout that adapts between phone, tablet, and desktop widths: an app shell whose navigation is a persistent InlineDrawer on wide viewports and a modal OverlayDrawer on narrow ones, card grids that change column count, size and orientation, master/detail views whose tab rail flips between vertical and horizontal, and dialogs that become full-screen sheets on small screens.
 
 ## When to Use
 
-Use this recipe when a single component tree must adapt to viewport width: dashboards, list/detail app shells, settings forms, and card galleries. It is the right choice when content can reflow with CSS and only a few behaviours (rail vs. disclosure, stacked vs. side-by-side fields) need to change.
+Use this recipe for app shells, dashboards, list/detail views, and settings surfaces where the *interaction model* — not just spacing — changes between sizes: a sidebar becoming off-canvas, a rail becoming a tab strip, a dialog becoming a full-screen sheet, cards re-orienting from vertical to horizontal. Use it whenever you need a small, shared set of breakpoints, a matchMedia-based hook, and guidance on which Fluent v9 props already do the adapting for you (Card orientation/size, TabList vertical, Divider vertical, Toolbar vertical, DialogActions fluid, Drawer type).
 
 ## When Not to Use
 
-Do not use it for tabular data that must stay tabular at every width (keep the table and give its wrapper `overflow-x: auto`), and do not use viewport media queries when the component lives in a resizable pane or an iframe rather than the page viewport — measure the container instead. If the requirement is 'drop individual toolbar items as space shrinks' rather than 'reflow the layout', you need an item-overflow pattern instead of media queries.
+Do not reach for JavaScript breakpoints when a pure CSS change (columns, gaps, padding, wrapping) is enough — write a media or container query instead. Do not use it to collapse a long toolbar into an overflow menu; use Menu + MenuTrigger for that affordance. Do not use it to resize or hide data-table columns; use DataGrid with columnSizingOptions and resizableColumnsOptions. And do not use it to delete content on small screens — if the information matters, reflow it rather than hiding it.
 
-FluentUI React v9 ships no `Grid` or `Stack` in core. Responsive layouts are assembled from two things: **Griffel styles** (`makeStyles` + `tokens`, including `@media` blocks) and **component props** that flip orientation, size, or density at a breakpoint. This recipe composes three patterns most app shells need: a card grid that reflows, an app shell whose navigation rail collapses behind a toggle, and a form whose fields switch from stacked to label-beside-control.
+## Outcome
 
-## The three levers of responsiveness
+A single component tree that reflows from a 320 px phone to a 1920 px desktop:
 
-| Lever | Use it when | Tools |
+- Navigation is a persistent `InlineDrawer` on wide viewports and a modal `OverlayDrawer` on narrow ones, toggled from a `Toolbar` button.
+- Card collections change column count, `Card size`, and `Card orientation` without any measurement code.
+- Master/detail views flip a single `TabList vertical` prop and match the `Divider` axis to the parent direction.
+- Dialogs become full-screen sheets with full-width stacked actions on touch-sized viewports.
+
+## Mental model: three layers, cheapest first
+
+1. **Fluid CSS (no JavaScript).** Let the container do the work: `display: grid` with `repeat(auto-fill, minmax(300px, 1fr))`, `flex-wrap: wrap`, `min-width: 0` on flexible children, `clamp()` for type. Most "responsive" behaviour needs no component change at all.
+2. **Props that adapt.** Many Fluent v9 components already expose a layout prop — flip it at a breakpoint instead of swapping components:
+   - `Card` `orientation` (`horizontal` | `vertical`) and `size` (`small` | `medium` | `large`)
+   - `TabList` `vertical` — a side rail on desktop, a horizontal strip on mobile
+   - `Divider` `vertical` — matches whichever axis the parent uses
+   - `Toolbar` / `ToolbarGroup` `vertical`, `ToolbarButton` `appearance`
+   - `DialogActions` `fluid` — full-width stacked buttons on touch-sized viewports
+   - `Drawer` `type`, plus `InlineDrawer` / `OverlayDrawer` with `open` + `onOpenChange`
+   - `FluentProvider` `dir` — flip layout direction for RTL locales
+3. **Component swap.** Only when the *interaction model* changes (a persistent sidebar becomes modal, a detail pane becomes a dialog) do you render a different component. Keep any state that must survive the swap in a parent.
+
+## Breakpoints
+
+Define one scale and use it everywhere so JavaScript and CSS never drift:
+
+| Name | Range | Typical change |
 | --- | --- | --- |
-| **Fluid CSS** | Same DOM, different sizes | `makeStyles` + CSS grid/flex, `minmax(0, 1fr)`, `minWidth: 0` |
-| **Breakpoint props** | Same DOM, different arrangement | `Card orientation`, `Divider vertical`, `Field orientation`, `Tabs vertical`, `Nav density`, `size` props |
-| **Breakpoint structure** | Different behaviour or a different component | a `matchMedia` hook + conditional rendering (rail vs. disclosure) |
+| compact | <= 599px | one column, full-screen dialogs, horizontal tabs, small cards |
+| medium | 600-1023px | two columns, vertical cards, inline drawer |
+| wide | >= 1024px | three or more columns, horizontal cards, vertical rail |
 
-Always try lever 1, then lever 2. Reach for lever 3 only when behaviour genuinely differs — every conditional render is a place where focus and typed input can be lost.
+Fluent's design guidance uses 320 / 480 / 640 / 1024 / 1366 / 1920. Two or three breakpoints per feature is plenty; resist adding more. Prefer `em`-based queries (`(max-width: 48em)`) when you want the layout to also respond to user font-size increases.
 
-## Step 1 — Pick breakpoints and keep them in one place
+## The breakpoint hook
 
-Use a small, device-agnostic set. Content, not devices, drives the values.
-
-```ts
-// breakpoints.ts
-export const BREAKPOINTS = {
-  sm: 640, // large phone / small tablet
-  md: 900, // tablet landscape
-  lg: 1200, // desktop
-} as const;
-
-/** Media query strings for the JS side (window.matchMedia). */
-export const MEDIA = {
-  smUp: `(min-width: ${BREAKPOINTS.sm}px)`,
-  mdUp: `(min-width: ${BREAKPOINTS.md}px)`,
-  lgUp: `(min-width: ${BREAKPOINTS.lg}px)`,
-} as const;
-```
-
-Inside `makeStyles`, write the media query string **literally** in the style object:
-
-```ts
-const useStyles = makeStyles({
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr)',
-    gap: tokens.spacingHorizontalM,
-    '@media (min-width: 640px)': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
-    '@media (min-width: 1024px)': { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' },
-  },
-});
-```
-
-Go **mobile-first**: the base rule is the narrow layout and each `@media (min-width: ...)` block adds the wider one. Mixing `max-width` and `min-width` overrides for the same property inside one rule makes you depend on class emission order, which is fragile.
-
-## Step 2 — Let CSS do the work
-
-Rules of thumb that keep Fluent layouts from overflowing:
-
-- Grid tracks: `minmax(0, 1fr)` instead of `1fr`, or long words and nested tables blow the column out.
-- Flex/grid children that contain text, `Table`, or a `Card` grid: add `minWidth: 0`.
-- `Text truncate` only truncates when a parent can shrink — give the wrapper `minWidth: 0`.
-- Buttons that should fill the width on a phone: `width: '100%'` in the base rule, `width: 'auto'` inside the media query.
-- Never reorder content with CSS `order` or `flex-direction: column-reverse`; visual order and DOM/tab order diverge. Put the primary action last in the DOM and use `justifyContent` to place it.
-- Use spacing tokens (`tokens.spacingHorizontalL`) rather than literals so the layout follows the active theme (including compact density).
-
-## Step 3 — Sync JS with CSS using a matchMedia hook
-
-Use JS only for decisions CSS cannot express: which markup to render, whether a panel starts open, whether a rail exists at all.
+`useMediaQuery` subscribes to `matchMedia` once — no resize listeners, no layout thrash, no reading `window.innerWidth` during render. The lazy initializer uses the real browser value on the first client render (avoiding a flash of the wrong layout) and falls back to `false` on the server:
 
 ```tsx
 function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = React.useState<boolean>(() =>
-    typeof window === 'undefined' ? false : window.matchMedia(query).matches,
+  const [matches, setMatches] = React.useState<boolean>(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches,
+  );
+
+  React.useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handleChange = (event: MediaQueryListEvent) => setMatches(event.matches);
+    setMatches(mql.matches);
+    mql.addEventListener('change', handleChange);
+    return () => mql.removeEventListener('change', handleChange);
+  }, [query]);
+
+  return matches;
+}
+```
+
+Call it once per breakpoint at the top of the component and derive everything else from those booleans. Hooks must run in a stable order — never branch on a hook:
+
+```tsx
+const isNarrow = useMediaQuery('(max-width: 767px)');
+const isWide = useMediaQuery('(min-width: 1024px)');
+```
+
+## Recipe 1 - Adaptive app shell (inline drawer <-> overlay drawer)
+
+Steps:
+
+1. Subscribe to the navigation breakpoint once (`max-width: 767px`).
+2. Build the drawer contents in a single variable so both variants render identical markup — same `DrawerHeader`, `DrawerHeaderTitle`, `DrawerBody` and navigation links.
+3. Render `InlineDrawer` (with `separator`) when wide and `OverlayDrawer` when narrow. The overlay variant is controlled with `open` + `onOpenChange` so the toolbar toggle can open it.
+4. Put the toggle inside a `Toolbar`/`ToolbarGroup`; give it `aria-label` and `aria-expanded`, and only render it in the narrow branch.
+5. Close the overlay whenever the viewport crosses back to wide (an effect keyed on `isNarrow`) and return focus to the toggle when it is dismissed.
+
+Why a swap rather than a style change: the sidebar is *persistent* on desktop and *modal* on mobile. That is an interaction change, and `OverlayDrawer` gives you the backdrop, focus containment and dismiss behaviour for free.
+
+## Recipe 2 - A card grid that re-orients
+
+Steps:
+
+1. Let CSS count the columns: `gridTemplateColumns: repeat(auto-fill, minmax(300px, 1fr))`. On compact screens swap `300px` for `100%` so you always get a single column.
+2. Only two booleans are needed: `isCompact` (single column + `Card size="small"`) and `isWide` (`Card orientation="horizontal"`).
+3. When the card turns horizontal, wrap `CardHeader` and `CardFooter` in a column next to `CardPreview` so the row reads preview -> text -> actions.
+4. Add `minWidth: 0` to that flex column and use `Text truncate` for the title/description; otherwise long strings push the card wider than its grid track.
+5. Use `Image` with `fit="cover"` and a per-breakpoint inline size so the preview never distorts.
+
+## Recipe 3 - Master/detail with a vertical rail
+
+Steps:
+
+1. One prop flips the whole navigation pattern: `TabList vertical={!isNarrow}` — a side rail on desktop, a scrollable strip on mobile.
+2. Match the divider to the parent axis: `Divider vertical={!isNarrow}`.
+3. The detail pane lives in the same tree in both layouts; only `flexDirection` changes, so selection state and scroll position survive.
+4. Wrap the action row with `flexWrap: 'wrap'` so buttons stack instead of overflowing on narrow screens.
+5. Read the selected value from `TabList onTabSelect` (`data.value`) and render from the same array in both layouts.
+
+## Recipe 4 - Dialog that becomes a full-screen sheet
+
+Steps:
+
+1. Control `Dialog` with `open` + `onOpenChange` so both the trigger and the action buttons can dismiss it.
+2. Change `DialogSurface` geometry at the compact breakpoint: `width: 100vw`, `height: 100vh`, `margin: 0`, `borderRadius: 0` on mobile; a `maxWidth` on desktop.
+3. Switch the form body to a single-column grid (`gridTemplateColumns: isNarrow ? '1fr' : '1fr 1fr'`) using `Field` + `Input` + `Select`.
+4. Pass `fluid={isNarrow}` to `DialogActions` so the buttons stretch to full width and stack on touch screens.
+5. Keep a visible close affordance in `DialogTitle` via `DialogTrigger action="close"`; `Dialog` still traps focus and closes on Esc.
+
+## Keeping state alive across a breakpoint
+
+- Lift shared state (open flags, selection, filters) above the branch so it survives the swap.
+- Reset transient UI when leaving its breakpoint — e.g. close the overlay drawer in an effect keyed on `isNarrow`.
+- Do not render both variants and hide one with `display: none`: you get duplicate ids, two tab stops, and double side effects. Swap the tree instead.
+- If you must keep DOM alive (for example a video element), hide the inactive variant with proper `hidden`/`inert` semantics, not just visually.
+
+## Performance notes
+
+- `matchMedia` fires only when a query flips — no debounce needed. If you add a `resize` listener for measurement, throttle it with `requestAnimationFrame`.
+- Avoid measuring the DOM in effects to decide layout; express it in CSS (`repeat(auto-fit, minmax(...))`, `flex-wrap`).
+- Keep both branches structurally similar so switching does not remount large subtrees.
+
+## Checklist
+
+- [ ] Breakpoints defined once and shared by JavaScript and CSS.
+- [ ] No conditional hooks; hook order is stable across renders.
+- [ ] Every layout exposes a keyboard path to all actions; the drawer toggle is a real button with `aria-expanded`.
+- [ ] Transient overlays close when the breakpoint changes.
+- [ ] Flexible columns use `minWidth: 0` and `Text truncate`.
+- [ ] Layout survives 320 px width and 200% zoom.
+
+## Examples
+
+### Adaptive app shell: inline drawer on desktop, overlay drawer on mobile
+
+A full app shell that swaps a persistent InlineDrawer for a modal OverlayDrawer below 768px, exposes the toggle through a Toolbar with aria-expanded, closes the overlay when the viewport grows back, and returns focus to the toggle.
+
+```tsx
+import * as React from 'react';
+import {
+  Avatar,
+  Button,
+  Divider,
+  DrawerBody,
+  DrawerHeader,
+  DrawerHeaderTitle,
+  FluentProvider,
+  InlineDrawer,
+  OverlayDrawer,
+  Text,
+  Toolbar,
+  ToolbarButton,
+  ToolbarDivider,
+  ToolbarGroup,
+  webLightTheme,
+} from '@fluentui/react-components';
+
+/**
+ * Subscribes to a CSS media query with a single listener and no resize polling.
+ * The browser value is used for the first client render to avoid a layout flash;
+ * on the server it falls back to `false`.
+ */
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = React.useState<boolean>(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches,
   );
 
   React.useEffect(() => {
@@ -94,244 +188,435 @@ function useMediaQuery(query: string): boolean {
 
   return matches;
 }
+
+const SECTIONS = ['Overview', 'Analytics', 'Reports', 'Settings'];
+
+const PrimaryNav: React.FC<{ onNavigate?: () => void }> = ({ onNavigate }) => (
+  <nav aria-label="Primary" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 8 }}>
+    {SECTIONS.map((section) => (
+      <Button
+        key={section}
+        appearance="subtle"
+        onClick={onNavigate}
+        style={{ justifyContent: 'flex-start' }}
+      >
+        {section}
+      </Button>
+    ))}
+  </nav>
+);
+
+export const AdaptiveAppShell: React.FC = () => {
+  const isNarrow = useMediaQuery('(max-width: 767px)');
+  const [isNavOpen, setIsNavOpen] = React.useState(false);
+  const navToggleRef = React.useRef<HTMLButtonElement>(null);
+
+  // Crossing back to the wide layout must never leave the modal drawer open.
+  React.useEffect(() => {
+    if (!isNarrow) {
+      setIsNavOpen(false);
+    }
+  }, [isNarrow]);
+
+  const closeNav = () => {
+    setIsNavOpen(false);
+    navToggleRef.current?.focus();
+  };
+
+  // One content tree for both layouts keeps the two variants in sync.
+  const drawerContent = (
+    <>
+      <DrawerHeader>
+        <DrawerHeaderTitle
+          action={
+            isNarrow ? (
+              <Button appearance="subtle" aria-label="Close navigation" onClick={closeNav}>
+                Close
+              </Button>
+            ) : undefined
+          }
+        >
+          Contoso
+        </DrawerHeaderTitle>
+      </DrawerHeader>
+      <DrawerBody>
+        <PrimaryNav onNavigate={isNarrow ? closeNav : undefined} />
+      </DrawerBody>
+    </>
+  );
+
+  return (
+    <FluentProvider theme={webLightTheme}>
+      <div style={{ display: 'flex', flexDirection: isNarrow ? 'column' : 'row', minHeight: '100vh' }}>
+        {isNarrow ? (
+          <OverlayDrawer
+            open={isNavOpen}
+            onOpenChange={(_event, data) => setIsNavOpen(data.open)}
+            aria-label="Primary navigation"
+          >
+            {drawerContent}
+          </OverlayDrawer>
+        ) : (
+          <InlineDrawer separator style={{ width: 240, flexShrink: 0 }}>
+            {drawerContent}
+          </InlineDrawer>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: 0 }}>
+          <Toolbar aria-label="Page actions">
+            <ToolbarGroup>
+              {isNarrow && (
+                <ToolbarButton
+                  ref={navToggleRef}
+                  aria-label="Open navigation"
+                  aria-expanded={isNavOpen}
+                  onClick={() => setIsNavOpen(true)}
+                >
+                  Menu
+                </ToolbarButton>
+              )}
+              <ToolbarDivider />
+              <ToolbarButton appearance="primary">New report</ToolbarButton>
+            </ToolbarGroup>
+            <ToolbarGroup style={{ marginInlineStart: 'auto' }}>
+              <Avatar name="Ada Lovelace" size={28} />
+            </ToolbarGroup>
+          </Toolbar>
+          <Divider />
+          <main style={{ padding: 16, flexGrow: 1 }}>
+            <Text size={600} weight="semibold" block>
+              Overview
+            </Text>
+            <Text block style={{ marginTop: 8 }}>
+              Resize the viewport below 768px: the persistent sidebar becomes an off-canvas drawer and a menu
+              toggle appears in the toolbar.
+            </Text>
+          </main>
+        </div>
+      </div>
+    </FluentProvider>
+  );
+};
 ```
 
-- The lazy initializer keeps server rendering safe (`typeof window === 'undefined'`).
-- `mql.addEventListener('change', ...)` avoids resize-event churn and fires only when the query flips.
-- The `query` string must be the **same** string used by the CSS media query, or CSS and behaviour will disagree for a range of widths.
+### Responsive card grid with re-orienting cards
 
-## Step 4 — Flip component props at a breakpoint
-
-Several Fluent components already model “stacked vs. side-by-side”:
-
-- `Field orientation` — `'vertical' | 'horizontal'`.
-- `Card orientation` — `'vertical' | 'horizontal'` (good for media + text cards).
-- `Divider vertical` — a vertical rule; its parent must give it height.
-- `Tabs vertical`, `Nav density`, `Toolbar vertical`, `Persona textPosition`, and the various `size` props follow the same idea.
-
-Drive them from the hook and **annotate the variable** — a bare ternary widens to `string` and will not type-check against the prop:
-
-```tsx
-const isWide = useMediaQuery('(min-width: 720px)');
-const orientation: 'horizontal' | 'vertical' = isWide ? 'horizontal' : 'vertical';
-
-<Field label="Workspace name" orientation={orientation}>
-  <Input />
-</Field>;
-```
-
-## Step 5 — Compose
-
-The examples below are the three building blocks:
-
-1. `ResponsiveProjectGrid` — CSS only. A card grid that reflows 1 → 2 → 3 columns and toolbar actions that stretch to full width on phones.
-2. `ResponsiveAppShell` — behaviour switch. A sticky navigation rail at `min-width: 900px`, and a `Menu` button with `aria-expanded`/`aria-controls` that reveals the same nav below that width. A `matchMedia` hook and the CSS media queries share one breakpoint string.
-3. `ResponsiveSettingsForm` — prop switch. `Field orientation` flips at 720px and the form actions stack full-width on phones, with `Divider` rows separating sections.
-
-## Checking your work
-
-1. Resize from 320px to 1600px and watch for horizontal scrollbars — any overflow means a track or child is missing `minmax(0, 1fr)` / `minWidth: 0`.
-2. Zoom to 200% at 1280px. WCAG 1.4.10 (Reflow) requires content to be usable at the equivalent of 320 CSS px without two-dimensional scrolling.
-3. Tab through each breakpoint: the nav toggle, every rail item, and both form actions must be reachable in DOM order.
-4. Cross the breakpoint while focus is inside a control and while an input has a value — nothing should lose focus or state.
-
-## Examples
-
-### ResponsiveProjectGrid
-
-A card gallery that reflows from one to two to three columns and a toolbar whose actions go full-width on phones. Pure CSS responsiveness with Griffel media queries, tokens, Card, Badge, Avatar, Button, and Text.
+An auto-filling CSS grid of Cards that switch between small/medium size, between vertical and horizontal orientation, and that truncate text safely inside flexible grid tracks.
 
 ```tsx
 import * as React from 'react';
-import { Avatar, Badge, Button, Card, Text, makeStyles, tokens } from '@fluentui/react-components';
+import {
+  Badge,
+  Button,
+  Card,
+  CardFooter,
+  CardHeader,
+  CardPreview,
+  FluentProvider,
+  Image,
+  Text,
+  webLightTheme,
+} from '@fluentui/react-components';
 
-type ProjectStatus = 'On track' | 'At risk' | 'Blocked';
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = React.useState<boolean>(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches,
+  );
 
-interface Project {
+  React.useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handleChange = (event: MediaQueryListEvent) => setMatches(event.matches);
+    setMatches(mql.matches);
+    mql.addEventListener('change', handleChange);
+    return () => mql.removeEventListener('change', handleChange);
+  }, [query]);
+
+  return matches;
+}
+
+type Project = {
   id: string;
   name: string;
   description: string;
-  owner: string;
-  status: ProjectStatus;
-}
+  cover: string;
+  status: 'On track' | 'At risk';
+};
+
+/** Inline SVG placeholder so the example has no external dependencies. */
+const placeholderCover = (fill: string) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="${fill}"/></svg>`,
+  )}`;
 
 const PROJECTS: Project[] = [
   {
     id: 'northwind',
     name: 'Northwind migration',
-    description: 'Move the reporting pipeline to the new cluster without downtime.',
-    owner: 'Ada Lovelace',
+    description: 'Move 42 services onto the new platform.',
+    cover: placeholderCover('#0f6cbd'),
     status: 'On track',
   },
   {
     id: 'billing',
-    name: 'Billing revamp',
-    description: 'Rebuild invoices, credits and refunds end to end.',
-    owner: 'Grace Hopper',
+    name: 'Billing rewrite',
+    description: 'Consolidate invoice generation and dunning.',
+    cover: placeholderCover('#8764b8'),
     status: 'At risk',
   },
   {
-    id: 'search',
-    name: 'Search relevance',
-    description: 'Tune ranking signals for the product catalog.',
-    owner: 'Alan Turing',
-    status: 'Blocked',
+    id: 'design-system',
+    name: 'Design system audit',
+    description: 'Align every surface with the design system.',
+    cover: placeholderCover('#038387'),
+    status: 'On track',
   },
 ];
 
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalL,
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: tokens.spacingHorizontalL,
-    boxSizing: 'border-box',
-  },
-  // Stacked on phones, split on the left/right from 640px up.
-  toolbar: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalS,
-    columnGap: tokens.spacingHorizontalM,
-    '@media (min-width: 640px)': {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-  },
-  heading: {
-    margin: 0,
-    fontSize: tokens.fontSizeBase600,
-    lineHeight: tokens.lineHeightBase600,
-    fontWeight: tokens.fontWeightSemibold,
-  },
-  toolbarActions: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    columnGap: tokens.spacingHorizontalS,
-    rowGap: tokens.spacingVerticalS,
-  },
-  toolbarButton: {
-    flexGrow: 1,
-    '@media (min-width: 640px)': { flexGrow: 0 },
-  },
-  // 1 column -> 2 columns -> 3 columns. minmax(0, 1fr) keeps long words from
-  // stretching the track wider than its share of the container.
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr)',
-    gap: tokens.spacingHorizontalM,
-    '@media (min-width: 640px)': {
-      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    },
-    '@media (min-width: 1024px)': {
-      gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-    },
-  },
-  card: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalS,
-    height: '100%',
-    boxSizing: 'border-box',
-  },
-  cardFooter: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    columnGap: tokens.spacingHorizontalS,
-    rowGap: tokens.spacingVerticalS,
-    marginTop: 'auto',
-  },
-  owner: {
-    display: 'flex',
-    alignItems: 'center',
-    columnGap: tokens.spacingHorizontalS,
-    minWidth: 0,
-  },
-});
-
-const badgeColor = (status: ProjectStatus): 'success' | 'warning' | 'danger' => {
-  if (status === 'On track') {
-    return 'success';
-  }
-  if (status === 'At risk') {
-    return 'warning';
-  }
-  return 'danger';
-};
-
-export const ResponsiveProjectGrid: React.FC = () => {
-  const styles = useStyles();
+export const ResponsiveCardGrid: React.FC = () => {
+  const isCompact = useMediaQuery('(max-width: 599px)');
+  const isWide = useMediaQuery('(min-width: 1024px)');
 
   return (
-    <section className={styles.root} aria-labelledby="projects-heading">
-      <div className={styles.toolbar}>
-        <h2 className={styles.heading} id="projects-heading">
+    <FluentProvider theme={webLightTheme}>
+      <section style={{ padding: 16 }}>
+        <Text size={600} weight="semibold" block>
           Projects
-        </h2>
-        <div className={styles.toolbarActions}>
-          <Button className={styles.toolbarButton} appearance="secondary">
-            Filter
-          </Button>
-          <Button className={styles.toolbarButton} appearance="primary">
-            New project
-          </Button>
-        </div>
-      </div>
+        </Text>
 
-      <div className={styles.grid}>
-        {PROJECTS.map((project) => (
-          <Card key={project.id} appearance="outline" className={styles.card}>
-            <Text weight="semibold" truncate>
-              {project.name}
-            </Text>
-            <Text size={200}>{project.description}</Text>
-            <div className={styles.cardFooter}>
-              <span className={styles.owner}>
-                <Avatar name={project.owner} size={24} />
-                <Text size={200} truncate>
-                  {project.owner}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(auto-fill, minmax(${isCompact ? '100%' : '300px'}, 1fr))`,
+            gap: 12,
+            marginTop: 12,
+          }}
+        >
+          {PROJECTS.map((project) => (
+            <Card
+              key={project.id}
+              appearance="outline"
+              size={isCompact ? 'small' : 'medium'}
+              orientation={isWide ? 'horizontal' : 'vertical'}
+            >
+              <CardPreview>
+                <Image
+                  src={project.cover}
+                  alt=""
+                  fit="cover"
+                  style={
+                    isWide
+                      ? { width: 160, minHeight: 120, alignSelf: 'stretch' }
+                      : { width: '100%', height: 140 }
+                  }
+                />
+              </CardPreview>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  minWidth: 0,
+                  flexGrow: 1,
+                }}
+              >
+                <CardHeader
+                  header={
+                    <Text weight="semibold" truncate>
+                      {project.name}
+                    </Text>
+                  }
+                  description={
+                    <Text size={200} truncate>
+                      {project.description}
+                    </Text>
+                  }
+                  action={
+                    <Badge
+                      appearance="tint"
+                      color={project.status === 'On track' ? 'success' : 'warning'}
+                    >
+                      {project.status}
+                    </Badge>
+                  }
+                />
+                <CardFooter>
+                  <Button appearance="primary">Open</Button>
+                  <Button appearance="secondary">Share</Button>
+                </CardFooter>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </section>
+    </FluentProvider>
+  );
+};
+```
+
+### Master/detail with a tab rail that flips vertical to horizontal
+
+A mailbox-style layout: TabList vertical on desktop, horizontal on mobile, a Divider that matches the parent axis, and a detail Card whose action row wraps on narrow screens.
+
+```tsx
+import * as React from 'react';
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  Divider,
+  FluentProvider,
+  Tab,
+  TabList,
+  Text,
+  webLightTheme,
+} from '@fluentui/react-components';
+
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = React.useState<boolean>(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches,
+  );
+
+  React.useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handleChange = (event: MediaQueryListEvent) => setMatches(event.matches);
+    setMatches(mql.matches);
+    mql.addEventListener('change', handleChange);
+    return () => mql.removeEventListener('change', handleChange);
+  }, [query]);
+
+  return matches;
+}
+
+type Message = {
+  id: string;
+  from: string;
+  subject: string;
+  body: string;
+  unread: boolean;
+};
+
+const MESSAGES: Message[] = [
+  {
+    id: 'm1',
+    from: 'Ada Lovelace',
+    subject: 'Quarterly plan review',
+    body: 'I tightened the milestones for Q3 and removed the two deliverables that depended on the billing rewrite. The revised plan is attached: please review before Thursday.',
+    unread: true,
+  },
+  {
+    id: 'm2',
+    from: 'Grace Hopper',
+    subject: 'Release notes draft',
+    body: 'The draft notes are ready for a first pass. I flagged the breaking changes in the migration section so support can prepare the knowledge base article.',
+    unread: false,
+  },
+  {
+    id: 'm3',
+    from: 'Alan Turing',
+    subject: 'Incident postmortem',
+    body: 'Root cause was a stale feature flag left enabled in one ring. Action items: add a flag audit to the release checklist and alert on flag age.',
+    unread: false,
+  },
+];
+
+export const ResponsiveMasterDetail: React.FC = () => {
+  const isNarrow = useMediaQuery('(max-width: 767px)');
+  const [selectedId, setSelectedId] = React.useState<string>(MESSAGES[0].id);
+  const selected = MESSAGES.find((message) => message.id === selectedId) ?? MESSAGES[0];
+
+  return (
+    <FluentProvider theme={webLightTheme}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: isNarrow ? 'column' : 'row',
+          gap: isNarrow ? 0 : 16,
+          padding: 16,
+          minHeight: '100vh',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ flexShrink: 0, width: isNarrow ? '100%' : 240 }}>
+          <TabList
+            vertical={!isNarrow}
+            selectedValue={selectedId}
+            onTabSelect={(_event, data) => setSelectedId(data.value as string)}
+            style={isNarrow ? { overflowX: 'auto' } : undefined}
+          >
+            {MESSAGES.map((message) => (
+              <Tab key={message.id} value={message.id}>
+                {message.subject}
+              </Tab>
+            ))}
+          </TabList>
+        </div>
+
+        <Divider vertical={!isNarrow} />
+
+        <div style={{ flexGrow: 1, minWidth: 0, paddingBlock: isNarrow ? 16 : 0 }}>
+          <Card appearance="subtle">
+            <CardHeader
+              header={
+                <Text size={500} weight="semibold">
+                  {selected.subject}
                 </Text>
-              </span>
-              <Badge appearance="tint" color={badgeColor(project.status)}>
-                {project.status}
-              </Badge>
+              }
+              description={<Text size={200}>{selected.from}</Text>}
+              action={
+                selected.unread ? (
+                  <Badge appearance="filled" color="brand">
+                    Unread
+                  </Badge>
+                ) : undefined
+              }
+            />
+            <Text block style={{ marginTop: 12 }}>
+              {selected.body}
+            </Text>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+              <Button appearance="primary">Reply</Button>
+              <Button appearance="secondary">Archive</Button>
             </div>
           </Card>
-        ))}
+        </div>
       </div>
-    </section>
+    </FluentProvider>
   );
 };
 ```
 
-### ResponsiveAppShell
+### Settings dialog that becomes a full-screen sheet on mobile
 
-An app shell with a sticky navigation rail on desktop that becomes a collapsible nav panel below 900px, driven by a matchMedia hook that shares its breakpoint string with the Griffel media queries.
+A controlled Dialog whose surface fills the viewport below 600px, with a responsive Field/Input/Select grid and fluid (full-width, stacked) DialogActions.
 
 ```tsx
 import * as React from 'react';
-import { Avatar, Badge, Button, Card, Divider, Text, Tooltip, makeStyles, tokens } from '@fluentui/react-components';
-
-/**
- * Keep this string in sync with the `@media (min-width: 900px)` blocks below:
- * the CSS lays the shell out and the hook decides which markup to render.
- */
-const WIDE_QUERY = '(min-width: 900px)';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  Field,
+  FluentProvider,
+  Input,
+  Select,
+  webLightTheme,
+} from '@fluentui/react-components';
 
 function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = React.useState<boolean>(() =>
-    typeof window === 'undefined' ? false : window.matchMedia(query).matches,
+  const [matches, setMatches] = React.useState<boolean>(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches,
   );
 
   React.useEffect(() => {
     const mql = window.matchMedia(query);
     const handleChange = (event: MediaQueryListEvent) => setMatches(event.matches);
-
     setMatches(mql.matches);
     mql.addEventListener('change', handleChange);
     return () => mql.removeEventListener('change', handleChange);
@@ -340,379 +625,143 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-const NAV_ITEMS = ['Overview', 'Deployments', 'Analytics', 'Settings'] as const;
-
-const STATS = [
-  { id: 'deploys', label: 'Deployments today', value: '18' },
-  { id: 'failed', label: 'Failed checks', value: '2' },
-  { id: 'build', label: 'Average build time', value: '4m 12s' },
-];
-
-const useStyles = makeStyles({
-  shell: {
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: '100vh',
-    backgroundColor: tokens.colorNeutralBackground2,
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    columnGap: tokens.spacingHorizontalM,
-    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
-    backgroundColor: tokens.colorNeutralBackground1,
-    borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
-  },
-  brand: {
-    minWidth: 0,
-  },
-  headerEnd: {
-    display: 'flex',
-    alignItems: 'center',
-    columnGap: tokens.spacingHorizontalM,
-  },
-  alerts: {
-    display: 'flex',
-    alignItems: 'center',
-    columnGap: tokens.spacingHorizontalXS,
-  },
-  // Column on narrow screens (nav above content), row from 900px up.
-  body: {
-    display: 'flex',
-    flexDirection: 'column',
-    flexGrow: 1,
-    '@media (min-width: 900px)': {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-    },
-  },
-  rail: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalXXS,
-    paddingTop: tokens.spacingVerticalS,
-    paddingBottom: tokens.spacingVerticalS,
-    paddingLeft: tokens.spacingHorizontalS,
-    paddingRight: tokens.spacingHorizontalS,
-    backgroundColor: tokens.colorNeutralBackground1,
-    '@media (min-width: 900px)': {
-      width: '240px',
-      flexShrink: 0,
-      position: 'sticky',
-      top: 0,
-      borderRight: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
-    },
-  },
-  navItem: {
-    justifyContent: 'flex-start',
-    width: '100%',
-  },
-  content: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalL,
-    flexGrow: 1,
-    minWidth: 0,
-    padding: tokens.spacingHorizontalL,
-  },
-  stats: {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr)',
-    gap: tokens.spacingHorizontalM,
-    '@media (min-width: 640px)': {
-      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    },
-    '@media (min-width: 1200px)': {
-      gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-    },
-  },
-  statCard: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalXXS,
-  },
-});
-
-export const ResponsiveAppShell: React.FC = () => {
-  const styles = useStyles();
-  const isWide = useMediaQuery(WIDE_QUERY);
-  const [navOpen, setNavOpen] = React.useState(false);
-  const [selected, setSelected] = React.useState<string>(NAV_ITEMS[0]);
-
-  // On wide screens the rail is always there; below the breakpoint it is a disclosure.
-  const showNavigation = isWide || navOpen;
-
-  const handleSelect = (item: string) => {
-    setSelected(item);
-    if (!isWide) {
-      setNavOpen(false);
-    }
-  };
-
-  return (
-    <div className={styles.shell}>
-      <header className={styles.header}>
-        <div className={styles.brand}>
-          <Text weight="semibold" truncate>
-            Contoso Ops
-          </Text>
-        </div>
-
-        <div className={styles.headerEnd}>
-          <span className={styles.alerts}>
-            <Badge appearance="tint" color="danger" size="medium">
-              3
-            </Badge>
-            <Text size={200}>alerts</Text>
-          </span>
-
-          <Tooltip content="Opens the documentation" relationship="description">
-            <Button
-              appearance="subtle"
-              onClick={() => window.open('https://example.com/docs', '_blank', 'noopener')}
-            >
-              Help
-            </Button>
-          </Tooltip>
-
-          <Avatar name="Ada Lovelace" size={28} />
-
-          {!isWide ? (
-            <Button
-              appearance="subtle"
-              aria-expanded={navOpen}
-              aria-controls="app-navigation"
-              onClick={() => setNavOpen((open) => !open)}
-            >
-              Menu
-            </Button>
-          ) : null}
-        </div>
-      </header>
-
-      <div className={styles.body}>
-        {showNavigation ? (
-          <nav id="app-navigation" className={styles.rail} aria-label="Primary">
-            {NAV_ITEMS.map((item) => (
-              <Button
-                key={item}
-                className={styles.navItem}
-                appearance={item === selected ? 'secondary' : 'subtle'}
-                aria-current={item === selected ? 'page' : undefined}
-                onClick={() => handleSelect(item)}
-              >
-                {item}
-              </Button>
-            ))}
-          </nav>
-        ) : null}
-
-        <main className={styles.content}>
-          <Text size={600} weight="semibold" block>
-            {selected}
-          </Text>
-          <Divider />
-
-          <div className={styles.stats}>
-            {STATS.map((stat) => (
-              <Card
-                key={stat.id}
-                appearance="filled-alternative"
-                className={styles.statCard}
-              >
-                <Text size={200}>{stat.label}</Text>
-                <Text size={500} weight="semibold">
-                  {stat.value}
-                </Text>
-              </Card>
-            ))}
-          </div>
-        </main>
-      </div>
-    </div>
-  );
-};
-```
-
-### ResponsiveSettingsForm
-
-A settings form in a Card where Field orientation flips from vertical to horizontal at 720px and the action buttons stack full-width on phones, showing prop-driven responsiveness on top of CSS.
-
-```tsx
-import * as React from 'react';
-import { Button, Card, Divider, Field, Input, Select, Switch, Text, makeStyles, tokens } from '@fluentui/react-components';
-
-const WIDE_QUERY = '(min-width: 720px)';
-
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = React.useState<boolean>(() =>
-    typeof window === 'undefined' ? false : window.matchMedia(query).matches,
-  );
-
-  React.useEffect(() => {
-    const mql = window.matchMedia(query);
-    const handleChange = (event: MediaQueryListEvent) => setMatches(event.matches);
-
-    setMatches(mql.matches);
-    mql.addEventListener('change', handleChange);
-    return () => mql.removeEventListener('change', handleChange);
-  }, [query]);
-
-  return matches;
-}
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    justifyContent: 'center',
-    minHeight: '100vh',
-    padding: tokens.spacingHorizontalL,
-    boxSizing: 'border-box',
-    backgroundColor: tokens.colorNeutralBackground2,
-  },
-  card: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalL,
-    width: '100%',
-    maxWidth: '720px',
-    alignSelf: 'flex-start',
-    padding: tokens.spacingHorizontalL,
-    boxSizing: 'border-box',
-  },
-  fields: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalL,
-  },
-  // Actions are stacked and full width on phones, right-aligned on one row above 720px.
-  actions: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalS,
-    '@media (min-width: 720px)': {
-      flexDirection: 'row',
-      justifyContent: 'flex-end',
-      columnGap: tokens.spacingHorizontalS,
-    },
-  },
-  actionButton: {
-    width: '100%',
-    '@media (min-width: 720px)': { width: 'auto' },
-  },
-});
-
-export const ResponsiveSettingsForm: React.FC = () => {
-  const styles = useStyles();
-  const isWide = useMediaQuery(WIDE_QUERY);
-  // Annotate the variable: a bare ternary widens to `string` and fails to type-check.
-  const orientation: 'horizontal' | 'vertical' = isWide ? 'horizontal' : 'vertical';
-
-  const [name, setName] = React.useState('Contoso Ops');
+export const ResponsiveSettingsDialog: React.FC = () => {
+  const isNarrow = useMediaQuery('(max-width: 599px)');
+  const [open, setOpen] = React.useState(false);
+  const [name, setName] = React.useState('Contoso workspace');
   const [region, setRegion] = React.useState('westus');
-  const [digest, setDigest] = React.useState(true);
-  const [saving, setSaving] = React.useState(false);
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSaving(true);
-    window.setTimeout(() => setSaving(false), 800);
-  };
 
   return (
-    <form className={styles.root} onSubmit={handleSubmit}>
-      <Card className={styles.card} appearance="outline">
-        <Text size={500} weight="semibold" block>
-          Workspace settings
-        </Text>
-        <Divider />
+    <FluentProvider theme={webLightTheme}>
+      <Dialog open={open} onOpenChange={(_event, data) => setOpen(data.open)}>
+        <DialogTrigger disableButtonEnhancement>
+          <Button appearance="primary">Workspace settings</Button>
+        </DialogTrigger>
 
-        <div className={styles.fields}>
-          <Field
-            label="Workspace name"
-            orientation={orientation}
-            required
-            hint="Shown to everyone in the workspace."
-          >
-            <Input
-              value={name}
-              onChange={(_, data) => setName(data.value)}
-              placeholder="Contoso Ops"
-            />
-          </Field>
+        <DialogSurface
+          style={
+            isNarrow
+              ? {
+                  width: '100vw',
+                  maxWidth: '100vw',
+                  height: '100vh',
+                  maxHeight: '100vh',
+                  margin: 0,
+                  borderRadius: 0,
+                }
+              : { maxWidth: 520 }
+          }
+        >
+          <DialogBody>
+            <DialogTitle
+              action={
+                <DialogTrigger action="close" disableButtonEnhancement>
+                  <Button appearance="subtle" aria-label="Close settings">
+                    Close
+                  </Button>
+                </DialogTrigger>
+              }
+            >
+              Workspace settings
+            </DialogTitle>
 
-          <Field
-            label="Primary region"
-            orientation={orientation}
-            hint="Changing the region restarts running jobs."
-          >
-            <Select value={region} onChange={(_, data) => setRegion(data.value)}>
-              <option value="westus">West US</option>
-              <option value="eastus">East US</option>
-              <option value="westeurope">West Europe</option>
-            </Select>
-          </Field>
+            <DialogContent>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: isNarrow ? '1fr' : '1fr 1fr',
+                  gap: 16,
+                }}
+              >
+                <Field label="Workspace name" required>
+                  <Input value={name} onChange={(_event, data) => setName(data.value)} />
+                </Field>
 
-          <Field
-            label="Weekly digest"
-            orientation={orientation}
-            hint="A summary email every Monday."
-          >
-            {/* Field labels the control, so the Switch does not need its own label. */}
-            <Switch checked={digest} onChange={(_, data) => setDigest(data.checked)} />
-          </Field>
-        </div>
+                <Field label="Region" hint="Determines where your data is stored.">
+                  <Select value={region} onChange={(_event, data) => setRegion(data.value)}>
+                    <option value="westus">West US</option>
+                    <option value="eastus">East US</option>
+                    <option value="westeurope">West Europe</option>
+                  </Select>
+                </Field>
+              </div>
+            </DialogContent>
 
-        <Divider />
-
-        <div className={styles.actions}>
-          <Button className={styles.actionButton} appearance="secondary" type="reset">
-            Reset
-          </Button>
-          <Button
-            className={styles.actionButton}
-            appearance="primary"
-            type="submit"
-            disabled={saving}
-          >
-            {saving ? 'Saving...' : 'Save changes'}
-          </Button>
-        </div>
-      </Card>
-    </form>
+            <DialogActions fluid={isNarrow}>
+              <DialogTrigger action="close" disableButtonEnhancement>
+                <Button appearance="secondary">Cancel</Button>
+              </DialogTrigger>
+              <Button appearance="primary" onClick={() => setOpen(false)}>
+                Save
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+    </FluentProvider>
   );
 };
 ```
 
 ## Pitfalls
 
-- Building media query strings in makeStyles from a shared constants object using computed keys (`[MEDIA.mdUp]: { ... }`) can widen the style object's type and break type-checking or Griffel's class extraction. Write the media query string literally inside each style rule and share only plain numbers/strings with your matchMedia hook.
-- Using `1fr` grid tracks instead of `minmax(0, 1fr)` lets long unbroken content (URLs, code, Table rows) stretch a column past its share and produce horizontal page scrolling.
-- Omitting `minWidth: 0` on flex or grid children that contain text, a Card, or a Table. Flex items default to min-width: auto, so they refuse to shrink and overflow instead.
-- Driving anything with JS that CSS can do. Reading `window.matchMedia` in a useState initializer without guarding `typeof window === 'undefined'` breaks server rendering, and computing layout in JS causes a flash before hydration. Guard it, and keep the JS query string identical to the CSS media query or the layout and behaviour disagree for a band of widths.
-- Unmounting an element when a breakpoint flips (for example, removing the whole nav) can drop focus, reset scroll, or lose form state. Prefer CSS-level hiding with `hidden`/`display:none`, and only conditionally render when the markup genuinely differs — and then keep the toggle and the region adjacent in the DOM.
-- Rendering exactly one button per breakpoint (a mobile 'Menu' button and a desktop 'Help' button in separate branches) without a stable `key` or element identity can cause focus loss and duplicate ids. Render one element and change its props/behaviour instead.
-- Using `Divider vertical` inside a container that has no height or does not stretch its children: a vertical divider resolves to zero height and disappears. Give the parent an explicit height or `alignItems: 'stretch'`.
-- Making a sticky header or rail without offsetting the other sticky element by the header height, so the rail sticks underneath the header. Use a shared height token/variable for both.
-- Relying on Button's default size for full-width mobile actions. Buttons size to their content; set `width: '100%'` in the narrow rule and revert to `width: 'auto'` inside the wider media query. The same applies to reordering actions: keep the primary action last in the DOM rather than using CSS `order`.
+- Calling hooks conditionally to "switch layout": `if (isNarrow) { const x = useState(...) }` breaks the rules of hooks. Always call useMediaQuery and every state hook unconditionally at the top, then branch only in the returned JSX.
+- Rendering both layouts and hiding one with display:none: this duplicates element ids, doubles the tab stops, and fires effects twice. Swap the component tree instead; if you must keep DOM alive, hide it with hidden/inert semantics.
+- Forgetting to close the overlay drawer when the viewport grows: the modal drawer stays mounted behind the newly visible inline drawer and can swallow focus on the next interaction. Add an effect keyed on isNarrow that closes it.
+- Reading window.innerWidth during render or in a resize listener without guards: it produces stale values across renders, causes hydration mismatches in SSR frameworks, and triggers layout thrash. Subscribe to matchMedia once per query instead.
+- Skipping minWidth: 0 on flex/grid children: a long title or an Image with a natural width pushes the pane wider than its track and breaks the whole shell. Add minWidth: 0 and use Text truncate.
+- Changing Card orientation without regrouping children: with orientation="horizontal" every direct child becomes a flex row item, so CardPreview takes a full column and the header sits beside it awkwardly. Wrap CardHeader and CardFooter in a single column div.
+- Letting JavaScript and CSS breakpoints drift apart: if the hook uses 767px while your stylesheet uses 768px, one frame renders a hybrid layout. Define the breakpoints once and reference the same values.
+- Giving the mobile experience fewer capabilities: hiding the primary action on small screens or burying it behind a scroll that the sticky header covers. Reflow actions (flexWrap: 'wrap', DialogActions fluid) instead of removing them.
+- Using pixel-perfect absolute positioning for responsiveness: it breaks at unanticipated widths, in RTL, and under zoom. Prefer grid auto-fill/minmax, flex-wrap, and clamp() for fluid behaviour.
+- Not returning focus to the trigger after the overlay drawer closes: keyboard users end up at the top of the document. Store the toggle in a ref and call focus() in the close handler.
 
 ## Accessibility
 
-Fluent layout components do not add landmarks, so provide them yourself: header/main/nav/section with aria-labelledby on sections that have headings, and aria-label on navigation regions. A control that shows or hides navigation must be a real button (Button) with aria-expanded and aria-controls pointing at the id of the region it toggles, and it should sit immediately before that region in DOM order so keyboard users move from the toggle straight into the nav. Collapsed navigation must be removed from the DOM or hidden with the hidden attribute / display:none — never just visually hidden — so its items are not focusable or exposed to assistive technology. Keep DOM order identical to visual order; do not reorder with CSS order, column-reverse, or absolute positioning, since screen readers and tab order follow the DOM. Text truncate removes content visually but not from the accessibility tree, so make the full value available (a title or aria-label on the container) when truncation is possible. Keep interactive targets at least 40-44px on touch widths; the responsive toolbar stretches buttons on phones, which also satisfies target-size guidance. Field supplies the label association for Input, Select, and Switch — do not add a second visible label to the control inside a Field. Sticky headers and rails can cover the focused element when scrolling; add scroll offset or padding so focus is never hidden, and check that resizing across a breakpoint does not move focus or discard typed input. Test at 200% browser zoom: WCAG 1.4.10 requires usable reflow at the equivalent of a 320 CSS px viewport without two-dimensional scrolling. Media-query-driven layout responds to zoom automatically; JS-driven layout should never be the only thing keeping content usable.
+Responsive layouts must expose the same information and the same task completion paths at every width, or the small-screen experience becomes a dead end. Specific requirements for this recipe:
+
+1. Navigation toggle: the button that opens the off-canvas drawer must be a real button with an accessible name (aria-label="Open navigation") and must report state with aria-expanded={isNavOpen}. It must only exist in the narrow layout so screen-reader and keyboard users never encounter two navigation controls.
+2. Drawer semantics: OverlayDrawer is modal - it renders a backdrop, traps focus, and closes on Esc, so it must have an accessible name (aria-label on the drawer) and a visible close action in DrawerHeaderTitle. Return focus to the toggle when the drawer closes; without that, focus lands on body and keyboard users lose their place.
+3. Reading order equals DOM order: when a row layout stacks into a column, the DOM order (nav, toolbar, main / list, detail) is the reading order. Do not use CSS order or absolute positioning to visually reorder regions, because assistive technology follows the DOM.
+4. TabList: switching vertical={!isNarrow} keeps arrow-key navigation intact because TabList implements roving tabindex in both axes. Keep one TabList in the tree across the breakpoint so the selected tab and focus are preserved.
+5. Dialogs on mobile: a full-screen DialogSurface is still a modal - keep the DialogTitle with a close DialogTrigger, keep focus trapped by Dialog (do not disable it), and ensure DialogActions buttons are reachable with the virtual keyboard open. Set DialogActions fluid so buttons do not shrink below the ~44px touch target.
+6. Text truncation must never hide the only copy: pair Text truncate with a title attribute or expose the full value in the detail pane, not only in the list.
+7. Zoom and text resize: verify the layout at 200% browser zoom and at 320px CSS width. Prefer em-based media queries so increased user font size also triggers the compact layout.
+8. Motion: overlay drawers and dialogs animate; respect reduced-motion preferences and avoid animating layout properties (width/height) in your own breakpoint styling.
 
 ## Components used
 
+- [FluentProvider](../../components/fluent-provider.md)
+- [Toolbar](../../components/toolbar.md)
+- [ToolbarGroup](../../components/toolbar-group.md)
+- [ToolbarButton](../../components/toolbar-button.md)
+- [ToolbarDivider](../../components/toolbar-divider.md)
 - [Avatar](../../components/avatar.md)
-- [Badge](../../components/badge.md)
 - [Button](../../components/button.md)
-- [Card](../../components/card.md)
 - [Divider](../../components/divider.md)
+- [DrawerHeader](../../components/drawer-header.md)
+- [DrawerHeaderTitle](../../components/drawer-header-title.md)
+- [DrawerBody](../../components/drawer-body.md)
+- [InlineDrawer](../../components/inline-drawer.md)
+- [OverlayDrawer](../../components/overlay-drawer.md)
+- [Text](../../components/text.md)
+- [Card](../../components/card.md)
+- [CardHeader](../../components/card-header.md)
+- [CardPreview](../../components/card-preview.md)
+- [CardFooter](../../components/card-footer.md)
+- [Image](../../components/image.md)
+- [Badge](../../components/badge.md)
+- [TabList](../../components/tab-list.md)
+- [Tab](../../components/tab.md)
+- [Dialog](../../components/dialog.md)
+- [DialogTrigger](../../components/dialog-trigger.md)
+- [DialogSurface](../../components/dialog-surface.md)
+- [DialogBody](../../components/dialog-body.md)
+- [DialogTitle](../../components/dialog-title.md)
+- [DialogContent](../../components/dialog-content.md)
+- [DialogActions](../../components/dialog-actions.md)
 - [Field](../../components/field.md)
 - [Input](../../components/input.md)
 - [Select](../../components/select.md)
-- [Switch](../../components/switch.md)
-- [Text](../../components/text.md)
-- [Tooltip](../../components/tooltip.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

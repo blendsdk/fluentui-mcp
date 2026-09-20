@@ -4,617 +4,646 @@
 
 ## Goal
 
-A production-ready sign-in form built from Fluent UI React v9 primitives: labelled credential inputs (Field + Input), a remember-me and reveal-password checkbox, a single primary action that guards against double submission, in-flight progress via Spinner, and form-level server feedback via MessageBar, wrapped in structure components (Card, Text, Divider, Link).
+Build a complete, accessible Fluent UI v9 login form: labeled email/password inputs with inline validation, a remember-me checkbox, secondary links, a submit button with a pending state, form-level error reporting, an optional password-reveal control, and a dialog-based re-authentication variant.
 
 ## When to Use
 
-Use this recipe for any credential sign-in surface: a dedicated /login page, a modal or drawer sign-in prompt, an SSO fallback form, or a re-authentication prompt after session expiry. It fits when you need controlled inputs, inline validation, a single primary call-to-action, and screen-reader friendly error reporting without pulling in a form library.
+Use this recipe when a user must prove identity with a credential (email/username + password, employee ID + PIN, etc.) before entering an app or before a sensitive action: sign-in pages, account-switch screens, session-expired re-authentication gates, and admin 'confirm your password' prompts. It fits both a bare page layout and a Card-based layout, and covers local validation plus server-side failure reporting.
 
 ## When Not to Use
 
-Do not use it for account creation or multi-step flows with many field types (use the broader Form recipe with Select, DatepickerCompat, Spinbutton, Textarea). Avoid it when authentication is fully delegated to an external redirect with no local fields (you only need a Button and maybe a Spinner). For a password reset screen, reuse the Field + Input + Button + MessageBar pattern but with one field and a success state instead of a session. If you genuinely need a modal sign-in, wrap this markup in a Dialog rather than reworking the fields.
+Do not use it for (a) creating an account — that needs confirmation fields, password strength meters, and terms acceptance; (b) federated-only sign-in where the only affordance is a provider Button or Link and no credential is typed; (c) one-time-code / OTP entry, which is a single focused Input with numeric semantics and auto-advance; (d) search, filtering, or inline editing, which should use SearchBox, Dropdown, or DataGrid editing instead. If you need many arbitrary fields and layout composition, reach for a general form recipe built from Field + a layout primitive rather than this credential-specific flow.
 
-A sign-in surface assembled from Fluent UI React v9 form primitives: `Field`, `Input`, `Checkbox` and `Button`, with `MessageBar` and `Spinner` for the round trip to your identity service, plus `Card`, `Text`, `Divider` and `Link` for structure.
+A login form converts a credential — normally an email or username plus a password — into a session. In Fluent UI v9 the whole thing is composed from a small set of primitives: `Field` wraps each control and owns its label and validation message, `Input` is the credential control, `Checkbox` handles "remember me", `Button` is the single primary action, `MessageBar` reports failures that do not belong to one field, and `Spinner` communicates the pending round trip.
 
-## What the recipe produces
+## Anatomy
 
-- Two credential inputs with persistent labels, required indicators and inline error text that is part of the accessibility tree.
-- Validation that runs on submit first and only then reacts to typing, so nobody is scolded mid keystroke.
-- One primary action that cannot be double submitted and that reports progress while it waits.
-- Server feedback through `MessageBar` instead of a modal or toast that steals focus.
-- The secondary paths a real sign-in screen needs: reveal password, stay signed in, forgot password, create account and alternate providers.
-
-## Why these components
-
-| Concern | Component | Notes |
-| --- | --- | --- |
-| Label, hint and error text | `Field` | Renders `label`, `hint` and `validationMessage` as one unit and connects them to the control passed as children. |
-| Credential entry | `Input` | `type` switches between `email`, `password` and `text` for the reveal toggle with no styling change. |
-| Boolean choices | `Checkbox` | Controlled with `checked` and `onChange(ev, data)`; read `data.checked`. |
-| Primary action | `Button` | `appearance="primary"`, `size="large"`, `disabled` while a request is in flight. |
-| ProgressBar | `Spinner` | Rendered in the Button `icon` slot while submitting. |
-| Result feedback | `MessageBar` | `intent="error"` with `politeness="assertive"` for failures, `intent="success"` with `politeness="polite"` for success. |
-| Surface, heading text, separator, links | `Card`, `Text`, `Divider`, `Link` | Purely presentational plus navigation. |
-
-## Step 1 - Model values and errors
-
-Keep the field values in one object and the validation result in a second one. Both inputs stay controlled (`value` + `onChange`), which is what lets you clear an error the moment the user fixes it.
-
-```tsx
-type LoginValues = { email: string; password: string; rememberMe: boolean };
-type FieldErrors = Partial<Record<'email' | 'password', string>>;
-
-const [values, setValues] = React.useState<LoginValues>({ email: '', password: '', rememberMe: true });
-const [errors, setErrors] = React.useState<FieldErrors>({});
-const [submitted, setSubmitted] = React.useState(false);
+```text
+<form>
+├─ h1 > Text                  heading ("Sign in")
+├─ MessageBar                 optional form-level error (intent="error", politeness="assertive")
+├─ Field[label=Email]         → Input[type=email, autoComplete=username]
+├─ Field[label=Password]      → Input[type=password, autoComplete=current-password]
+├─ Checkbox + Link            "Keep me signed in" · "Forgot password?"
+└─ Button[type=submit]        primary action; disabled + Spinner while pending
 ```
 
-`Input` does not require a controlled value, but a login form almost always wants one, because you need to validate, clear and sometimes prefill a previously used address.
+Optional layers:
 
-## Step 2 - One Field per input
+- `Card` when the form sits on a page next to marketing content or other panels.
+- `Input` `contentAfter` slot for a show/hide password toggle.
+- `Dialog` + `DialogSurface` + `DialogBody` + `DialogTitle` + `DialogContent` + `DialogActions` for a re-authentication prompt.
 
-`Field` is the accessibility backbone. Render the control inside it and describe it with the `label`, `required`, `validationState` and `validationMessage` props:
+## State shape
+
+Hold everything in one component (or one custom hook) so validation, submission, and error display stay in sync:
+
+```ts
+type LoginErrors = { email?: string; password?: string };
+
+const [email, setEmail] = React.useState('');
+const [password, setPassword] = React.useState('');
+const [remember, setRemember] = React.useState(false);
+const [errors, setErrors] = React.useState<LoginErrors>({});
+const [formError, setFormError] = React.useState<string | null>(null);
+const [submitting, setSubmitting] = React.useState(false);
+```
+
+Two error channels, deliberately separated:
+
+1. **Field errors** — knowable locally (missing, malformed, too short). They render through `Field`'s `validationState` and `validationMessage` so the message is programmatically associated with the control.
+2. **Form errors** — knowable only after the round trip (bad credentials, locked account, network failure, rate limit). They render through `MessageBar` above the fields.
+
+## Labeling and validation with Field
+
+Never use a placeholder as a label. `Field` renders a real `<label>` tied to the control by `htmlFor`, adds the required indicator from `required`, and links the validation message and hint to the control for you:
 
 ```tsx
 <Field
-  label="Password"
+  label="Email"
   required
-  validationState={errors.password ? 'error' : 'none'}
-  validationMessage={errors.password}
+  hint="Use the address you signed up with."
+  validationState={errors.email ? 'error' : 'none'}
+  validationMessage={errors.email}
 >
-  <Input
-    type={showPassword ? 'text' : 'password'}
-    appearance="outline"
-    value={values.password}
-    onChange={(ev, data) => update({ password: data.value })}
-  />
+  <Input type="email" name="email" autoComplete="username" value={email} onChange={(_, data) => setEmail(data.value)} />
 </Field>
 ```
 
 Rules of thumb:
 
-- Always reset `validationState` to `'none'` when the message clears, otherwise the field keeps its error outline.
-- Prefer the persistent `label` over a placeholder. A placeholder is not a label and disappears as soon as the user types.
-- Use `hint` for static guidance (password rules, SSO instructions) and `validationMessage` for dynamic errors.
-- Use `orientation="horizontal"` on `Field` for a compact, table-like sign-in card.
+- Set `noValidate` on the `<form>` when you use `Field` validation. Otherwise the browser's native bubbles and Fluent's inline messages both fire and contradict each other.
+- `validationState="error"` gives you the icon and color; the `validationMessage` string is the announcement. Do not rely on color alone.
+- Validate on submit. After a field has been marked invalid, re-validate that field on change so the error clears as soon as the user fixes it.
 
-## Step 3 - Validate on submit, then live
-
-Validate in a single function, call it from the submit handler, and gate live re-validation behind a `submitted` flag:
+## Submission and pending state
 
 ```tsx
-const update = (patch: Partial<LoginValues>) => {
-  const next = { ...values, ...patch };
-  setValues(next);
-  if (submitted) {
-    setErrors(validate(next));
-  }
-};
-
-const submit = () => {
-  setSubmitted(true);
-  const nextErrors = validate(values);
+const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  event.preventDefault();
+  const nextErrors = validate();
   setErrors(nextErrors);
-  if (Object.keys(nextErrors).length > 0) {
-    return;
+  setFormError(null);
+  if (Object.keys(nextErrors).length > 0) return; // focus the first invalid input here
+
+  setSubmitting(true);
+  try {
+    await signIn({ email: email.trim(), password, remember });
+  } catch {
+    setFormError('That email and password combination did not work. Try again.');
+  } finally {
+    setSubmitting(false);
   }
-  // call your authentication service here
 };
 ```
 
-This gives you the friendly behaviour of both worlds: a pristine form shows no errors, and an error disappears as soon as the value becomes valid.
+- Guard against double submits with `submitting` and by disabling only the submit `Button` — leave the inputs enabled so focus, selection, and typed text survive.
+- Swap the button label (`Signing in...`) and drop a `Spinner` into the `icon` slot instead of adding a separate page-level spinner.
+- Keep the email value after a failure; ask the user to retype only the password.
+- Translate service errors into a human sentence. Never surface raw error payloads.
 
-## Step 4 - Use a real form element so Enter submits
+## Revealing the password (optional)
 
-Wrap the fields in a plain `<form>` with `noValidate` (so the browser does not stack its own bubbles on top of your `validationMessage`) and handle `onSubmit`. Give the primary `Button` the same `submit` handler through `onClick` so pointer users get identical behaviour, and make sure the handler is idempotent:
-
-```tsx
-<form
-  noValidate
-  onSubmit={(event) => {
-    event.preventDefault();
-    submit();
-  }}
-  style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
->
-  {/* fields */}
-  <Button appearance="primary" size="large" onClick={submit}>
-    Sign in
-  </Button>
-</form>
-```
-
-## Step 5 - Report the server result with MessageBar and Spinner
-
-A failed sign-in is a form-level problem, not a field-level one: the server will not tell you which of the two credentials was wrong. Render a single `MessageBar` above the form:
+`Input` exposes `contentBefore` and `contentAfter` slots, which is the canonical place for a reveal toggle:
 
 ```tsx
-{errorMessage && (
-  <MessageBar intent="error" politeness="assertive" style={{ marginBottom: 8 }}>
-    {errorMessage}
-  </MessageBar>
-)}
+<Input
+  type={reveal ? 'text' : 'password'}
+  contentAfter={
+    <Button type="button" appearance="transparent" size="small" onClick={() => setReveal((v) => !v)} aria-label={reveal ? 'Hide password' : 'Show password'}>
+      {reveal ? 'Hide' : 'Show'}
+    </Button>
+  }
+/>
 ```
 
-While the request is in flight, disable the button, change its label and drop a `Spinner` into its `icon` slot:
+The `type="button"` is mandatory: without it the toggle becomes a second submit button inside the form.
+
+## Layout: bare form vs. card
+
+- Bare form: a plain `<form>` with `display: grid; gap: 16px` keeps the tab order and spacing predictable, and works well as the only content on a page.
+- `Card appearance="outline"` gives the form a surface when it shares a page with other content. Keep the `<form>` inside the `Card` rather than making the card itself the form element, so selection/focus behavior stays with the card and semantics stay with the form.
+
+## Re-authentication dialog
+
+For "confirm it's you" gates, reuse the same `Field` + `Input` pieces inside `Dialog`:
 
 ```tsx
-<Button
-  appearance="primary"
-  size="large"
-  disabled={isSubmitting}
-  icon={isSubmitting ? <Spinner size="extra-tiny" /> : undefined}
-  onClick={() => { void submit(); }}
->
-  {isSubmitting ? 'Signing in...' : 'Sign in'}
-</Button>
+<Dialog open={open} onOpenChange={(_, data) => { if (!data.open) onDismiss(); }}>
+  <DialogSurface>
+    <DialogBody>
+      <DialogTitle>Confirm it's you</DialogTitle>
+      <DialogContent>{/* form with one password Field */}</DialogContent>
+      <DialogActions>{/* Cancel + Continue */}</DialogActions>
+    </DialogBody>
+  </DialogSurface>
+</Dialog>
 ```
 
-Clear the error as soon as the user edits a field again, so a stale message never sits next to a field that has already been corrected.
+Put the `<form>` inside `DialogContent` and give the confirm `Button` in `DialogActions` a matching `form` id plus `type="submit"`, so Enter inside the password field still submits while the DOM keeps the expected dialog structure. Reset the password, error, and submitting state whenever the dialog closes.
 
-## Step 6 - Secondary actions
+## Theming and direction
 
-- Reveal password: a `Checkbox` labelled `Show password` that flips the `Input` `type` between `password` and `text`. The label is required; an icon-only eye toggle needs an accessible name.
-- Stay signed in: a second `Checkbox`. It is part of the submitted payload, so it belongs in `LoginValues`, not in throwaway UI state.
-- Forgot password and create account: `Link` with `inline`, sized as body copy so it sits on the baseline of the surrounding text.
-- Alternate providers: `Button appearance="outline"` actions, separated from the credential form with `<Divider>or</Divider>`.
+All examples assume a `FluentProvider` ancestor; without it the components have no theme tokens. Wrap the app root (or the form's portal target) once and set `dir` there for RTL. No login-form component hard-codes a string — every label, hint, and message is authored by you, so localization is a matter of supplying translated text.
 
-## Accessibility and layout checklist
+## Verification checklist
 
-- One `Field` per control; never hand-roll a `Label` next to an `Input`.
-- Mark required fields with `required` on `Field` so the label renders the required indicator.
-- The error `MessageBar` uses `politeness="assertive"`; success and informational bars use `politeness="polite"`.
-- Something must be announced when the request starts. Keeping focus on the button and changing its label to a progress string is enough.
-- Never signal an error with colour alone. `validationState="error"` pairs with text in `validationMessage`.
-- Use `Card` only as a surface. Do not attach `onSelectionChange`, or the card becomes an extra tab stop in the middle of the form.
-- Keep the primary button next in the tab order after the last field; links and alternate providers follow it.
-
-## Where to take it next
-
-- Need a modal sign-in? Wrap the same markup in a `Dialog` rather than rewriting the fields.
-- Multi-tenant products can add a `Select` for workspace selection, using the same `Field` wrapper.
-- Full-page session restore can render a `Spinner` with `labelPosition="below"` while the token refresh completes.
+- Tab order: heading → email → password → remember → forgot password → submit.
+- Enter inside either input submits the form.
+- Every error is visible, associated with its control, and announced.
+- Password manager fills both fields (verify `autoComplete` tokens and `name` attributes).
+- Submitting twice quickly performs one request.
+- Component works with a screen reader in browse mode and forms mode.
 
 ## Examples
 
-### Basic login form with inline validation
+### Validated login form with async submit
 
-A complete controlled sign-in form: email and password Fields with inline validation that runs on submit and then live, a reveal-password checkbox, remember me, forgot-password and create-account links, and a single primary action inside a real form element.
+A self-contained controlled login form: Field-based labels, hint and inline validation, remember-me checkbox, forgot-password link, a primary submit Button that shows a Spinner while the request is in flight, and an assertive MessageBar for credential failures. Wrapped in FluentProvider so the snippet runs as-is.
 
 ```tsx
 import * as React from 'react';
-import { Button, Card, Checkbox, Field, Input, Link, Text } from '@fluentui/react-components';
+import {
+  Button,
+  Checkbox,
+  Field,
+  FluentProvider,
+  Input,
+  Link,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Spinner,
+  Text,
+} from '@fluentui/react-components';
 
-type LoginValues = {
-  email: string;
-  password: string;
-  rememberMe: boolean;
+type LoginErrors = {
+  email?: string;
+  password?: string;
 };
 
-type FieldErrors = Partial<Record<'email' | 'password', string>>;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const emptyValues: LoginValues = { email: '', password: '', rememberMe: true };
+// Replace with your real authentication call.
+async function signIn(request: { email: string; password: string; remember: boolean }): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  if (request.password === 'wrong-password') {
+    throw new Error('Invalid credentials');
+  }
+}
 
-export const BasicLoginForm: React.FC = () => {
-  const [values, setValues] = React.useState<LoginValues>(emptyValues);
-  const [showPassword, setShowPassword] = React.useState(false);
-  const [errors, setErrors] = React.useState<FieldErrors>({});
-  const [submitted, setSubmitted] = React.useState(false);
+export const LoginForm: React.FC<{ onSignedIn?: (email: string) => void }> = ({ onSignedIn }) => {
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [remember, setRemember] = React.useState(false);
+  const [errors, setErrors] = React.useState<LoginErrors>({});
+  const [formError, setFormError] = React.useState<string | null>(null);
+  const [submitting, setSubmitting] = React.useState(false);
 
-  const validate = (next: LoginValues): FieldErrors => {
-    const nextErrors: FieldErrors = {};
-    const email = next.email.trim();
+  const validate = (): LoginErrors => {
+    const next: LoginErrors = {};
 
-    if (email.length === 0) {
-      nextErrors.email = 'Enter the email address you signed up with.';
-    } else if (!email.includes('@')) {
-      nextErrors.email = 'Enter an email address in the format name@example.com.';
+    if (!email.trim()) {
+      next.email = 'Enter your email address.';
+    } else if (!EMAIL_PATTERN.test(email.trim())) {
+      next.email = 'Enter a valid email address, for example name@example.com.';
     }
 
-    if (next.password.length === 0) {
-      nextErrors.password = 'Enter your password.';
+    if (!password) {
+      next.password = 'Enter your password.';
+    } else if (password.length < 8) {
+      next.password = 'Passwords are at least 8 characters.';
     }
 
-    return nextErrors;
+    return next;
   };
 
-  const update = (patch: Partial<LoginValues>) => {
-    const next = { ...values, ...patch };
-    setValues(next);
-    // Only re-validate while typing after the first submit attempt.
-    if (submitted) {
-      setErrors(validate(next));
-    }
-  };
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
-  const submit = () => {
-    setSubmitted(true);
-    const nextErrors = validate(values);
+    const nextErrors = validate();
     setErrors(nextErrors);
+    setFormError(null);
+
     if (Object.keys(nextErrors).length > 0) {
       return;
     }
-    // TODO: call your authentication service with `values`.
+
+    setSubmitting(true);
+    try {
+      await signIn({ email: email.trim(), password, remember });
+      onSignedIn?.(email.trim());
+    } catch {
+      setFormError('That email and password combination did not work. Check your details and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <Card appearance="filled-alternative" size="large" style={{ maxWidth: 420 }}>
-      <Text size={600} weight="semibold" block>
-        Sign in
-      </Text>
-      <Text size={200} block style={{ marginBottom: 8 }}>
-        Use your work account to continue.
-      </Text>
+    <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: '16px', maxWidth: '360px' }}>
+      <h1 style={{ margin: 0 }}>
+        <Text size={600} weight="semibold">
+          Sign in
+        </Text>
+      </h1>
 
-      <form
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          submit();
-        }}
-        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+      {formError ? (
+        <MessageBar intent="error" politeness="assertive">
+          <MessageBarBody>
+            <MessageBarTitle>We could not sign you in</MessageBarTitle>
+            {formError}
+          </MessageBarBody>
+        </MessageBar>
+      ) : null}
+
+      <Field
+        label="Email"
+        required
+        hint="Use the address you signed up with."
+        validationState={errors.email ? 'error' : 'none'}
+        validationMessage={errors.email}
       >
-        <Field
-          label="Email"
-          required
-          validationState={errors.email ? 'error' : 'none'}
-          validationMessage={errors.email}
-        >
-          <Input
-            type="email"
-            appearance="outline"
-            value={values.email}
-            onChange={(ev, data) => update({ email: data.value })}
-          />
-        </Field>
-
-        <Field
-          label="Password"
-          required
-          validationState={errors.password ? 'error' : 'none'}
-          validationMessage={errors.password}
-        >
-          <Input
-            type={showPassword ? 'text' : 'password'}
-            appearance="outline"
-            value={values.password}
-            onChange={(ev, data) => update({ password: data.value })}
-          />
-        </Field>
-
-        <Checkbox
-          checked={showPassword}
-          onChange={(ev, data) => setShowPassword(Boolean(data.checked))}
-          label="Show password"
+        <Input
+          type="email"
+          name="email"
+          autoComplete="username"
+          placeholder="name@example.com"
+          value={email}
+          onChange={(_, data) => setEmail(data.value)}
         />
+      </Field>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-          }}
-        >
-          <Checkbox
-            checked={values.rememberMe}
-            onChange={(ev, data) => update({ rememberMe: Boolean(data.checked) })}
-            label="Keep me signed in"
-          />
-          <Link href="/forgot-password" inline>
-            Forgot password?
-          </Link>
-        </div>
+      <Field
+        label="Password"
+        required
+        validationState={errors.password ? 'error' : 'none'}
+        validationMessage={errors.password}
+      >
+        <Input
+          type="password"
+          name="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(_, data) => setPassword(data.value)}
+        />
+      </Field>
 
-        <Button appearance="primary" size="large" onClick={submit}>
-          Sign in
-        </Button>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+        <Checkbox
+          label="Keep me signed in"
+          checked={remember}
+          onChange={(_, data) => setRemember(data.checked === true)}
+        />
+        <Link inline href="/forgot-password">
+          Forgot password?
+        </Link>
+      </div>
 
-        <Text size={200} block align="center">
-          New here?{' '}
-          <Link href="/signup" inline>
-            Create an account
-          </Link>
-        </Text>
-      </form>
-    </Card>
+      <Button
+        type="submit"
+        appearance="primary"
+        disabled={submitting}
+        icon={submitting ? <Spinner size="tiny" /> : undefined}
+      >
+        {submitting ? 'Signing in...' : 'Sign in'}
+      </Button>
+    </form>
   );
 };
+
+export default function App() {
+  return (
+    <FluentProvider>
+      <LoginForm onSignedIn={(email) => console.log(`Signed in as ${email}`)} />
+    </FluentProvider>
+  );
+}
 ```
 
-### Async login form with spinner and MessageBar feedback
+### Login card with password reveal and error banner
 
-Adds the asynchronous round trip: a status machine (idle, submitting, succeeded, failed), a Spinner inside the primary Button's icon slot, an assertive error MessageBar for bad credentials, a polite success MessageBar, and clearing of stale server errors when the user edits a field.
+The same credential fields presented on a Card surface, with a show/hide password toggle placed in Input's contentAfter slot, a full-width primary action that spins while pending, a form-level MessageBar for credential failures, and a sign-up Link in the footer.
 
 ```tsx
 import * as React from 'react';
-import { Button, Card, Checkbox, Field, Input, Link, MessageBar, Spinner, Text } from '@fluentui/react-components';
+import {
+  Button,
+  Card,
+  Checkbox,
+  Field,
+  Input,
+  Link,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Spinner,
+  Text,
+} from '@fluentui/react-components';
 
-type Status = 'idle' | 'submitting' | 'succeeded' | 'failed';
+// Replace with your real authentication call.
+async function signIn(request: { email: string; password: string; remember: boolean }): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  if (request.password === 'wrong-password') {
+    throw new Error('Invalid credentials');
+  }
+}
 
-type SignInResponse = { ok: true } | { ok: false; message: string };
-
-// Stand-in for your real authentication call.
-const signIn = (email: string, password: string): Promise<SignInResponse> =>
-  new Promise((resolve) => {
-    window.setTimeout(() => {
-      const isKnownUser = email.trim().length > 0;
-      if (isKnownUser && password === 'correct-horse-battery-staple') {
-        resolve({ ok: true });
-      } else {
-        resolve({
-          ok: false,
-          message:
-            'We could not sign you in with that email and password. Check your details and try again.',
-        });
-      }
-    }, 1200);
-  });
-
-export const AsyncLoginForm: React.FC = () => {
+export const LoginCard: React.FC = () => {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
-  const [rememberMe, setRememberMe] = React.useState(true);
-  const [status, setStatus] = React.useState<Status>('idle');
-  const [errorMessage, setErrorMessage] = React.useState<string | undefined>();
+  const [remember, setRemember] = React.useState(true);
+  const [revealPassword, setRevealPassword] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const isSubmitting = status === 'submitting';
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
 
-  const clearFeedback = () => {
-    setErrorMessage(undefined);
-    if (status === 'failed') {
-      setStatus('idle');
-    }
-  };
-
-  const submit = async () => {
-    if (isSubmitting) {
-      return;
-    }
-
-    if (email.trim().length === 0 || password.length === 0) {
-      setStatus('failed');
-      setErrorMessage('Enter both your email address and your password to continue.');
-      return;
-    }
-
-    setStatus('submitting');
-    setErrorMessage(undefined);
-
-    const result = await signIn(email, password);
-
-    if (result.ok) {
-      setStatus('succeeded');
-    } else {
-      setStatus('failed');
-      setErrorMessage(result.message);
+    try {
+      await signIn({ email: email.trim(), password, remember });
+    } catch {
+      setError('Your email or password is incorrect.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <Card appearance="filled-alternative" size="large" style={{ maxWidth: 420 }}>
-      <Text size={600} weight="semibold" block>
-        Sign in
-      </Text>
-      <Text size={200} block style={{ marginBottom: 8 }}>
-        Sign in with the email address your admin invited.
-      </Text>
-
-      {errorMessage && (
-        <MessageBar intent="error" politeness="assertive" style={{ marginBottom: 8 }}>
-          {errorMessage}
-        </MessageBar>
-      )}
-
-      {status === 'succeeded' && (
-        <MessageBar intent="success" politeness="polite" style={{ marginBottom: 8 }}>
-          Signed in. Taking you to your dashboard...
-        </MessageBar>
-      )}
-
-      <form
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submit();
-        }}
-        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
-      >
-        <Field label="Email" required>
-          <Input
-            type="email"
-            appearance="outline"
-            value={email}
-            onChange={(ev, data) => {
-              setEmail(data.value);
-              clearFeedback();
-            }}
-          />
-        </Field>
-
-        <Field label="Password" required>
-          <Input
-            type="password"
-            appearance="outline"
-            value={password}
-            onChange={(ev, data) => {
-              setPassword(data.value);
-              clearFeedback();
-            }}
-          />
-        </Field>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-          }}
-        >
-          <Checkbox
-            checked={rememberMe}
-            onChange={(ev, data) => setRememberMe(Boolean(data.checked))}
-            label="Keep me signed in"
-          />
-          <Link href="/forgot-password" inline>
-            Forgot password?
-          </Link>
-        </div>
-
-        <Button
-          appearance="primary"
-          size="large"
-          disabled={isSubmitting}
-          icon={isSubmitting ? <Spinner size="extra-tiny" /> : undefined}
-          onClick={() => {
-            void submit();
-          }}
-        >
-          {isSubmitting ? 'Signing in...' : 'Sign in'}
-        </Button>
-      </form>
-    </Card>
-  );
-};
-```
-
-### Compact sign-in card with alternate providers
-
-A denser layout using horizontal Fields with underline Inputs, a Divider separating the credential form from single sign-on and passkey buttons, and a pending-provider status line rendered with Text.
-
-```tsx
-import * as React from 'react';
-import { Button, Card, Checkbox, Divider, Field, Input, Link, Text } from '@fluentui/react-components';
-
-type Provider = 'sso' | 'passkey';
-
-export const CompactSignInCard: React.FC = () => {
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [keepSignedIn, setKeepSignedIn] = React.useState(false);
-  const [pendingProvider, setPendingProvider] = React.useState<FluentProvider | undefined>();
-
-  const submit = () => {
-    if (email.trim().length === 0 || password.length === 0) {
-      return;
-    }
-    setPendingProvider(undefined);
-    // TODO: sign in with the email and password values above.
-  };
-
-  const signInWith = (provider: Provider) => {
-    setPendingProvider(provider);
-    // TODO: start the redirect or WebAuthn ceremony for `provider`.
-  };
-
-  return (
-    <Card appearance="outline" size="medium" style={{ width: 480, maxWidth: '100%' }}>
-      <form
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          submit();
-        }}
-        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-      >
-        <Text size={500} weight="semibold" block>
-          Sign in to Contoso
-        </Text>
-
-        <Field orientation="horizontal" label="Email" required>
-          <Input
-            type="email"
-            appearance="underline"
-            value={email}
-            onChange={(ev, data) => setEmail(data.value)}
-          />
-        </Field>
-
-        <Field orientation="horizontal" label="Password" required>
-          <Input
-            type="password"
-            appearance="underline"
-            value={password}
-            onChange={(ev, data) => setPassword(data.value)}
-          />
-        </Field>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-          }}
-        >
-          <Checkbox
-            checked={keepSignedIn}
-            onChange={(ev, data) => setKeepSignedIn(Boolean(data.checked))}
-            label="Keep me signed in"
-          />
-          <Link href="/forgot-password" inline>
-            Forgot password?
-          </Link>
-        </div>
-
-        <Button appearance="primary" onClick={submit}>
-          Sign in
-        </Button>
-
-        <Divider>or</Divider>
-
-        <div style={{ display: 'grid', gap: 8 }}>
-          <Button appearance="outline" onClick={() => signInWith('sso')}>
-            Continue with single sign-on
-          </Button>
-          <Button appearance="outline" onClick={() => signInWith('passkey')}>
-            Sign in with a passkey
-          </Button>
-        </div>
-
-        {pendingProvider && (
-          <Text size={200} block>
-            Starting the {pendingProvider === 'sso' ? 'single sign-on' : 'passkey'} flow...
+    <Card appearance="outline" size="large" style={{ maxWidth: '420px', margin: '0 auto', padding: '24px' }}>
+      <div style={{ display: 'grid', gap: '16px' }}>
+        <h1 style={{ margin: 0 }}>
+          <Text size={600} weight="semibold">
+            Sign in to Contoso
           </Text>
-        )}
+        </h1>
 
-        <Text size={200} block align="center">
+        {error ? (
+          <MessageBar intent="error" politeness="assertive">
+            <MessageBarBody>
+              <MessageBarTitle>Sign-in failed</MessageBarTitle>
+              {error}
+            </MessageBarBody>
+          </MessageBar>
+        ) : null}
+
+        <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: '16px' }}>
+          <Field label="Email" required>
+            <Input
+              type="email"
+              name="email"
+              autoComplete="username"
+              value={email}
+              onChange={(_, data) => {
+                setEmail(data.value);
+                if (error) {
+                  setError(null);
+                }
+              }}
+            />
+          </Field>
+
+          <Field label="Password" required>
+            <Input
+              type={revealPassword ? 'text' : 'password'}
+              name="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(_, data) => {
+                setPassword(data.value);
+                if (error) {
+                  setError(null);
+                }
+              }}
+              contentAfter={
+                <Button
+                  type="button"
+                  appearance="transparent"
+                  size="small"
+                  aria-label={revealPassword ? 'Hide password' : 'Show password'}
+                  onClick={() => setRevealPassword((revealed) => !revealed)}
+                >
+                  {revealPassword ? 'Hide' : 'Show'}
+                </Button>
+              }
+            />
+          </Field>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <Checkbox
+              label="Remember me"
+              checked={remember}
+              onChange={(_, data) => setRemember(data.checked === true)}
+            />
+            <Link inline href="/forgot-password">
+              Forgot password?
+            </Link>
+          </div>
+
+          <Button
+            type="submit"
+            appearance="primary"
+            disabled={submitting}
+            style={{ width: '100%' }}
+            icon={submitting ? <Spinner size="tiny" /> : undefined}
+          >
+            {submitting ? 'Signing in...' : 'Sign in'}
+          </Button>
+        </form>
+
+        <Text size={200} align="center" block>
           New to Contoso?{' '}
-          <Link href="/signup" inline>
+          <Link inline href="/sign-up">
             Create an account
           </Link>
         </Text>
-      </form>
+      </div>
     </Card>
+  );
+};
+```
+
+### Re-authentication dialog
+
+A controlled Dialog that asks for the password again before revealing sensitive content. The form lives inside DialogContent and the confirm Button in DialogActions submits it through the form attribute, so Enter inside the input and the dialog structure both behave correctly. State is reset whenever the dialog closes.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Field,
+  Input,
+  Spinner,
+  Text,
+} from '@fluentui/react-components';
+
+type ReauthenticateDialogProps = {
+  open: boolean;
+  onDismiss: () => void;
+  onVerified: () => void;
+};
+
+// Replace with your real verification call.
+async function verifyPassword(password: string): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  if (password === 'wrong-password') {
+    throw new Error('Invalid password');
+  }
+}
+
+export const ReauthenticateDialog: React.FC<ReauthenticateDialogProps> = ({
+  open,
+  onDismiss,
+  onVerified,
+}) => {
+  const [password, setPassword] = React.useState('');
+  const [error, setError] = React.useState<string | null>(null);
+  const [submitting, setSubmitting] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open) {
+      setPassword('');
+      setError(null);
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!password) {
+      setError('Enter your password to continue.');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await verifyPassword(password);
+      onVerified();
+    } catch {
+      setError('That password is not correct.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(_, data) => {
+        if (!data.open) {
+          onDismiss();
+        }
+      }}
+    >
+      <DialogSurface>
+        <DialogBody>
+          <DialogTitle>Confirm it&#39;s you</DialogTitle>
+          <DialogContent>
+            <Text block size={300} style={{ marginBottom: '12px' }}>
+              For your security we need your password before showing this information.
+            </Text>
+            <form id="reauthenticate-form" onSubmit={handleSubmit} noValidate>
+              <Field
+                label="Password"
+                required
+                validationState={error ? 'error' : 'none'}
+                validationMessage={error}
+              >
+                <Input
+                  type="password"
+                  name="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(_, data) => {
+                    setPassword(data.value);
+                    if (error) {
+                      setError(null);
+                    }
+                  }}
+                />
+              </Field>
+            </form>
+          </DialogContent>
+          <DialogActions>
+            <Button type="button" appearance="secondary" onClick={onDismiss} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="reauthenticate-form"
+              appearance="primary"
+              disabled={submitting}
+              icon={submitting ? <Spinner size="tiny" /> : undefined}
+            >
+              {submitting ? 'Verifying...' : 'Continue'}
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   );
 };
 ```
 
 ## Pitfalls
 
-- Rendering a bare Input with a placeholder instead of wrapping it in Field. You lose the programmatic label, the required indicator and the aria-describedby link to the error text. Always use Field with a persistent label.
-- Setting validationMessage without a matching validationState, or forgetting to reset validationState back to 'none'. A message with no 'error' state renders without the error styling, and a field that is never reset keeps a red outline after the user has fixed the value.
-- Validating on every keystroke from the first render. Gate live validation behind a submitted flag so a pristine form shows no errors, then re-validate as the user types once they have attempted a submit.
-- Reporting a wrong email or password as a field-level error. Most identity providers deliberately do not reveal which credential was wrong; surface it once as a form-level MessageBar with politeness="assertive" above the fields.
-- Disabling the submit Button whenever a field is empty. Users cannot discover what is wrong from a dead button; keep it enabled, validate on submit, and only set disabled while a request is in flight.
-- Leaving a server error on screen after the user edits a field. Clear the MessageBar text (and ideally the failed status) on the next onChange, otherwise a stale 'wrong password' banner sits next to a value that has already been corrected.
-- Using uncontrolled inputs (defaultValue only) in a form you also need to reset, prefill or clear after a failed attempt. Switch to value plus onChange so the state object is the single source of truth.
+- Using a placeholder as the only label. Placeholders vanish as soon as typing starts and are not a reliable accessible name; always provide Field's `label` and use the placeholder only as an example value such as `name@example.com`.
+- Letting native browser validation run alongside Field validation. Without `noValidate` on the `<form>`, the browser bubble and the Fluent validation message both appear and say different things; add `noValidate` and own validation with `validationState`/`validationMessage`.
+- Forgetting `type="button"` on controls placed in Input's contentBefore/contentAfter. A show/hide-password Button defaults to `type="submit"` inside a form, so clicking it submits the credential.
+- Disabling the inputs while the request is in flight. It drops focus, blocks password managers, and hides the typed values; disable only the submit Button, swap its label, and drop a Spinner into its `icon` slot while guarding against double submits in the handler.
+- Driving `Input` or `Checkbox` with `checked`/`value` but no `onChange`. React logs a read-only warning and the control stops responding; always pair the controlled prop with an `onChange` that writes the new value back (`data.value` for Input, `data.checked === true` for Checkbox, which can also be `'mixed'`).
+- Reporting the same failure twice, or clearing errors too eagerly. Showing 'Invalid credentials' in both a field message and a MessageBar produces duplicate screen reader announcements; conversely, clearing the whole error object on every keystroke can flash errors away while the user is still typing the other field. Scope error clearing to the field being edited.
+- Omitting `autoComplete`/`name`. Without `autoComplete="username"` and `autoComplete="current-password"`, password managers cannot fill the form and users fall back to copy/paste.
+- Surfacing raw server text or a generic 'Something went wrong' as the only feedback. Map service errors to a specific, human sentence in the MessageBar, and keep the typed email after a failure so only the password has to be retyped.
+- Reusing a Dialog-based login for state between openings. If password/error/submitting state is not reset when the dialog closes, the previous error is re-announced the next time the dialog opens; reset in an effect keyed on `open`, or unmount the form when closed.
 
 ## Accessibility
 
-Field is the accessibility backbone: rendering the Input as its child makes Field emit a Label with a matching htmlFor plus aria-describedby wiring for hint and validationMessage, so the error text is announced when the control gets focus. Always mark required fields with required on Field so the required indicator is rendered, and never signal an error with colour alone - pair validationState="error" with text in validationMessage. Errors that come back from the server should live in a single MessageBar with politeness="assertive" so screen readers interrupt to read the failure, while success and informational messages use politeness="polite" so they wait their turn. During submission keep focus on the Button, disable it to prevent double submits, and change its label to a progress string ("Signing in...") so the state change is announced; the Spinner in the icon slot is decorative. All Checkbox controls (reveal password, keep me signed in) carry a visible label rather than an icon-only affordance. Put the username and current-password autocomplete hints on the underlying text inputs so password managers and browser autofill keep working, and never block paste into credential fields. Use a real form element with onSubmit so Enter submits, give the surface a heading via Text for landmark navigation, and keep the Card non-interactive (no onSelectionChange) so it does not become a stray tab stop between the last field and the submit button.
+Labels: every credential control is wrapped in Field with a persistent visible `label`. Placeholders are supplementary examples only — they disappear on input and are not announced as names. Field ties the label to the control via htmlFor and links hint/validation text through described-by relationships, so pass messages through `validationMessage`/`hint` instead of rendering sibling divs.
+
+Errors and announcements: field errors use `validationState="error"` which supplies an icon as well as color — never signal failure with color alone. Form-level errors use MessageBar with `intent="error"` and `politeness="assertive"` so the text is announced the moment it appears, without stealing focus. Avoid writing the same sentence in both a field message and the MessageBar; duplicated live-region announcements are noisy for screen reader users.
+
+Focus management: after a failed local validation, move focus to the first invalid Input so keyboard and screen reader users land on the problem (use a ref on the Input, or focus the control whose Field is in the error state). After a server failure rendered in a MessageBar, leave focus on the submit Button so the user can correct the password and re-submit with one keystroke.
+
+Keyboard flow: Enter inside either credential input submits the form, which requires the primary action to be `<Button type="submit">` inside the `<form>`. Any Button rendered inside `Input`'s `contentBefore`/`contentAfter` — such as the password reveal toggle — must be `type="button"`, otherwise it becomes a second, unlabeled submit button.
+
+Autofill and mobile: `autoComplete="username"` on the identifier and `autoComplete="current-password"` on the password let password managers and assistive technology identify the fields; keep `name` attributes on both inputs so non-React consumers (FormData, browsers, password managers) can read them.
+
+Busy state: disabling only the submit Button and swapping its label plus an inline Spinner avoids the trap where disabling the inputs drops focus to the body and silently discards what the user typed.
+
+Dialog variant: Dialog moves and traps focus, Escape closes it, and DialogTitle (rendered as a heading) provides the accessible name — always render DialogTitle first inside DialogBody and give the dismiss Button a text label rather than an icon-only button with no name. Reset the password, error, and pending state when the dialog closes so no stale error is announced on the next open.
+
+Theming and direction: render the form inside a FluentProvider so tokens, dark mode, high-contrast, and RTL direction are inherited; all copy in this recipe is supplied as text/children, so localization requires no component changes.
 
 ## Components used
 
 - [Button](../../components/button.md)
 - [Card](../../components/card.md)
 - [Checkbox](../../components/checkbox.md)
-- [Divider](../../components/divider.md)
+- [Dialog](../../components/dialog.md)
+- [DialogActions](../../components/dialog-actions.md)
+- [DialogBody](../../components/dialog-body.md)
+- [DialogContent](../../components/dialog-content.md)
+- [DialogSurface](../../components/dialog-surface.md)
+- [DialogTitle](../../components/dialog-title.md)
 - [Field](../../components/field.md)
+- [FluentProvider](../../components/fluent-provider.md)
 - [Input](../../components/input.md)
 - [Link](../../components/link.md)
 - [MessageBar](../../components/message-bar.md)
+- [MessageBarBody](../../components/message-bar-body.md)
+- [MessageBarTitle](../../components/message-bar-title.md)
 - [Spinner](../../components/spinner.md)
 - [Text](../../components/text.md)
 

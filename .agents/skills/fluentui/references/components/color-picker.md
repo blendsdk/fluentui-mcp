@@ -7,24 +7,24 @@
 
 ## Overview
 
-ColorPicker is a composite form control that lets a user choose a color, including its alpha channel, from an interactive visual surface. Rather than rendering a fixed palette or a single canvas on its own, it acts as the container and state hub for a family of color sub-components: ColorArea provides the two-dimensional saturation/brightness gradient, ColorSlider adjusts a single hue, saturation, or value channel, and AlphaSlider adjusts opacity, with SwatchPicker and its ColorSwatch children available for presenting saved or presets alongside the freeform controls. The picker is controlled: you pass the current selection through the color prop as an HsvColor and receive every user-driven change through onColorChange, whose callback data carries an updated HsvColor (including an optional alpha). Because all children read from the same selection context, composing ColorArea, ColorSlider, and AlphaSlider inside a single ColorPicker keeps every sub-control synchronized on one value. The component exposes a minimal prop surface — color, onColorChange, and shape — and a required root slot, leaving layout, preview swatches, and hex/RGB text fields to the consumer, as demonstrated in the documentation stories that pair the picker with Input, SpinButton, Label, Button, and Popover.
+ColorPicker is a composition container in @fluentui/react-components that turns a set of color input sub-components — ColorArea, ColorSlider, and AlphaSlider, supplied as children — into a single coordinated HSB color editing surface. The component itself holds no internal color state: it receives the current value through the color prop as an HsvColor and reports every user edit back through onColorChange, so the application stays the single source of truth for the selected color. Because the visible picker is assembled entirely from its children, the same ColorPicker can render as a bare hue slider, a full saturation/brightness area with hue and alpha sliders, a swatch-plus-slider combination, or a preview-driven popup hosted inside a Popover surface that only commits on confirmation. The shape prop propagates a corner radius treatment to the sub-components (rounded by default, square for dense or grid-aligned layouts), and the root slot is the only required slot, so a ColorPicker with no children renders an empty container. Typical supporting pieces in real usages include Label, Input, SpinButton, Button, and SwatchPicker for hex/RGB/alpha entry, reset actions, and reusable palettes.
 
-**When to use**: Use ColorPicker when a user needs to author or fine-tune an arbitrary color: theme and brand customization screens, design or diagram tooling, annotation and highlight settings, chart series colors, or any personalization surface where the exact hue, saturation, brightness, and opacity matter. Pair it with ColorArea, ColorSlider, and AlphaSlider when you need full freedom of selection, and add SwatchPicker when you want to combine freeform selection with a short list of saved or preset colors. Prefer a simpler alternative when the choice is bounded: use a single Select, Radio group, or SwatchPicker on its own if the user picks from a small fixed list of colors, and use a plain Input with hex validation if the audience is technical and typing the value is faster than dragging. When picker real estate is limited, or when the choice should be confirmed before it takes effect, host the picker inside a Popover triggered by a Button and commit the value with an explicit confirmation action. Avoid ColorPicker for purely decorative color usage where no user choice occurs.
+**When to use**: Use ColorPicker when users need to choose an arbitrary value from the full color space rather than pick from a predefined set of brand colors, because only the free-form picker exposes saturation, brightness, hue, and alpha as continuously adjustable channels. Reach for SwatchPicker or ColorSwatch when a curated, bounded palette is sufficient and you want the fastest possible selection with guaranteed on-brand results. Choose an inline ColorPicker (rendered directly in a settings panel, theme editor, or form) when color selection is a primary task on the page; choose a Popover-hosted ColorPicker when the trigger should stay compact and the user should be able to preview a color and either confirm or cancel it. Because this component is a low-level building block with no built-in text entry or preview, pair it with Input or SpinButton fields when users must be able to type an exact hex, RGB, or alpha value, and with ColorSwatch or a color preview element when they need to see the resolved color. Avoid it as a replacement for a themed color-token picker in product settings where only design-system tokens are valid choices.
 
 ## Props Reference
 
 | Prop | Type | Default | Required | Description |
 | --- | --- | --- | --- | --- |
 | `color` | `HsvColor \| undefined` | — | No | Selected color. |
-| `onColorChange` | `any` | — | No | Callback for when the user changes the color. |
+| `onColorChange` | `EventHandler<ColorPickerOnChangeData> \| undefined` | — | No | Callback for when the user changes the color. |
 | `shape` | `"rounded" \| "square" \| undefined` | — | No | ColorPicker shape |
 
 ### Prop Guidance
 
-- **color**: The current selection, expressed as an HsvColor rather than a string. Pass the exact object you want displayed; the picker is controlled, so a change to this prop is what moves the thumbs. Keep the object complete by supplying hue, saturation, and value, and include alpha when opacity is being edited, defaulting missing alpha to 1 on the way in. `An HsvColor state value such as hue 210, saturation 1, value 1, alpha 1`
-- **onColorChange**: The single change notification for the whole picker. It receives an event and a data object containing the updated HsvColor, and it fires continuously while a thumb is dragged or when an arrow key adjusts a channel. Use it to write the new color back into state, spreading the reported color and defaulting alpha when it is undefined, and keep the handler light because it runs on every incremental change. `Update state with the reported color and fall back to an alpha of 1 when alpha is not reported`
-- **shape**: Controls the corner rounding of the picker's sub-components, with rounded as the default and square available for interfaces built from square-cornered controls. Set it once on the parent and let the children inherit it, rather than styling each child separately. `square`
-- **root (slot)**: The root element that wraps the picker's children and carries the shared color context. Attach layout classes and an accessible name to it, and remember that it renders no controls by itself — content comes entirely from the ColorArea, ColorSlider, AlphaSlider, and any preview or text-field elements you place inside. `A container that stacks a ColorArea, a hue slider, and an alpha slider`
+- **color**: The single source of truth for the picker. Pass a controlled HsvColor value (hue, saturation, value, and optional alpha) from your own state, because the component never stores or derives color internally. Two pickers sharing the same value will track each other automatically, and omitting the prop leaves the children without a defined position until you supply one. `{ h: 210, s: 0.6, v: 0.9, a: 1 }`
+- **onColorChange**: The only channel for user edits. It fires with a ColorPickerOnChangeData payload whenever a child input changes, and it fires continuously during a drag in ColorArea or a slider, so keep the handler cheap: update state, normalize alpha, and defer persistence. Always read the color from the event data rather than from the color prop, since the prop may not have re-rendered yet when the callback runs. `data.color`
+- **shape**: Controls the corner radius treatment propagated to the ColorArea, ColorSlider, and AlphaSlider children rather than to the root wrapper. Use the default rounded to match standard Fluent controls, and square for dense surfaces, grid-aligned panels, or when the picker sits inside an already-squared container. Set it once on ColorPicker instead of styling children individually so all channels stay visually consistent. `square`
+- **children**: The picker has no visual parts of its own, so the children you pass define everything the user sees and touches. Typical compositions place a ColorArea for saturation and brightness, a ColorSlider for hue, and an AlphaSlider for transparency, optionally with a preview element and Labels. Render at least one interactive child, and keep the same set of children mounted between renders so focus is not lost mid-interaction. `ColorArea, ColorSlider, AlphaSlider`
 
 ### Slots
 
@@ -394,113 +394,113 @@ export const ColorAndSwatchPicker = (): JSXElement => {
 
 ### Do's
 
-- Keep the selection in your own React state and feed it back through the color prop on every change reported by onColorChange, because the picker will not move its thumbs unless the parent supplies a new HsvColor.
-- Normalize alpha defensively when receiving an update, falling back to a value of 1 when the reported alpha is undefined, so the stored color always has a complete set of channels.
-- Compose the picker's children deliberately — typically a ColorArea for saturation and brightness, a ColorSlider for hue, and an AlphaSlider for opacity — so every sub-control operates against the same shared selection.
-- Give every sub-control an accessible name, such as Saturation and Brightness for the two axes of the color area, and Hue and Alpha for the sliders, since these controls have no visible text labels of their own.
-- Supply aria-valuetext on the sliders and color area axes with a human-readable description of the value, for example the hue in degrees followed by the nearest named color, because raw numeric channel values are hard to interpret when announced.
-- Choose the shape value that matches the surrounding surface, using the default rounded appearance inside rounded cards and dialogs and square when the picker sits next to square-cornered inputs or toolbars.
-- When embedding the picker in a Popover, drive the popover's open state yourself and stage edits in a temporary color so that a confirmation action commits the value and a cancel action discards it.
-- Validate color text entry before accepting it — check that a hex string matches the expected pattern and that the parsed color is valid — and surface rejection through aria-invalid rather than silently overwriting the field.
-- Provide a visual preview element next to the controls and pair it with a text representation of the current color so the selection is verifiable without relying on color perception alone.
+- Keep the component fully controlled: always pass the current HsvColor through the color prop and update it inside the onColorChange handler, since ColorPicker keeps no internal color state of its own.
+- Normalize the alpha channel before storing the value, for example by coalescing data.color.a to 1 when it is undefined, so downstream hex/RGB string conversion never produces an invalid color.
+- Always render at least one color input as a child (ColorArea, ColorSlider, or AlphaSlider); a ColorPicker with no children produces an empty root element that gives users nothing to interact with.
+- Give every child input a distinct accessible name — saturation and brightness for the two ColorArea axes, hue for ColorSlider, alpha for AlphaSlider — because the gradient background carries no information for assistive technology.
+- Pair the picker with a visible color preview and, where space allows, a textual representation such as hex or RGB so the chosen value is not communicated by color alone.
+- Use the shape prop once on the ColorPicker rather than styling individual children, so the ColorArea, ColorSlider, and AlphaSlider all share the same corner radius treatment as the surrounding UI.
+- When embedding the picker in a Popover, keep a separate preview color in state and only copy it into the committed color when the user confirms; use the Popover trapFocus behavior so keyboard users stay inside the surface.
+- Provide a reset control (a Button that restores the default HsvColor) in editor-style usages, since an HSB picker makes it easy to drift far from the original color.
 
 ### Don'ts
 
-- Don't render ColorPicker as a standalone element with no children; without ColorArea, ColorSlider, or AlphaSlider inside it there is nothing for the user to manipulate and no visual output.
-- Don't treat the picker as uncontrolled and skip onColorChange; the displayed color is driven entirely by the color prop, so ignoring the callback freezes the UI on the initial value.
-- Don't mutate the HsvColor object you pass in; always build a new object from the values reported by the callback so React can detect the change and re-render the sub-controls.
-- Don't omit aria-label on the color area's two axes or on the individual sliders, because screen reader users will otherwise hear unlabeled sliders with no indication of which channel they are adjusting.
-- Don't run expensive or asynchronous work directly inside onColorChange, since the callback fires continuously while a thumb is dragged.
-- Don't drop the alpha channel when the design does not need transparency; if opacity is irrelevant, omit the AlphaSlider entirely rather than showing a control that has no effect on the final value.
-- Don't use ColorPicker where a small fixed set of colors would do; a SwatchPicker or Select communicates a bounded choice far more efficiently and reduces the risk of off-brand values.
-- Don't apply the square or rounded shape to the parent expecting it to restyle the root alone; the shape governs the rounding of the picker's sub-components through their shared styling context.
-- Don't expose an editable hex or RGB field without a validation and error state, or users will be able to enter values that cannot be parsed into a color.
-- Don't hide the only affordance for a color behind a popover that traps focus without an explicit confirmation path, or keyboard users can end up in a dead end.
+- Don't mutate the object passed to color in place; onColorChange already delivers a new color payload, so build a new state value instead of assigning into the existing one.
+- Don't assume onColorChange always reports an alpha value — the HsvColor alpha may be undefined, and storing it verbatim breaks alpha sliders and RGB string output.
+- Don't rely on the picker alone to communicate the selected color; users with color vision deficiencies or monochrome displays cannot read the result from a gradient.
+- Don't put expensive work — network calls, persistence, or repeated tinycolor conversions and re-mapping — directly in onColorChange, because it fires continuously while the user drags inside ColorArea or a slider.
+- Don't nest multiple ColorPicker instances that share one piece of color state without a single owner; competing states produce jumpy thumbs and inconsistent previews.
+- Don't strip the aria-label from child inputs to save space; an unnamed slider or 2D control is unusable with a screen reader.
+- Don't attempt to fix layout clipping by resizing the picker itself; when it lives in a scrolling or overflow-hidden container, host it in a Popover surface instead.
+- Don't treat ColorPicker as a text field — it has no built-in hex or RGB entry, so expecting typed input without pairing it with Input or SpinButton leads to broken flows.
 
 ## Anti-Patterns
 
-### Standalone picker with no controls
+### Uncontrolled color state
 
-❌ Rendering ColorPicker without any sub-components produces an empty region: there is no surface to drag, no slider to nudge, and nothing that can emit a color, so the user is left with an inert container.
+❌ Treating color and onColorChange as optional and letting the picker appear to work without updating state leaves the thumbs and gradients frozen after the first interaction, because ColorPicker never owns the selected value.
 
-✅ Always compose at least one interactive child, such as a ColorArea plus a ColorSlider, and add an AlphaSlider only when transparency is part of the design.
+✅ Hold the HsvColor in component state, pass it through the color prop on every render, and write the new payload back inside onColorChange.
 
-### Fire-and-forget state updates
+### Leaking an undefined alpha channel
 
-❌ Ignoring the change callback or writing the incoming color into a local variable rather than state breaks the controlled contract: the thumbs snap back to the last value supplied through the color prop, and the picker appears frozen.
+❌ Storing the incoming color object verbatim lets an undefined alpha reach the AlphaSlider and any hex or RGB string conversion, which produces transparent or malformed output and a slider stuck at zero.
 
-✅ Store the color in React state, update it from the change callback on every invocation, and pass that same state value back through the color prop.
+✅ Coalesce the alpha before storing, using a fallback of 1 when data.color.a is undefined, and re-derive hex and RGB from the normalized value.
 
-### Undefined alpha leaking into stored colors
+### Unlabeled gradient inputs
 
-❌ The reported color may omit the alpha channel, so copying it straight into state can leave an incomplete color that renders incorrectly or produces unexpected results when it is converted to other formats.
+❌ A ColorArea or ColorSlider rendered without aria-label and aria-valuetext is announced as an unnamed slider with a bare numeric value, so screen reader users cannot tell which channel they are changing.
 
-✅ Spread the reported color and normalize alpha to 1 when it is undefined before saving it, as the documentation examples do.
+✅ Label each channel (Saturation, Brightness, Hue, Alpha), add aria-roledescription on the two-dimensional area, and supply aria-valuetext that speaks the value in meaningful units, optionally with a color name.
 
-### Unlabeled sliders and axes
+### Expensive work inside onColorChange
 
-❌ The color area exposes two sliders and the sliders expose one each; without names, screen reader users hear generic sliders with no idea which channel they are changing.
+❌ Because the callback fires on every pointer move while dragging, doing network persistence, large list re-mapping, or repeated color conversions inside it causes dropped frames and a sluggish drag.
 
-✅ Put an aria-label on the horizontal and vertical color area inputs, such as Saturation and Brightness, and on each slider, such as Hue and Alpha, then enrich the experience with aria-valuetext that describes the value in human terms.
+✅ Keep the handler to a minimal state update, derive hex/RGB values with memoization, and debounce or commit persistence work on pointer release or on an explicit confirm action.
 
-### Heavy work in the change handler
+### Committing live inside a popover
 
-❌ The change callback fires on every pointer movement during a drag, so conversions, formatting, logging, or network calls performed inline cause dropped frames and a sluggish picker.
+❌ Writing every onColorChange straight into the committed application color makes a cancel action meaningless, since the surrounding UI has already changed by the time the user dismisses the popup.
 
-✅ Keep the handler to a minimal state update, derive display values like hex or RGB outside the drag path or memoize them, and defer any expensive work until the interaction settles.
+✅ Maintain a separate preview color for the popover-hosted picker and copy it into the committed color only when the user confirms; restore or discard on cancel and Escape.
 
-### Using a picker for a fixed palette
+### Color as the only signal of the selection
 
-❌ Presenting a full color canvas when the design only permits a handful of approved colors invites off-brand selections and adds unnecessary interaction cost.
+❌ Relying on the gradient and a colored chip to convey the chosen value excludes users with color vision deficiencies and anyone using a monochrome or high-contrast display.
 
-✅ Use a SwatchPicker of preset colors for bounded choices, and reserve the full picker for cases where any color is legitimately allowed.
+✅ Show the selection in text form as well, such as a hex value, an RGB triple, or a channel readout, and keep that text synchronized with the color state.
 
 ## Accessibility
 
-**Requirements**: The picker is a group of slider-like widgets rather than a single input, so each interactive child must carry its own accessible name and its own value semantics. Every color area axis and every slider must be reachable by keyboard and must expose a label, a current numeric value, and — where a number is not self-explanatory — a descriptive text value. Color must never be the sole carrier of meaning: pair the interactive surface with a text representation of the selected color and mark invalid text input with aria-invalid. Target the WCAG 2.1 AA expectations for name, role, and value on custom widgets, keyboard operability, focus visibility, and non-text contrast; the focus ring drawn on the picker's sub-components must remain perceptible against both light and dark surfaces and against the arbitrary colors the user selects. If the picker is opened from a trigger, the hosting surface must return focus to the trigger on close.
+**Requirements**: The composed picker must satisfy WCAG 2.1 Level AA: content must be operable from the keyboard alone (2.1.1), every focusable channel must have a visible focus indicator (2.4.7), each input must expose a name, role, and value (4.1.2), and color must never be the only visual means of conveying the selected value (1.4.1). Because the picker is built from custom slider-like inputs rather than native range elements, the accessible name and the spoken value must be provided explicitly on each child (ColorArea, ColorSlider, AlphaSlider) through aria-label and aria-valuetext; the 2D ColorArea needs aria-roledescription to explain that it is a two-dimensional control. Text fields used alongside the picker for hex or RGB entry should mark invalid input with aria-invalid so the error is announced rather than only colored.
 
 | Key | Action |
 | --- | --- |
-| `Tab` | Moves focus into the picker and forward through each sub-control, such as the two color area axes, the hue slider, the alpha slider, and any header or footer buttons. |
-| `Shift+Tab` | Moves focus backward out of the picker and through the preceding sub-controls. |
-| `ArrowLeft / ArrowRight` | Adjusts the focused slider or the horizontal axis of the color area, changing one channel of the color and firing the change callback. |
-| `ArrowUp / ArrowDown` | Adjusts the focused slider or the vertical axis of the color area, changing one channel of the color and firing the change callback. |
-| `Home` | Jumps the focused slider or color area axis to its minimum value. |
-| `End` | Jumps the focused slider or color area axis to its maximum value. |
-| `PageUp / PageDown` | Moves the focused slider in larger increments for coarse adjustments of hue, saturation, brightness, or alpha. |
-| `Enter / Space` | Activates buttons and color swatches, such as confirming or cancelling a picker shown in a popover, or selecting a saved swatch. |
-| `Escape` | Dismisses a popover or dialog that contains the picker, returning focus to the element that opened it. |
+| `Tab` | Moves focus into the ColorPicker's root and then through each child input and any adjacent controls in document order. |
+| `Shift+Tab` | Moves focus backwards out of the picker or to the previous child input. |
+| `ArrowLeft` | Decreases the focused channel value in ColorArea, ColorSlider, or AlphaSlider (for a vertical slider, moves along the vertical axis). |
+| `ArrowRight` | Increases the focused channel value in ColorArea, ColorSlider, or AlphaSlider. |
+| `ArrowUp` | Increases the focused channel value; on the ColorArea value (brightness) axis this raises brightness. |
+| `ArrowDown` | Decreases the focused channel value; on the ColorArea value (brightness) axis this lowers brightness. |
+| `Home` | Jumps the focused channel to its minimum (for example alpha 0 or saturation 0). |
+| `End` | Jumps the focused channel to its maximum (for example alpha 1 or saturation 1). |
+| `Page Up` | Increases the focused channel in larger increments for coarse adjustments. |
+| `Page Down` | Decreases the focused channel in larger increments for coarse adjustments. |
+| `Enter or Space` | Activates adjacent buttons in the same flow, such as the confirm, cancel, or reset Button placed next to the picker. |
+| `Escape` | Closes the hosting Popover when the picker is presented as a popup, dismissing without committing the preview color. |
 
-**ARIA**: aria-label, aria-valuetext, aria-roledescription, aria-invalid, aria-label on the picker container or a sibling Label associated with it
+**ARIA**: aria-label on each child input (ColorArea inputX and inputY, ColorSlider, AlphaSlider) to give the channel an accessible name such as Saturation, Brightness, Hue, or Alpha, aria-valuetext on child inputs and on text fields to speak a human-readable value such as a hue in degrees, a percentage, or a color name instead of a raw number, aria-roledescription set to a value such as 2D slider on the ColorArea axes to explain the two-dimensional interaction model, aria-invalid on hex or RGB text inputs that accompany the picker when the typed value cannot be parsed
 
-**Screen Reader**: The ColorPicker root is a container, not an interactive widget, so nothing is announced when focus passes over it unless you give it an accessible name. As the user tabs, each sub-control is announced by its role — the color area's two thumbs announce as sliders with a two-dimensional slider role description, and the hue and alpha controls announce as sliders — followed by the label you supplied, its current position, and, when provided, the aria-valuetext description such as a hue in degrees plus the closest named color. Because color changes are visual, the announcement relies entirely on the values you supply through aria-label and aria-valuetext; a chosen color should therefore also be rendered as text or paired with a Label so it can be reviewed on demand. Hex text entry that fails validation is announced as invalid through aria-invalid, and disabled swatches are skipped by focus traversal.
+**Screen Reader**: Screen readers do not announce the ColorPicker container itself as an interactive widget; it is a grouping element whose children are the real controls. Each child input is exposed as a slider with its own accessible name, current value, and minimum/maximum, so a user hears something like Saturation, 2D slider, 100 percent, adjustable. Because the gradient itself is purely visual, the spoken experience depends entirely on the labels and aria-valuetext you provide, which is why a value such as Saturation 80, Brightness 40, blue is far more useful than a bare number. When the picker is hosted in a Popover, focus is trapped inside the surface and returns to the trigger on close, and any adjacent confirm, cancel, or reset buttons are announced as ordinary buttons with their own labels.
 
 ## Styling
 
-Style the picker and its sub-components with makeStyles and Griffel tokens rather than ad-hoc colors so the chrome tracks the theme. Use tokens.colorNeutralStroke1 for the outlines of the color area and sliders, tokens.colorStrokeFocus2 for focus indicators on custom-wrapped children, and tokens.colorNeutralBackground1 for the surrounding container so the picker sits cleanly on neutral surfaces. Corner rounding comes from the shape prop, which corresponds to theme radii such as tokens.borderRadiusMedium for the rounded default and a square radius when shape is square; if you need to fine-tune it, override the child component's border radius through a class rather than fighting the prop. Spacing between stacked sub-controls and their preview swatch is handled well with tokens.spacingVerticalS and tokens.spacingVerticalM, and horizontal gap between a slider column and a preview reads nicely with tokens.spacingHorizontalL. Preview swatches are typically plain elements whose backgroundColor is set from the selected color, so give them their own fixed size and a neutral border such as tokens.colorNeutralStroke1 plus tokens.borderRadiusMedium to keep the preview readable against any page background. Label the picker's sub-cases with Text or Label using tokens.colorNeutralForeground1, and rely on tokens.shadow4-level elevation on the hosting popover surface so the picker separates from the page.
+ColorPicker intentionally ships almost no visual surface of its own — styling work usually targets the root container and the children. Use makeStyles with tokens.spacingHorizontalS, tokens.spacingHorizontalM, tokens.spacingVerticalS, and tokens.spacingVerticalM to lay out the ColorArea, the stacked ColorSlider and AlphaSlider group, and the color preview side by side, and give the preview element a fixed size with a border from tokens.colorNeutralStroke1 or tokens.colorNeutralStroke2 so very light or fully transparent colors remain visible. The shape prop is the sanctioned way to control corner radius: the default rounded applies radius tokens such as tokens.borderRadiusMedium to the sub-components, while square flattens them to tokens.borderRadiusNone for dense, grid-aligned surfaces. When embedding the picker in a PopoverSurface, keep the surface on tokens.colorNeutralBackground1 with tokens.shadow4 and separate the confirm/cancel row with tokens.spacingVerticalS. Focus visibility comes from the sub-components' own focus styling (tokens.colorStrokeFocus2); avoid overriding it. If you need a larger hit area for touch, increase the wrapper padding with spacing tokens rather than scaling the child inputs, and use className on the root to constrain the overall picker width instead of setting widths on each child.
 
 ## Performance
 
-Every sub-control inside the picker is driven by the same color value, so a single change callback re-renders the color area, the sliders, and any preview or text fields in one commit. Two things matter most. First, the callback fires at pointer-move frequency during a drag; keep the handler to one state update and avoid synchronous conversions or side effects. Second, avoid splitting the color across many independent pieces of state derived in the same handler — the reference examples update hex, RGB, alpha, and the HSV color together, which multiplies renders; grouping derived values behind a single state object or memoizing them reduces that cost. Memoize change handlers so child components do not re-create callbacks each render, and consider hosting the picker inside a Popover so the gradient canvases are mounted only while the user is actively choosing a color. Also prefer keeping the picker mounted and stable across parent re-renders; remounting resets internal focus and drag state.
+ColorPicker itself is a thin state-passing container, so its cost is dominated by its children and by the frequency of onColorChange. That callback fires continuously while the user drags within ColorArea or a slider, which means every state update you make in it re-renders the picker and everything around it. Isolate the color state in the smallest possible component, derive display strings (hex, RGB, color names) with memoized conversions rather than recomputing them on each render, and avoid placing the picker inside a large list or table row that re-renders expensively. Prefer keeping the picker mounted across open/close cycles when it lives in a Popover surface if you observe remount cost, and prefer it hosted in a portal-based Popover rather than inline inside scroll containers so the browser does not repaint clipped gradients during scroll. No measurement or ResizeObserver cost is incurred by the ColorPicker root, but each alpha and hue slider paints a gradient, so avoid rendering many pickers simultaneously on one screen.
 
 ## Theming & Tokens
 
-The picker's chrome is fully theme-aware while the selected color itself is data, not a theme token. Sub-component outlines and separators resolve to tokens.colorNeutralStroke1, focus rings to tokens.colorStrokeFocus2, and the surrounding surface to tokens.colorNeutralBackground1, so the control reads correctly in both light and dark themes. Corner rounding is expressed through theme radii — the rounded default aligns with tokens.borderRadiusMedium and its child radii, while the square setting removes that rounding — so changing shape alone keeps the picker consistent with the active theme. Text labels around the picker should use tokens.colorNeutralForeground1 and secondary descriptions tokens.colorNeutralForeground2, and spacing should come from tokens.spacingHorizontalM, tokens.spacingVerticalS, and their siblings. Any custom preview swatch you build should use tokens.colorNeutralStroke1 as its border and the container's neutral background token behind it, since the swatch fill is a literal color value supplied by the user and will not respond to theme changes.
+ColorPicker does not paint its own surfaces, so theming flows to it through FluentProvider and through the child color inputs, which read tokens such as tokens.colorNeutralBackground1 for their track and thumb surfaces, tokens.colorNeutralStroke1 and tokens.colorNeutralStroke2 for borders and the alpha checkerboard edges, and tokens.colorStrokeFocus2 for the visible focus indicator. Corner radius comes from tokens.borderRadiusMedium (and related radius tokens) when shape is rounded, and collapses to tokens.borderRadiusNone when shape is square, so a fully de-rounded theme still honors square. Spacing around the composed controls typically uses tokens.spacingHorizontalS, tokens.spacingHorizontalM, tokens.spacingVerticalS, and tokens.spacingVerticalM, and any PopoverSurface hosting the picker uses tokens.colorNeutralBackground1 with tokens.shadow4. Text rendered beside the picker, such as Labels and value readouts, should use tokens.colorNeutralForeground1 and tokens.colorNeutralForeground3 so it adapts to high-contrast themes.
 
 ## Migration Notes
 
-The v9 ColorPicker is deliberately minimal and compositional: it exposes only color, onColorChange, and shape, and it is expected to wrap child controls such as ColorArea, ColorSlider, and AlphaSlider that read from the same color context. This differs from older picker experiences that bundled previews, channel sliders, and text fields into a single monolithic prop surface. When moving to v9, plan for (1) a controlled data flow, where you own an HsvColor in state and update it from the change callback, (2) explicit child composition, since previously implicit sliders and previews are now assembled from the exported sub-components, and (3) building any hex or RGB text entry yourself with Input, SpinButton, and Label, validating user input before applying it to the shared color value. Because the shape prop propagates to the sub-components, adopt it once on the parent instead of styling each child individually.
+ColorPicker in v9 is a compositional, fully controlled container rather than a self-contained picker: it renders only the children you give it (ColorArea, ColorSlider, AlphaSlider) and coordinates them through the color and onColorChange pair. If you are porting code from an older monolithic color picker API, expect to supply the layout, the text-entry fields, the preview swatch, and any confirm/cancel flow yourself, and expect to normalize the alpha channel on every change because HsvColor alpha may arrive undefined. The component is not deprecated and has no deprecated props; shape replaces per-child radius styling, and there is no built-in popover behavior — compose Popover with a trigger and a surface when you need the popup presentation.
 
 ## Edge Cases
 
-- The color reported by the change callback may have an undefined alpha channel; normalize it to 1 before storing so downstream conversions and previews behave predictably.
-- Hue is cyclical and unstable at the extremes: saturation or brightness of zero makes hue meaningless, and a hue of 360 and a hue of 0 describe the same color, so avoid depending on an exact hue value for equality checks.
-- The shape prop affects the children rather than producing a visual difference on an empty root, so a picker with no sub-components appears to ignore shape entirely.
-- A fully transparent selection (alpha of 0) produces a preview that appears empty; make sure the preview area has a neutral background and border so the user can tell that a color is still selected.
-- Free-text hex or RGB entry can produce unparseable values; validate both the string shape and the parsed result, keep the last valid value, and mark the field invalid with aria-invalid instead of accepting or silently discarding the entry.
-- Because the picker is controlled, any parent re-render that passes a stale or reconstructed color object will visually snap the thumb positions; derive the color from a single source of truth.
-- When the picker lives inside a popover, the staged color and the committed color diverge until confirmation — keep them in separate state so cancelling genuinely reverts the selection, and ensure focus returns to the trigger.
-- Vertical sliders change the interaction axis but keep the same underlying channel semantics, so arrow-key expectations and aria-valuetext should still describe the channel rather than the orientation.
+- The alpha channel of an HsvColor received from onColorChange can be undefined, so any code that interpolates it into an alpha slider value or an RGB string must coalesce it to 1 first.
+- A ColorPicker rendered with no children produces an empty root element; the required root slot gives you a container but no controls, so at least one interactive child must always be composed.
+- Shape affects only the border radius of the child inputs, not the layout or the wrapper, so a square picker still needs explicit spacing and width styling from the host layout.
+- Hue is a cyclic channel: values wrap at the ends of the hue range, so code that compares stored hue values for equality can report a change even though the visible color is identical.
+- Custom swatches added to a companion SwatchPicker must use stable, unique value strings as keys, because duplicate or index-based values cause focus to jump to the wrong swatch after the palette is rebuilt.
+- Inside an overflow-hidden or scrollable container, inline-rendered gradient sliders can be clipped or repainted during scroll; hosting the picker in a Popover surface avoids the clipping entirely.
+- HsvColor is not directly printable, so any user-facing text readout requires conversion through a color utility; keep that conversion memoized because it runs alongside high-frequency change events.
+- When two ColorPicker instances are bound to the same color state, both re-render on every drag event; if the second one is expensive, decouple it or present it only on demand.
 
 ## See Also
 

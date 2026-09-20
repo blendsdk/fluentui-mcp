@@ -7,9 +7,9 @@
 
 ## Overview
 
-Skeleton is a data-display component that renders an animated placeholder in the shape of content that has not loaded yet. The component is intentionally split in two: Skeleton is the root container (a div by default) that holds the wireframe, and SkeletonItem elements are the individual placeholder blocks placed inside it. Because Skeleton owns the layout container, it can propagate shared presentation down to its items: the size prop sets the pixel height of the SkeletonItems inside it, and the shape prop sets their default geometry, while each individual SkeletonItem may still override those values with its own size and shape. It supports two motion styles through the animation prop (wave, the default, or pulse) and two surface treatments through the appearance prop (opaque or translucent, the latter intended for colored, image, or Material-style backgrounds). Skeleton is purely presentational and non-interactive: it never receives focus, has no click or key handlers, and exists to reserve space and communicate 'content coming' until the real data replaces it.
+Skeleton is a data-display component that renders placeholder wireframes in place of content that has not finished loading yet. Rather than painting the whole placeholder itself, Skeleton is a container: its required root slot (a div by default) holds the individual placeholder blocks — SkeletonItem elements — and can also hold the real data that Skeleton is standing in for. Skeleton-level props such as size and shape act as defaults that are inherited by the SkeletonItems inside it, and any individual item can override those defaults with its own size and shape. The animation prop controls the motion used to convey activity (a sweeping wave, which is the default, or a soft pulse), while the appearance prop switches between an opaque fill and a translucent fill intended for inverted or MaterialOS-styled surfaces. Because the root also accepts the eventual content, Skeleton is typically kept mounted around a region and its children are swapped between placeholder blocks and real data once the fetch resolves, which keeps layout stable.
 
-**When to use**: Use Skeleton when the eventual layout of the incoming content is known and structured, such as a card, list, table, profile header, or feed. In those cases a wireframe of blocks preserves the geometry of the final content and prevents the page from jumping when data arrives, which feels calmer than an abrupt blank region. Choose Skeleton for first-load placeholders on structured regions and for refreshes where the existing layout must stay stable. Prefer Spinner or Progress instead when the final layout is unknown, when the wait is very long or unbounded, when the operation is blocking (a full-page load or a modal gate), or when the region is so small that a single shimmer bar conveys nothing useful. Do not use Skeleton as an empty state, as decoration, or as a permanent placeholder: it is a transient loading signal that should be removed the moment content is available or an error is shown.
+**When to use**: Use Skeleton when a region of the UI has a known final geometry and the wait for its data is long enough that an empty area would feel broken — for example cards, list rows, table shells, profile headers, media tiles, or chat messages. Because placeholder blocks are composed explicitly, Skeleton is the right choice when you want the loading state to preview the shape of the eventual content and thus avoid layout shift. Prefer Spinner when you cannot predict the final layout, when the wait is very short or indeterminate in an inline control, or when the loading state belongs to a single small element such as a button. Prefer ProgressBar when progress is measurable, and prefer a plain empty state or MessageBar when the operation has failed or returned nothing. Skeleton is also a poor fit for content that might never resolve — always pair it with a timeout, error, or empty-state path.
 
 ## Props Reference
 
@@ -23,11 +23,12 @@ Skeleton is a data-display component that renders an animated placeholder in the
 
 ### Prop Guidance
 
-- **animation**: Selects the motion style of the placeholder. wave, the default, sweeps a highlight across each block and reads as an active, short-lived load; pulse fades the blocks in and out and is the better choice for long waits, large wireframes, or pages where many Skeletons animate simultaneously. Keep one animation value per view so the page feels coherent. `pulse`
-- **appearance**: Controls the surface treatment of the placeholders. opaque, the default, paints solid neutral stencil tones and belongs on ordinary page backgrounds. translucent renders semi-transparent stencils so whatever sits behind the Skeleton shows through, which is what you want over images, colored bands, or Material-style themes. Do not mix the two appearances in one region. `translucent`
-- **size**: Sets the pixel height of the SkeletonItems inside the root and is restricted to a small set of recommended values, which keeps placeholders on a consistent scale across a product. Values are overridable per item, so use this to establish the dominant line height of the wireframe (for example a 20-pixel body-text rhythm) and raise or lower individual items only where the real content differs. `20`
-- **shape**: Sets the default geometry of the SkeletonItems inside the root. Use circle for avatars, icons, and other round elements, rectangle for text lines, image blocks, and bars that should fill available width, and square for tiles and thumbnails. Individual items may override the inherited shape, which is how a row that is mostly text lines still renders a round avatar. `circle`
-- **width**: Deprecated. It sets the width of the skeleton wrapper, but wrapper dimensions should be expressed with className, makeStyles, and layout tokens instead so that Skeleton participates in the same layout system as the real content. Do not introduce new usages; remove existing ones when you touch the surrounding code. `240`
+- **animation**: Selects the motion used to signal that work is in progress. The default is wave, a highlight that sweeps across the placeholder surface; pulse is an alternative that fades the block in and out. Keep wave for a small number of large placeholders and switch to pulse in dense layouts, repeated list rows, or motion-sensitive contexts. `pulse`
+- **appearance**: Controls the visual weight of the placeholder. Opaque is the default and is right for standard light or dark surfaces; translucent produces a lighter, semi-transparent fill that sits better on inverted or MaterialOS-styled backgrounds. Verify contrast against the surface before adopting translucent in a normal theme. `translucent`
+- **width**: Deprecated. It previously set the width of the skeleton wrapper. Set width on the root through a class name or style instead, alongside height and gap values, so the placeholder matches the dimensions of the loaded content and no longer depends on a deprecated prop. `deprecated — use root CSS sizing`
+- **size**: Sets the size, in pixels, of the SkeletonItems inside the Skeleton and is restricted to the recommended SkeletonItemSize values rather than arbitrary numbers. Treat it as the default row height for the placeholder and override it on an individual SkeletonItem only when that block needs a different dimension, such as a larger avatar. `20`
+- **shape**: Sets the shape of the SkeletonItems inside the Skeleton: circle for avatars and icons, square for compact tiles and thumbnails, and rectangle for text lines, bars, and media blocks. It provides the default for all children and can be overridden per SkeletonItem — a single avatar circle among rectangular text lines is the canonical use. `rectangle`
+- **children**: The root slot contains both the SkeletonItem blocks that compose the placeholder and, when loading finishes, the real content the Skeleton was standing in for. Compose children to mirror the final structure — a row of an avatar circle followed by text rectangles — and swap them for the loaded data rather than unmounting the Skeleton container. `one circle item plus several rectangle items in a row`
 
 ### Slots
 
@@ -128,99 +129,96 @@ Animation.parameters = {
 
 ### Do's
 
-- Build the Skeleton wireframe to mirror the real content: match the number of rows, the relative widths of text lines, and the sizes of avatars and media blocks so the transition to loaded content causes no layout shift.
-- Set size and shape once on the Skeleton root and let them cascade to the SkeletonItems, then override only the individual items that genuinely differ from the majority (for example a circular avatar at a larger size inside a row of text lines).
-- Give the Skeleton root a meaningful aria-label describing what is loading, exactly as the documented examples do with 'Loading Content', so assistive technology announces the region rather than silence.
-- Use the default wave animation for short, localized loads and animation set to pulse for large wireframes, long-running loads, or pages with several Skeletons animating at once, since pulse is visually calmer and cheaper to paint.
-- Use appearance set to translucent when the Skeleton is layered over an image, a colored band, or a Material-style theme, and keep the default opaque appearance on standard neutral page surfaces.
-- Render the Skeleton in the same render pass in which the request starts, and size the root with className or makeStyles rather than the deprecated width prop, so the placeholder occupies its final dimensions immediately.
-- Keep wave or pulse consistent across a page: if several regions are loading at once, drive them all with the same animation value so the page does not look like two different designs.
+- Compose the placeholder out of SkeletonItem children whose shapes and sizes mirror the real content (a circular item for an avatar, rectangles for text lines) so the transition to loaded data is visually seamless.
+- Set shared defaults once on Skeleton with the size and shape props, and only override size or shape on the individual SkeletonItem that genuinely differs, such as a 24-pixel circular avatar beside rectangular text lines.
+- Give the Skeleton root the same overall dimensions and internal spacing that the loaded content will occupy — apply width, height, and gap values through the root's class name or style — so nothing reflows when the data arrives.
+- Always provide an accessible name on the Skeleton, as every documented example does with aria-label="Loading Content", and make it describe the specific region rather than using a generic string for the entire page.
+- Keep the Skeleton mounted as the container for both states and swap its children, so the layout skeleton is the same element tree the loaded content uses.
+- Choose animation="pulse" for dense or repeated placeholders and keep the default wave animation for a small number of large blocks, where the sweep reads as intentional motion rather than noise.
+- Use appearance="translucent" when the placeholder sits on a dark, inverted, or MaterialOS-styled surface where an opaque fill would look too heavy.
+- Prefer CSS sizing on the root (via class name or style) over the deprecated width prop so your implementation survives the prop's removal.
 
 ### Don'ts
 
-- Do not use the deprecated width prop. Style the root through className with makeStyles and tokens instead, so width is expressed with the same rules as the rest of your layout.
-- Do not place interactive children, links, buttons, or form fields inside a Skeleton or make SkeletonItems focusable; the placeholder is not a functioning UI and creating focusable dead ends traps keyboard users.
-- Do not attach an aria-label to every SkeletonItem. Repeating the same label dozens of times makes screen readers announce an identical phrase over and over; label the root once, or mark decorative items with aria-hidden.
-- Do not leave a Skeleton on screen after the request resolves, on an error path, or as an indefinite placeholder. Swap it for content, an error message, or an empty state as soon as the outcome is known.
-- Do not use Skeleton for a single short line of text or for a wait shorter than a fraction of a second, where the flash of placeholder is more distracting than an empty region.
-- Do not mix wave and pulse within the same view, and do not stack several different appearances (opaque and translucent) in one region; the shimmer should read as one consistent surface.
-- Do not assume Skeleton enforces alignment inside the wireframe. Multiple SkeletonItems inside your own divs stack according to your styles, so an unstyled wireframe can look ragged; supply the row and column layout yourself.
+- Don't use the deprecated width prop — set the width on the root with CSS instead so the layout is controlled consistently with height and spacing.
+- Don't try to express arbitrary pixel heights through the Skeleton-level size prop; that prop is restricted to the recommended SkeletonItemSize values, so use a numeric size on the individual SkeletonItem or CSS when you need an unusual dimension.
+- Don't leave a Skeleton on screen forever when a request stalls or fails; resolve to an error or empty state instead of letting the placeholder imply progress indefinitely.
+- Don't use Skeleton to represent a short inline operation such as a button submit or a single value refresh, where a Spinner is the clearer and less disruptive signal.
+- Don't let the placeholder geometry drift from the real content — a Skeleton whose rows are a different height, count, or corner radius than the loaded data causes the very layout shift it was meant to prevent.
+- Don't wrap an entire page in one large animated Skeleton when only one panel is loading; scope the placeholder to the region that is actually pending.
+- Don't stack wave animations on hundreds of placeholder items at once, and don't animate placeholder blocks that the user is unlikely to ever see.
+- Don't ship a Skeleton without an accessible name; an unlabeled generic container gives assistive technology users no indication that content is pending.
 
 ## Anti-Patterns
 
-### Wireframe that does not match the loaded content
+### Placeholder geometry that does not match the loaded content
 
-❌ A generic stack of bars that ignores the real structure (a square where an avatar appears, three lines where the card renders five) forces an obvious reflow when data arrives, so the loading state feels like a jump rather than a transition and the page appears to flicker.
+❌ A Skeleton built from arbitrary rectangles and gaps occupies different dimensions than the content that replaces it, so the page jumps when the data resolves — exactly the shift the placeholder was meant to prevent.
 
-✅ Model the placeholder on the actual component: same row count, similar relative widths, matching avatar sizes and image aspect ratios. Use the Skeleton root's size and shape to set the dominant values and override only the items that differ, as shown in the row-based wireframe examples.
+✅ Derive the placeholder from the real layout: same row count, same heights, same corner radius, same gaps. Set the Skeleton-level size and shape to the dominant values and override only the items that genuinely differ, then confirm that swapping in the loaded content produces no reflow.
 
-### Labelling every placeholder block
+### Using the deprecated width prop for sizing
 
-❌ Putting an aria-label, title, or other announcement on each SkeletonItem produces a stream of identical labels that a screen reader user must listen to or navigate past, and it can make decorative placeholders sound like real controls.
+❌ width is deprecated, so relying on it for the placeholder's dimensions locks the loading state to an API that will be removed and splits sizing logic between a prop and CSS.
 
-✅ Label the Skeleton root once with text such as 'Loading Content', or hide the whole wireframe with aria-hidden when the loading state is already announced elsewhere, and leave individual SkeletonItems unlabelled.
+✅ Size the root with a class name or style instead, expressing width, height, and spacing together so the placeholder and the loaded content share one layout definition.
 
-### Skeleton as a permanent or failure state
+### Placeholder used as a permanent loading indicator
 
-❌ Leaving the placeholder mounted after a request resolves, times out, or fails keeps the page in a fake perpetual loading state, hides the real outcome from the user, and in the failure case offers no path forward.
+❌ When a request hangs or fails, an animated Skeleton keeps implying that content is on its way. Users wait indefinitely, and screen reader users receive no accessible-name change to tell them anything went wrong.
 
-✅ Treat Skeleton as strictly transient. Swap it for the real content on success, for an error message with a recovery action on failure, and for an empty state when the result set is legitimately empty.
+✅ Always pair the Skeleton with a resolution path: swap to the loaded content on success, and swap to an error, empty, or retry state when the request fails or times out. Let the accessible name and the surrounding region reflect the new state.
 
-### Sizing the wrapper with the deprecated width prop
+### Skeleton instead of Spinner for small inline waits
 
-❌ The width prop is deprecated, and combining it with class-based sizing causes two competing sources of truth for the same wrapper, which is confusing when the layout is later refactored or when the Skeleton is swapped for real content.
+❌ Rendering a wireframe for a single value, a button submit, or a very fast refresh adds visual noise and flashes content in and out faster than users can read it, while hiding the fact that a specific control is busy.
 
-✅ Remove width usages and set dimensions on the root with className and makeStyles, ideally reusing the same layout styles that the loaded content will use so the two are guaranteed to align.
+✅ Reserve Skeleton for regions with known, substantial layout. For short or inline operations use Spinner, and for measurable work use ProgressBar, keeping Skeleton for the cases where previewing the final shape is genuinely useful.
 
-### Interactive or focusable content inside a Skeleton
+### Unlabeled placeholder container
 
-❌ Buttons, links, or inputs placed inside a wireframe, or tabIndex applied to placeholder blocks, create focus stops that lead to non-functional UI, which is disorienting for keyboard and screen reader users and violates the contract that the region is not yet usable.
+❌ A Skeleton without an accessible name is announced as a generic container, so assistive technology users hear nothing about the pending content while sighted users see an obvious loading state.
 
-✅ Keep Skeleton purely presentational. Render the real interactive controls only after loading completes, and make sure the placeholder itself is never focusable.
+✅ Attach aria-label to the Skeleton describing the region that is loading, as every documented example does, and consider hiding the non-semantic SkeletonItem children with aria-hidden so only the meaningful label is exposed.
 
 ## Accessibility
 
-**Requirements**: Skeleton must never be focusable or part of the tab order, since it represents content that does not yet exist. When the Skeleton stands in for a region whose load state should be conveyed, give the root a descriptive aria-label (the documented examples use 'Loading Content') and set aria-busy on the surrounding container that actually owns the data; remove the attribute once loading finishes. When a Skeleton is purely decorative because a nearby Spinner, Progress, or live region already announces the loading state, hide it from assistive technology with aria-hidden instead of labelling it, so the same status is not reported twice. Ensure the shimmer remains perceptible against its page background in every theme and in forced-colors mode, and treat vestibular comfort seriously: Skeleton animates continuously, so for users who prefer reduced motion, test the result and, where necessary, suppress the background-position animation in a reduced-motion media query.
+**Requirements**: Skeleton is a visual loading affordance, so it must not be the only thing that communicates state. Give the Skeleton root an accessible name with aria-label describing the pending content, keep the placeholder fill visually distinguishable from the surrounding surface (translucent appearance reduces contrast and should be verified against its background), and ensure the real content announced after loading is reachable and focusable in the normal order. Where the loading state is significant to the flow, surface it in the surrounding region as well (for example with a status message or an aria-live region on the container) rather than relying solely on the placeholder graphics. Respect reduced-motion preferences, and prefer the gentler pulse animation for motion-sensitive or high-density contexts.
 
 | Key | Action |
 | --- | --- |
-| `Tab` | No effect. Skeleton is not focusable and is skipped entirely in the tab order; focus stays on the control or region that triggered the load. |
-| `Shift + Tab` | No effect. The component is never a tab stop, so reverse navigation passes over it as well. |
-| `Enter` | No effect. Skeleton has no activation behavior and exposes no click handler. |
-| `Space` | No effect. The component cannot be activated or toggled from the keyboard. |
-| `Escape` | No effect. Any dismissal of the surrounding loading experience must be implemented by the containing dialog, drawer, or page. |
-| `Arrow keys` | No effect. Skeleton contains no internal navigation or roving focus. |
+| `Tab` | Skeleton is not focusable and does not participate in the tab order, so Tab moves focus straight past the placeholder to the next interactive element. |
+| `Enter / Space` | No effect. Skeleton and its SkeletonItem children expose no interactive behavior; any control that should act on the pending region must be authored as a real interactive component. |
 
-**ARIA**: aria-label, aria-hidden, aria-busy, aria-live
+**ARIA**: aria-label, aria-hidden
 
-**Screen Reader**: Skeleton itself has no built-in role or live-region semantics, so what a screen reader announces depends entirely on the attributes you add. If the root carries a label such as 'Loading Content', that text is read when the user navigates to the region, giving an audible cue that content is pending. Individual SkeletonItems are generic elements and produce no meaningful output; marking them aria-hidden removes any noise they could generate from labels or nesting. Because the placeholder is replaced by real content rather than updated in place, the most reliable pattern is to keep the announcement on the parent container (aria-busy while loading, aria-live polite on a status element that is updated when loading completes) and to keep the Skeleton either clearly labelled or fully hidden.
+**Screen Reader**: The root div exposes whatever accessible name you supply through aria-label; without one it is announced as an unnamed generic container that gives no hint that content is pending. The SkeletonItem children are non-semantic placeholder blocks and contribute nothing meaningful to the accessibility tree, so they can be hidden from assistive technology with aria-hidden when the surrounding Skeleton already carries the label. Because the placeholder is not focusable, screen reader and keyboard users move directly to surrounding content; if the loading state matters to the task, announce it from the containing region or status element rather than expecting the Skeleton itself to be reported.
 
 ## Styling
 
-Skeleton is styled with Griffel through makeStyles and the tokens object, so the DOM you target is the root container rather than the individual placeholders. Use className on the Skeleton root to control the overall width, max-width, and grid or flex arrangement of the wireframe, and add rowGap with a spacing token such as tokens.spacingVerticalS to tune the vertical rhythm between SkeletonItems; horizontal spacing between items in a row is handled by the row styles you write, for example columnGap with tokens.spacingHorizontalMNudge. Avoid the deprecated width prop and express dimensions through styles instead. Individual SkeletonItem blocks can be sized precisely with their own size prop, which is the supported way to render a large circular avatar next to narrow text lines. Because the shimmer is painted as a moving background gradient, you cannot restyle it with a plain backgroundColor on the item without a higher-specificity override; prefer overriding the backgroundImage on the item's class if you need a brand-tinted shimmer, and verify your override in both light and dark themes.
+Style the Skeleton root with makeStyles and Griffel tokens rather than inline values: the root is a plain div, so it accepts layout properties such as display, grid or flex gaps, width, height, and margin. Use tokens.spacingHorizontalM, tokens.spacingVerticalS, and related spacing tokens for the gaps between placeholder rows, and tokens.colorNeutralBackground3 or tokens.colorNeutralBackground4 for the placeholder fill so it tracks the theme. Corner rounding is controlled with tokens.borderRadiusSmall, tokens.borderRadiusMedium, and tokens.borderRadiusCircular — the circular token is what makes a shape="circle" item read as an avatar. The translucent appearance leans on alpha and opacity tokens such as tokens.colorNeutralBackgroundAlpha and tokens.opacityDisabled, so check that the result still separates from the surface underneath. If you override motion on the SkeletonItem root, use tokens.durationSlow with tokens.curveEasyEase to keep the timing in step with Fluent motion, and remember that the root also hosts the loaded content, so keep root styles layout-only (size, grid, gap) and leave color and typography to the real components.
 
 ## Performance
 
-Skeleton contains no JavaScript animation: the shimmer is produced by CSS on the SkeletonItem blocks, so the cost is rendering and painting rather than scripting. The default wave animation moves a background gradient, which repaints each item on every frame and is therefore heavier than the pulse animation's single fade; for large wireframes, long-lived loads, or pages with several Skeletons, choose pulse to cut paint work. Each SkeletonItem is its own element, so a wireframe with dozens of blocks multiplies DOM nodes and gradient paints; keep the placeholder to a representative handful of rows instead of a full facsimile of a very long list. Keep the Skeleton mounted for the duration of the request instead of toggling it on and off, since unmounting restarts the animation and can produce visible flicker, and let the parent own the conditional render that swaps the placeholder for content.
+Skeleton itself is lightweight — it is a container div plus SkeletonItem blocks — and the wave and pulse effects are declarative animations rather than script-driven updates, so cost is dominated by how many placeholder items you render. Each animated SkeletonItem is a separate element; a few dozen are negligible, but filling a very large grid or an entire dashboard with individually animated items keeps the compositor busy and can make the loading state itself feel slow. In dense views, prefer animation="pulse" over the sweeping wave, or leave the placeholder unanimated for off-screen regions. Because the Skeleton root is designed to stay mounted and host the loaded content, avoid tearing down and recreating the container on every fetch; reusing the same node keeps the layout tree stable and lets the placeholder blocks be replaced in a single render pass.
 
 ## Theming & Tokens
 
-Skeleton draws its colors from theme-aware Griffel tokens, so it adapts automatically across webLightTheme, webDarkTheme, and the Teams themes without any prop changes. The opaque appearance paints a moving gradient built from tokens.colorNeutralStencil1 and tokens.colorNeutralStencil2, which are neutral stencil tones that deliberately sit apart from tokens.colorNeutralBackground1 in both light and dark themes. The translucent appearance uses the alpha variants tokens.colorNeutralStencil1Alpha and tokens.colorNeutralStencil2Alpha so the surface behind the placeholder remains visible, making it the right choice over images and non-neutral backgrounds. Shapes map to radius tokens, with circle relying on tokens.borderRadiusCircular and rectangle and square using medium and small radii tokens for their corners, so corner rounding follows the theme's geometry. Animation timing comes from the theme's duration tokens, so a theme that adjusts motion timing also adjusts the shimmer. If you override the shimmer colors, do it by replacing the background gradient on your own class and verify contrast against the surface in every theme you support.
+Skeleton consumes theme values from the nearest FluentProvider, so it adapts automatically to light and dark themes. The placeholder fill is derived from neutral surface tokens such as tokens.colorNeutralBackground3 and tokens.colorNeutralBackground4, which is why the default opaque appearance stays legible in both themes. The translucent appearance draws on alpha and opacity tokens such as tokens.colorNeutralBackgroundAlpha and tokens.opacityDisabled, making it appropriate over inverted or MaterialOS-style surfaces where an opaque fill would read too heavily — but it also lowers the contrast against the background, so re-check it in a standard theme. Shape rounding maps onto tokens.borderRadiusSmall, tokens.borderRadiusMedium, and tokens.borderRadiusCircular, which is what gives a shape="circle" item its avatar look. Motion is expressed with Fluent duration and curve tokens, so overrides that use tokens.durationSlow and tokens.curveEasyEase stay consistent with the rest of the system.
 
 ## Migration Notes
 
-Skeleton in Fluent UI React v9 replaces the placeholder patterns of earlier Fluent generations, which relied on Shimmer and shimmer element groups rather than a Skeleton container with SkeletonItem children. The conceptual shift is composition: instead of describing a shimmer pattern to be generated for you, you now lay out explicit SkeletonItem blocks inside a Skeleton root and match the real content's geometry yourself. Within v9, the width prop is deprecated and should be replaced by styling the root with className and Griffel tokens; if you are carrying forward older markup that passes width, migrate those usages rather than mixing the prop with class-based sizing, since both target the same wrapper. The animation and appearance props carry over the same intent as earlier shimmer settings, with wave as the default motion, and the translucent appearance is the option to reach for when you are not on a standard opaque neutral surface.
+Migrating to v9 changes Skeleton from a component that painted its own placeholder shapes into a compound container: Skeleton provides the root container and the shared defaults, while every visible block is expressed as a SkeletonItem child. The width prop is deprecated — move sizing to the root's CSS (class name or style) so width, height, and spacing are handled the same way. The size prop at the Skeleton level is now constrained to the recommended SkeletonItemSize values and acts as a default that individual SkeletonItems can override with their own numeric size. The appearance prop (opaque, the default, or translucent) and the animation prop (wave, the default, or pulse) are the supported levers for matching inverted or MaterialOS-style surfaces and for choosing between sweeping and pulsing motion.
 
 ## Edge Cases
 
-- An individual SkeletonItem's size and shape always win over the values inherited from the Skeleton root, and the component will not warn about the mismatch, so a wireframe can silently mix scales if overrides are applied inconsistently.
-- Circle and square shapes are constrained to the item's size value, while rectangle stretches to the width available in its container; a rectangle inside a flex row without an explicit width can collapse or stretch unexpectedly.
-- The translucent appearance can become nearly invisible over a busy or light image because the stencil tones are semi-transparent; add a scrim or fall back to the opaque appearance when the background is not predictable.
-- The deprecated width prop and class-based sizing both target the same wrapper, so providing both can produce surprising layout results during migration.
-- Skeleton renders a plain div, so inside a constrained grid or flex parent the wireframe can be squeezed to zero height if the SkeletonItems have no size and the parent has no explicit dimensions.
-- The animation runs continuously for as long as the component is mounted; there is no built-in stop condition, so an unmounted-only-on-success pattern will leave the shimmer running forever on the error path.
-- Complex wireframes built from your own divs, as in the multi-row examples, depend entirely on your layout styles for alignment; Skeleton itself does not arrange items into rows or columns.
-- Because the placeholder is replaced rather than updated in place, assistive technology may not re-announce the region when content loads unless the parent container manages focus or a live region.
+- The width prop is deprecated. It may still accept a value, but sizing should be moved to the root's CSS so the placeholder does not depend on a soon-to-be-removed API.
+- The Skeleton-level size prop is limited to the recommended SkeletonItemSize values, so unusual row heights must be expressed either as a numeric size on the individual SkeletonItem or through CSS on the root.
+- Per-item size and shape always win over the Skeleton-level defaults, which is the intended way to mix a circular avatar with rectangular text lines — but it also means an overlooked override silently breaks the uniform look of a row.
+- The root slot is documented as the container for both the placeholder blocks and the data the Skeleton will load. That means root styles apply to the loaded state too, so keep them to layout properties and avoid painting colors or typography there.
+- The translucent appearance can be nearly invisible on a light background; test it against the actual surface before using it outside inverted or MaterialOS-style themes.
+- Skeleton never removes itself. Deciding when to stop showing the placeholder, and what to show instead on empty or error results, is the consuming application's responsibility.
+- Every documented example supplies aria-label on the Skeleton; omitting it leaves an unnamed container that conveys nothing about pending content to assistive technology.
 
 ## See Also
 

@@ -7,9 +7,9 @@
 
 ## Overview
 
-Select is a form component that renders a styled native HTML select element, giving users a compact way to choose a single value from a predefined list of options. It is composed of three slots: the root wrapper, the select element itself (the primary slot that receives native attributes and events), and an icon slot that typically renders the down-arrow indicator. The component supports four appearances — outline (the default), underline, filled-darker, and filled-lighter — and three sizes that match Input: small, medium, and large. Because the primary slot is a real select element, native form behavior such as defaultValue, value, disabled, id, and form submission all work as expected, and the onChange callback receives both the original React change event and a SelectOnChangeData object containing the newly selected value. Styling is handled with Griffel and Fluent theme tokens, so the control automatically follows the active theme (light, dark, high contrast) and can be extended with makeStyles and mergeClasses.
+Select is a form control that wraps the native HTML select element with Fluent UI styling, sizing, and theming. It renders a root container, the actual select element as its primary slot, and an icon slot that typically holds a down-arrow indicator. Because it is built on the native element, it inherits the platform's behavior: the option list is rendered by the browser/OS, selection is single-choice, and form participation (name/value submission) works without extra wiring. Select exposes three Fluent-specific props — appearance, size, and onChange — while still forwarding native attributes such as value, defaultValue, disabled, required, id, and name. The onChange handler provides both the raw React change event and a typed SelectOnChangeData payload so the new value can be read directly in controlled scenarios.
 
-**When to use**: Use Select when the user must pick exactly one value from a known, moderately sized list of options and screen space is limited — for example choosing a color, a country, a sort order, or a density setting inside a settings panel. Prefer it over a group of Radio buttons when the list is longer than roughly five items or when the form must stay vertically compact, and prefer it over a free-form Input when the value has to come from a constrained set. If users need to type to filter, or the list is very large or loaded asynchronously, use Combobox instead, because Select only offers native type-ahead and no search field. If multiple values may be chosen, use a multi-value control such as TagPicker or Combobox rather than Select. Use Switch or Checkbox for binary on/off choices, and always pair Select with Field or Label when it appears in a real form so it receives an accessible name.
+**When to use**: Use Select when the user must choose exactly one option from a short, fixed, well-known list — for example choosing a color, a sort order, a locale, or a country — and the platform's native dropdown behavior is acceptable. Prefer Select over Dropdown or Combobox when the list is static, non-searchable, and small, because Select gives you native keyboard handling, native mobile pickers, and automatic form submission for free. Choose Combobox or Dropdown instead when you need free-text entry, multi-select, custom option rendering (icons, avatars, descriptions), grouping with rich headers, or when you need full control over the popup surface. Use RadioGroup instead when every option should be visible at once and the number of choices is small — usually two to five — since exposing options without opening a menu reduces interaction cost. Use Checkbox or Switch when the choice is binary or on/off rather than a selection from a set.
 
 ## Props Reference
 
@@ -21,13 +21,14 @@ Select is a form component that renders a styled native HTML select element, giv
 
 ### Prop Guidance
 
-- **appearance**: Selects the color and border treatment of the control and defaults to outline. Use outline for standard forms, underline for low-chrome or dense layouts, filled-darker when the control sits on a light surface, and filled-lighter when it sits on a dark or colored surface — always confirming sufficient contrast with the surrounding color. `filled-lighter`
-- **size**: Sets the control height and typography and matches the Input sizes. Use small in dense toolbars and tables, medium (the default) for standard forms, and large for prominent or touch-oriented surfaces. Keep it consistent with neighboring Inputs in the same row. `medium`
-- **onChange**: Fires when the user selects a different option. Use the second argument's value to drive controlled state instead of reading the DOM, and keep the handler stable when the parent is memoized. `(event, data) => setValue(data.value)`
-- **value (native pass-through)**: Use with onChange to build a controlled Select whose displayed value is fully owned by your state, as in the Controlled story where the value is held in React state and updated from data.value. `Blue`
-- **defaultValue (native pass-through)**: Use for uncontrolled usage when you only need an initial selection, as in the InitialValue story where the control starts on a non-first option without React state. `Green`
-- **disabled (native pass-through)**: Disables the control, removing it from the tab order and from form submission. Use it when the choice is genuinely unavailable rather than to indicate a temporary loading state. `disabled`
-- **id (native pass-through)**: Required for label association. Generate it with useId and reuse it for the label's htmlFor so the accessible name is announced correctly in every story pattern. `select-outline`
+- **appearance**: Controls the fill and border treatment of the closed control: outline (the default) is a bordered box on a neutral background, underline shows only a bottom accent and is best for inline or minimal forms, filled-lighter and filled-darker use tinted backgrounds for use on surfaces of the matching tone. Choose based on the surface the Select sits on and verify contrast — the filled variants require the surrounding color to provide greater than 3:1 contrast against the fill. Use filled-lighter on light surfaces and filled-darker on elevated or tinted surfaces. `outline`
+- **size**: Sets the height, padding, and font size of the control. Use small in dense toolbars and compact forms, medium (the default) for standard page content, and large for prominent or touch-oriented layouts. Sizes intentionally match the Input sizes so a Select and an Input placed side by side line up on the same row. `medium`
+- **onChange**: Fires when the user selects a different option. The handler receives the React change event and a SelectOnChangeData object whose value holds the newly selected option's value; use the second argument to update controlled state rather than reading from the event target. Pair with the value prop for controlled usage or rely on defaultValue for uncontrolled usage, but never set both value and defaultValue on the same instance. `(event, data) => setValue(data.value)`
+- **value**: Passed through to the native select to make the component controlled. The value must match the value attribute of one of the option children (or the option's text content when no value attribute is provided), otherwise the control renders with no selection. Update it inside the onChange handler to keep the UI in sync with state. `Blue`
+- **defaultValue**: Sets the initially selected option for uncontrolled usage, as demonstrated in the InitialValue story. Use it when the selection never needs to be programmatically changed after mount; switch to value plus onChange when external controls or resets must drive the selection. `Green`
+- **disabled**: Native attribute that removes the Select from the tab order and blocks interaction, as shown in the Disabled story. Use it only when the choice is genuinely unavailable, and always pair it with visible explanatory text so users understand why rather than being left guessing. `disabled`
+- **required**: Native attribute indicating that a value must be chosen before submission. It is announced by screen readers when combined with a visible label, and browsers surface their own validation message; supplement it with an inline error message for clearer feedback. `required`
+- **id**: Used together with the label element's htmlFor to give the Select an accessible name, as shown in every story. Generate ids with useId so multiple Selects on the same page never collide. `selectId`
 
 ### Slots
 
@@ -170,104 +171,102 @@ Controlled.parameters = {
 
 ### Do's
 
-- Always give the control an accessible name by pairing it with a Label wired to its id, or by passing aria-label when no visible label is possible; the useId hook is the recommended way to keep ids unique across instances.
-- Set an intentional initial state with defaultValue for uncontrolled usage, or with value plus onChange for controlled usage, so the first option is not silently treated as the user's answer.
-- Read the selected value from the second argument of onChange (data.value) rather than digging into the event target; the component already normalizes it for you.
-- Match the Select size to surrounding Input controls so rows in a form keep a consistent baseline and control height.
-- Choose an appearance that fits the surface: outline for standard forms, underline for low-chrome or data-dense layouts, filled-darker on light backgrounds, and filled-lighter on dark or colored backgrounds, then verify the surrounding contrast.
-- Keep option labels short, human readable, and logically ordered (alphabetical or by frequency) so native type-ahead lands on the intended option.
-- Use the native disabled attribute when a choice is temporarily unavailable so the layout does not shift and the reason stays visible.
-- Keep the icon slot as a down-arrow disclosure indicator; it is what tells users the closed control is a choice rather than a text field.
+- Always associate a visible label with the Select using a label element and a matching htmlFor/id pair, as shown in the Default and Size stories, so the control has an accessible name.
+- Generate unique ids with the useId hook from @fluentui/react-components instead of hard-coding id strings, which prevents collisions when multiple Selects render on the same page.
+- Pass an explicit value or defaultValue that matches one of the option values (or the option's text content) so the control starts in a known state rather than silently falling back to the first option.
+- Use the appearance prop to match the surrounding surface — outline on standard cards and dialogs, filled-lighter or filled-darker on header or branded surfaces — and verify the filled variants meet the 3:1 contrast requirement against the adjacent background.
+- Pick a size that matches neighboring controls — small for compact toolbars and dense forms, medium as the default, large for prominent or touch-first layouts.
+- Use the onChange callback's second argument, SelectOnChangeData, to read the new value directly instead of digging through the change event target, keeping controlled state updates concise.
+- Use the native disabled attribute for unavailable choices and the native disabled attribute on individual option elements when only some choices are unavailable, so assistive technology reports them correctly.
 
 ### Don'ts
 
-- Don't use Select for on/off or yes/no decisions; Switch or Checkbox communicates binary state with fewer interactions.
-- Don't leave the control unlabeled and rely on the first option acting as a placeholder — screen reader users hear only the value with no field name.
-- Don't provide both value and defaultValue on the same instance, and never switch an instance from uncontrolled to controlled mid-life.
-- Don't use Select when the list must be searched, paged, or fetched as the user types; that experience belongs to Combobox.
-- Don't use the filled appearances on surfaces that fail to provide sufficient contrast against the field; the field boundary disappears, which the Appearance story explicitly warns about for filled-darker and filled-lighter.
-- Don't pack dozens of long option labels into a narrow Select — the closed control truncates the value and the user can no longer read what is selected.
-- Don't replace the icon with unrelated content or hard-code colors that bypass theme tokens, since dark theme and high-contrast mode will break.
-- Don't treat disabled as read-only: a disabled Select is removed from the tab order and its value is not submitted with the form.
+- Don't use Select for searchable or free-text entry needs — the native popup cannot be filtered, so reach for Combobox or Dropdown instead.
+- Don't build a custom dropdown out of Popover plus a list when a native select is sufficient; you would lose native mobile pickers, type-ahead, and form participation.
+- Don't hard-code colors, border widths, or padding in makeStyles overrides for the Select; use tokens such as tokens.colorNeutralBackground1, tokens.colorNeutralStroke1, and tokens.borderRadiusMedium so the control follows the theme.
+- Don't place a Select with the underline or filled appearances on a background where the surrounding contrast is below the 3:1 ratio required by the accessibility guidance for those styles.
+- Don't mix uncontrolled usage (defaultValue) with controlled usage (value) on the same Select instance — React will warn and the displayed value can drift from your state.
+- Don't rely on the first option as a placeholder substitute for a label; a first option like "Choose…" should be an actual, meaningful option or paired with a proper external label.
+- Don't assume you can style the option elements or the dropdown popup — that surface is rendered by the operating system, so visual customization stops at the closed control.
 
 ## Anti-Patterns
 
-### Select used as a searchable picker
+### Using Select as a searchable or filterable list
 
-❌ Select renders a native popup with no filter field, so users must scroll through long lists and can only rely on prefix type-ahead; asynchronous or virtualized data cannot be supported at all.
+❌ The option list is rendered by the operating system, so it cannot be filtered, virtualized, or given custom content. Teams often try to fake a search field by injecting a text input as an option, which breaks type-ahead, confuses screen readers, and produces an unusable popup.
 
-✅ Use Combobox when the list is long, remote, or needs filtering as the user types, and keep Select for short, static, known option sets.
+✅ Use Combobox when users need to type to filter, and Dropdown when you need a Fluent-rendered popup with custom option content. Keep Select for short, static, non-searchable lists.
 
-### Placeholder implied by the first option
+### Overriding the appearance with hard-coded styles
 
-❌ A native select always selects something: if no defaultValue or value is supplied and no empty option exists, the first option becomes the value and may be submitted even though the user never chose it. Screen reader users also hear a value without realizing they must make a choice.
+❌ Writing background-color, border, or padding literals into makeStyles for the Select bypasses the theming system, breaks in dark and high-contrast themes, and can silently violate the 3:1 contrast requirement for filled appearances.
 
-✅ Add an explicit empty or prompt-style option as the first child, or initialize defaultValue/value deliberately, and mark the field required with a proper Label so the expectation is clear.
+✅ Choose the appropriate appearance prop value and, when additional styling is truly needed, reference Griffel tokens such as tokens.colorNeutralBackground1, tokens.colorNeutralStroke1, tokens.colorNeutralStrokeAccessible, and tokens.borderRadiusMedium so the control follows the active theme.
 
-### Mixing controlled and uncontrolled state
+### Rendering a Select without an accessible name
 
-❌ Passing both value and defaultValue, or flipping an instance between them, leaves React warning and the visible value able to desync from application state.
+❌ A Select with only option text and no label is announced by screen readers as an unlabeled combobox, so users hear the current value but not what they are choosing. Relying on a first option like "Select a color…" as the label is not reliable, because that option is announced as a selectable value.
 
-✅ Pick one model for the lifetime of the instance: defaultValue for uncontrolled usage, or value combined with onChange and data.value for controlled usage.
+✅ Always render a label element associated through htmlFor and a unique id generated with useId, and fall back to aria-label or aria-labelledby only when a visible label is genuinely impossible.
 
-### Hard-coded colors and altered icon slot
+### Mixing controlled and uncontrolled value props
 
-❌ Overriding colors with inline styles or replacing the down-arrow icon with arbitrary content breaks dark theme, high-contrast mode, and the visual affordance that tells users the control is a choice.
+❌ Setting both value and defaultValue, or setting value without updating it in onChange, makes the control appear frozen or fall out of sync with application state, since the native select always displays the value prop when it is provided.
 
-✅ Pick one of the four appearance values, theme through the neutral Griffel tokens, and leave the icon slot as the disclosure indicator.
+✅ Pick one model: defaultValue plus no value for uncontrolled usage, or value plus an onChange handler that writes back to state (reading data.value from SelectOnChangeData) for controlled usage.
 
-### Binary decisions expressed as a Select
+### Using Select to hide large option sets
 
-❌ A two-option Select hides one of the two states behind a popup, adds an extra interaction, and reads poorly for settings that are conceptually on or off.
+❌ A Select with hundreds of options creates hundreds of option DOM nodes and forces users to scroll a native popup with no search, which is slow to render and painful to navigate by keyboard.
 
-✅ Use Switch for immediate on/off settings or Checkbox where a form submit is needed.
+✅ Move large catalogs to Combobox, which supports filtering and virtualized rendering, or restructure the choice into categories with smaller Selects.
 
 ## Accessibility
 
-**Requirements**: Because the primary slot is a native select element, the browser supplies listbox semantics, focus handling, and change announcements, so the application is responsible for naming, contrast, and state. Every Select must have an accessible name — either a visible Label linked to the component's id or an aria-label/aria-labelledby — satisfying WCAG 1.3.1 and 3.3.2. The Appearance story calls out that filled-darker and filled-lighter instances need more than 3:1 contrast against the color immediately surrounding the control to meet WCAG 1.4.11 non-text contrast, and the same expectation applies to the outline border and the underline stroke. Disabled and placeholder states must remain perceivable, and any error or helper messaging must be connected to the control rather than rendered as free-floating text.
+**Requirements**: Select renders a real select element, so it inherits the platform's accessibility semantics: an implicit combobox/listbox role, an accessible name from an associated label, and native form semantics. Every Select must have an accessible name — either from a visible label element referenced by htmlFor/id, or, when no visible label is possible, from aria-label or aria-labelledby. Because Select is a form control, it must also satisfy WCAG 3:1 non-text contrast for its border and indicator glyph and 4.5:1 contrast for its text; the Appearance story explicitly notes that the adjacent colors around the control must meet these ratios, particularly for filled-darker and filled-lighter appearances, whose fill must provide greater than 3:1 contrast against the immediate surrounding color. Optional states must be conveyed semantically: use the native required attribute for mandatory selection and aria-invalid plus a visible error message for validation failures. Do not communicate disabled state with color alone; the native disabled attribute removes the control from the tab order and is announced to assistive technology. Touch targets for the closed control must be at least 24 by 24 CSS pixels, which all three sizes satisfy by default.
 
 | Key | Action |
 | --- | --- |
-| `Tab` | Moves focus into or out of the Select; the control participates in the normal tab order and is skipped entirely when disabled. |
-| `Space` | Opens the option list so options can be browsed with the arrow keys. |
-| `Enter` | Opens the option list on platforms that support it and commits the highlighted option, closing the list. |
-| `ArrowDown` | Moves the highlight to the next option; when the list is closed, most browsers change the selected value directly. |
-| `ArrowUp` | Moves the highlight to the previous option; when the list is closed, most browsers change the selected value directly. |
-| `Home` | Jumps to the first option in the list. |
-| `End` | Jumps to the last option in the list. |
-| `Escape` | Closes the open option list without committing a new selection where the platform supports closing a native popup. |
-| `Alt+ArrowDown` | On Windows, opens the option list when the control is closed. |
-| `Character keys` | Type-ahead navigation: typing one or more characters moves the highlight to the first option that starts with that text. |
+| `Enter` | When the closed Select has focus, opens the option list and selects the highlighted option in platforms that use Enter to open; when the list is open, commits the highlighted option and closes the popup. |
+| `Space` | Opens the option list on Windows and Linux browsers, and commits the highlighted option when the popup is open. |
+| `ArrowDown` | Moves focus to the next option in the open list, or moves the selection to the next option in the closed list without opening it (browser-dependent). |
+| `ArrowUp` | Moves focus to the previous option in the open list, or moves the selection to the previous option in the closed list (browser-dependent). |
+| `Alt + ArrowDown` | Opens the option list in browsers that use this shortcut, giving an explicit open gesture on Windows and Linux. |
+| `Home` | Moves the highlight or selection to the first option in the list. |
+| `End` | Moves the highlight or selection to the last option in the list. |
+| `Escape` | Closes the open option list without committing a change and returns focus to the closed Select. |
+| `Tab` | Moves focus away from the Select and commits the currently highlighted option; a disabled Select is skipped entirely. |
+| `A–Z / 0–9` | Type-ahead: typing printable characters jumps the selection to the first option whose text starts with the typed string. |
 
-**ARIA**: aria-label, aria-labelledby, aria-describedby, aria-expanded (exposed by the browser for the native select, not authored manually), aria-haspopup (exposed by the browser for the native select, not authored manually)
+**ARIA**: aria-label, aria-labelledby, aria-describedby, aria-invalid, aria-required, aria-disabled, aria-expanded, aria-controls, aria-activedescendant
 
-**Screen Reader**: Screen readers announce the accessible name, the role of the control (combo box or collapsed list box depending on browser and browsing mode), and the currently selected value, along with a hint that a list of options is available. Arrow-key navigation changes the value and each change is announced as the new selection, while the option list itself is rendered by the operating system and read out through the browser's native accessibility tree. Disabled instances are announced as unavailable and are not reachable with the keyboard.
+**Screen Reader**: Because the underlying element is a native select, screen readers announce it as a combobox (or as a list box, depending on the platform) with its accessible name taken from the associated label, aria-label, or aria-labelledby. The current value is announced when focus lands on the control, and screen reader users can change the selection with the arrow keys without needing to open the visual popup, which is the primary advantage of the native element. When the popup is expanded, assistive technology reports the expanded state and reads each option's text as the user moves through the list, and disabled options are announced as unavailable. A disabled Select is announced as dimmed/unavailable and is not reachable via Tab, so avoid using it as the only indication of a required precondition — provide explanatory text instead. If the Select is marked required, screen readers announce the required state, and if aria-invalid is set, they announce the invalid state; pair aria-invalid with aria-describedby pointing at a visible error message, since a red border alone is not perceived by screen reader users.
 
 ## Styling
 
-The default outline appearance is drawn with tokens.colorNeutralStroke1 for the resting border, tokens.colorNeutralBackground1 for the field surface, tokens.colorNeutralForeground1 for the value text, and tokens.colorNeutralForeground2 for the down-arrow icon, with the focus treatment coming from the shared focus stroke such as tokens.colorStrokeFocus2. The filled-darker appearance maps to the darker neutral surface (tokens.colorNeutralBackground3) and filled-lighter to tokens.colorNeutralBackground1, which is exactly why the Appearance story warns about the 3:1 contrast between the field and the color immediately adjacent to it. Disabled instances rely on tokens.colorNeutralForegroundDisabled and tokens.colorNeutralBackgroundDisabled. Corners come from tokens.borderRadiusMedium, borders from tokens.strokeWidthThin, and typography from tokens.fontFamilyBase with tokens.fontSizeBase200, tokens.fontSizeBase300, and tokens.fontSizeBase400 aligning to the small, medium, and large sizes. Use makeStyles and mergeClasses (the pattern shown in the Appearance story) for the surrounding field container, and reserve the className you pass to the component for layout and spacing on the root wrapper rather than for colors, so theme and high-contrast modes keep working. Use tokens.spacingVerticalS or tokens.spacingVerticalM between a label and the control to match the rest of a Fluent form.
+Prefer the built-in appearance and size props over custom styles — they are the supported way to change the control's look. When you do need customization, target the root via className and use makeStyles from @fluentui/react-components with Griffel tokens: for example tokens.colorNeutralStroke1 and tokens.colorNeutralStroke1Hover for borders, tokens.colorNeutralStrokeAccessible for the underline accent, tokens.colorNeutralBackground1 and tokens.colorNeutralBackground3 for fills, tokens.colorNeutralForeground1 and tokens.colorNeutralForegroundDisabled for text, tokens.borderRadiusMedium for corner rounding, tokens.spacingHorizontalMNudge and tokens.spacingHorizontalS for inner padding, and tokens.fontSizeBase300 / tokens.lineHeightBase300 for typography. Combine multiple classes with mergeClasses rather than string concatenation so Griffel's atomic class ordering is preserved. Setting a fixed width on the root is a common and safe customization, since a native select will otherwise size to its longest option; you can also let it stretch with width: '100%'. Note that the dropdown popup and the individual option elements are drawn by the operating system and cannot be styled from your stylesheet, so things like custom option backgrounds, icons per option, or grouped headers must be handled by switching to Dropdown or Combobox.
 
 ## Performance
 
-Select is one of the cheapest controls in the library: it renders a root wrapper, a single native select element, and an icon, and all popup, positioning, and scrolling behavior is delegated to the browser, so there is no JavaScript overlay to mount. Rendering cost scales with the number of option children placed in the DOM, so very large lists should move to Combobox, which can virtualize. Keep the onChange handler stable with useCallback when the parent is memoized, avoid recreating inline style objects or Griffel classes on every render, and prefer controlled state that lives close to the control so unrelated keystrokes elsewhere in a large form do not re-render the select.
+Select is one of the lightest controls in the library: it composes a root element, the native select element, and an icon slot, with no portal, no focus-trap machinery, and no custom popup to mount. Rendering cost is therefore dominated by the number of option children, since each option is a real DOM node created up front. Lists of a few dozen options render imperceptibly; lists in the hundreds increase initial DOM size and style recalculation cost and should be reconsidered in favor of Combobox. Because styling is applied through Griffel's atomic classes, class generation is memoized per style object, so define styles with makeStyles at module scope rather than inside the component body and combine them with mergeClasses to avoid new class names on every render. Avoid recreating the onChange handler identity when it is not necessary, but note that a new inline handler on each render only re-renders the Select itself, not the option list, so the practical impact is small relative to the number of options.
 
 ## Theming & Tokens
 
-Select consumes Fluent theme tokens rather than hard-coded colors, so it adapts automatically when a Provider switches between light, dark, and high-contrast themes. Neutral surfaces and strokes come from tokens such as tokens.colorNeutralBackground1, tokens.colorNeutralBackground3, tokens.colorNeutralStroke1, and tokens.colorNeutralStrokeAccessible; text uses tokens.colorNeutralForeground1 and the icon uses tokens.colorNeutralForeground2; disabled states use tokens.colorNeutralForegroundDisabled and tokens.colorNeutralBackgroundDisabled; focus uses tokens.colorStrokeFocus2. Shape and spacing come from tokens.borderRadiusMedium, tokens.strokeWidthThin, and the spacing scale, while typography uses tokens.fontFamilyBase with tokens.fontSizeBase200, tokens.fontSizeBase300, and tokens.fontSizeBase400 for the three sizes. Note that Select deliberately has no brand or primary appearance — the available appearances are neutral surfaces only — so brand accenting belongs to the surrounding layout rather than to this control.
+Select consumes Fluent theme tokens rather than raw colors. The outline appearance draws its border from tokens.colorNeutralStroke1 with hover reinforcement from tokens.colorNeutralStroke1Hover, resting on tokens.colorNeutralBackground1 and using tokens.colorNeutralForeground1 for text. The underline appearance relies on tokens.colorNeutralStrokeAccessible for the bottom accent line, which is the token reserved for borders that must meet contrast requirements. The filled-lighter appearance uses a lighter neutral surface token (such as tokens.colorNeutralBackground1 layered over a tinted parent) while filled-darker uses tokens.colorNeutralBackground3; both set their text with tokens.colorNeutralForeground1. Disabled styling flows from tokens.colorNeutralForegroundDisabled and tokens.colorNeutralBackgroundDisabled. Sizing and typography are driven by the size prop, which selects the corresponding font and spacing tokens shared with Input, such as tokens.fontSizeBase300 and tokens.lineHeightBase300 for medium. Because all of these resolve from FluentProvider, a Select nested in a theme override or a high-contrast forced-colors context re-resolves its colors automatically; hard-coded values would not.
 
 ## Migration Notes
 
-This is the v9 Select, so styling is expressed through Griffel makeStyles and theme tokens rather than the legacy styling API, and the control is themed through the neutral tokens listed above. The appearance prop is the way to express variants — outline, underline, filled-darker, and filled-lighter — instead of separate styled components, and size values small, medium, and large are aligned with Input so form rows can mix controls freely. The component still renders a genuine native select element, so any behavior that depended on it being a real form control (form submission, native validity, browser popups) continues to work unchanged.
+Select in v9 is a lightweight wrapper around the native select element rather than a custom popup-based control, which differs from v8's approach. The v8 props that controlled the dropdown, such as dropdownWidth and the custom renderers for the option list, no longer exist because the popup is native. The v9 appearance values are outline (default), underline, filled-darker, and filled-lighter — there is no bare or filled alias — and size is limited to small, medium, and large, matching the Input sizes so Select and Input can be aligned in the same form row. Use SelectOnChangeData from the onChange callback instead of reading the event target, and useSelectStyles/useSelect_unstable hooks are replaced by the makeStyles plus tokens styling model shown in the Appearance story.
 
 ## Edge Cases
 
-- A Select with no defaultValue or value automatically selects its first option, so the control can never display a true 'nothing selected' state unless you add an empty or prompt option as the first child.
-- The option list is rendered by the operating system, so option styling, row height, and the number of visible rows vary by browser and platform; only the closed control is fully styleable.
-- Passing undefined versus null to value, or adding defaultValue later, can change the control between controlled and uncontrolled mode and produce confusing behavior.
-- Disabled instances are removed from the tab order and their value is not included in form submission, which surprises teams that use disabled to mean read-only.
-- The underline appearance has a very low-contrast boundary on light surfaces and a subtler focus treatment than outline, so verify it against your actual background.
-- Replacing the select slot with custom content means you own the select semantics, keyboard behavior, and name/value submission that the native element provided for free.
-- Long option labels are truncated inside the closed control, especially at small size, so users may not be able to read the full selected value without opening the list.
+- The displayed selection is matched against option values, and options without an explicit value attribute implicitly use their text content. Passing a value or defaultValue that matches neither results in a Select that renders with no visible selection, even though options exist.
+- The Controlled story's narrative refers to controlling the selection by updating a selected prop on option elements, while the working example drives the value prop and updates it inside onChange. Follow the example — the value plus onChange pattern — since option-level selected attributes in React are controlled through the parent select's value.
+- The underline, filled-darker, and filled-lighter appearances depend on the surrounding color for contrast. Placing filled-lighter on a light gray panel or filled-darker on a dark brand header can drop below the required 3:1 ratio, so verify the pairing rather than assuming the appearance is safe anywhere.
+- The dropdown popup, option styling, and option icons are rendered by the browser or operating system. Any visual treatment applied to option elements is ignored on most platforms, so per-option icons or descriptions require Dropdown or Combobox.
+- On native mobile browsers the select often opens as a full-screen wheel or sheet picker rather than an inline list, so layout assumptions about dropdown width or position do not hold across devices.
+- A disabled Select is removed from the tab order entirely, which means keyboard users cannot reach it to discover why it is unavailable; always expose the reason in surrounding text or an associated description.
+- Long option text is clipped by the closed control and typically truncated with an ellipsis, so set an explicit width on the root when option labels are long and the surrounding layout could be pushed out of alignment.
 
 ## See Also
 

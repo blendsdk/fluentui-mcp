@@ -2,74 +2,77 @@
 
 ## Overview
 
-The layout category is FluentUI React v9's containment and separation layer: Card gathers related content into one scannable, optionally interactive surface, and Divider draws a visual boundary between groups of content. These are structural primitives rather than a page framework — the category intentionally ships no grid, stack, or column system, so page-level structure still comes from your own CSS, while Card and Divider define where one unit of content ends and the next begins. Both are compositional: they expose appearance and sizing variants so that a card or a rule can match the surface hierarchy around it instead of forcing bespoke containers into the product.
+The Layout category provides the surface and separation primitives that give a page region its shape: Card and its companion parts (CardHeader, CardPreview, CardFooter) create one bounded, themeable surface that groups related content and actions, while Divider separates adjacent groups of content. Card is explicitly a composition rather than a single block - you assemble a preview area, a header with a description area and an action slot, and a footer action slot, then control the whole surface through orientation, size, appearance, and selection. Divider is a purely presentational separation primitive that runs horizontally or vertically and can be emphasized or muted. Used together, these parts let you build repeatable containers without hand-rolling borders, padding, and alignment.
 
 ## When to Use
 
-Reach for Card when a chunk of content is a discrete entity that a person can recognize, scan, and act on as a unit — a document, a person, a product, a settings group — and when that unit may need to be selectable or carry a floating action. Use the orientation and size props to decide whether the entity reads as a stacked tile (vertical) or as a row within a list (horizontal), and use selected, defaultSelected, and onSelectionChange when the collection can actually act on a selection. Reach for Divider when a region contains genuinely different subjects and whitespace alone is not enough to mark the change: between groups inside a card, between sections on a page, or vertically between items in a single toolbar-like row. If nothing is being grouped or separated — that is, if the content is one continuous block or one uniform list — neither component is needed.
+Reach for Card when a unit of content is discrete and self-contained: a single item in a collection, a summary tile, a selectable option, or a small region that needs its own media, title, description, and actions. Use CardHeader, CardPreview, and CardFooter rather than raw markup whenever the card should pick up theme, size, and orientation behavior automatically. Choose Card selection props when the surface itself is the thing being chosen (picking from a set, multi-select lists of tiles), and choose action slots when the surface merely contains controls. Reach for Divider when two groups of content are adjacent and a structural boundary must be visible - between sections of a panel, between toolbar regions, or between items laid out in a row. Do not reach for these components when you only need spacing or a heading to establish hierarchy, when you need a page-level region container, or when you need overlay and dialog behavior, which other categories cover.
 
 ## Best Practices
 
 ### Do's
 
-- Use Card for content that stands on its own as an object, and choose orientation up front: vertical for media-on-top tiles, horizontal for row-style entries in a list.
-- Match Card's appearance (filled, filled-alternative, outline, subtle) to the surface it sits on — outline reads clearly on a filled page background, while filled and filled-alternative read clearly on a plain one.
-- Keep one size, appearance, and orientation across every Card in a collection so the group scans as a set; change appearance only when a card's state genuinely differs, such as being selected.
-- Use Divider for real changes of subject, and set inset so the rule follows the container's content grid rather than running edge to edge through padding.
-- Rank separations with Divider's appearance scale (default, subtle, strong, brand) and alignContent rather than adding more lines to express hierarchy.
-- When a collection is selectable, wire selected or defaultSelected with onSelectionChange, and use the checkbox slot for multi-select so the selection affordance matches the rest of the product.
-- Reserve vertical Divider for a single row of equal-height items, such as a toolbar; horizontal dividers handle separation everywhere else.
-- Set shouldRestrictTriggerAction on an interactive Card that contains nested controls, so activating an inner control does not also activate the card.
+- Compose cards from CardHeader, CardPreview, and CardFooter instead of dropping loose content straight into Card, because the parts carry the spacing, slot structure, and alignment that keep the surface consistent across sizes and orientations.
+- Choose Card orientation deliberately: vertical when a preview sits above a stacked text block and the card is read top to bottom, horizontal when the preview belongs beside the header and description in a row.
+- Use the Card selection model (selected or defaultSelected together with onSelectionChange) whenever the card itself is a selectable item, so focus and selection behavior come from the component rather than a hand-built click handler on the root.
+- Place secondary or destructive actions in the CardHeader or CardFooter action slot, and reserve the Card floatingAction slot for controls that must float over the preview or body.
+- Use shouldRestrictTriggerAction to stop the card trigger from firing when the user interacts with inner controls that should not select the card.
+- Pick Divider appearance (brand, default, strong, or subtle) and inset to match the surface it sits on and the alignment of surrounding content, and place it only where a real content boundary exists.
+- Keep orientation, size, and appearance consistent across cards that appear together in the same collection, and vary cards through content such as previews, badges, or avatars.
+- Give the CardHeader image slot and CardPreview contents meaningful images so the preview communicates the same subject as the card text rather than acting as decoration.
 
 ### Don'ts
 
-- Don't use Divider for spacing; gaps, padding, and alignment are layout concerns, and every extra rule makes real boundaries harder to spot.
-- Don't nest Cards inside Cards, or place a Divider directly against a Card's own edge — the doubled lines suggest depth and grouping that do not exist.
-- Don't set Card's focusMode to off on a card that is selectable, disabled-but-reachable, or otherwise meant to be activated; it drops out of the tab order.
-- Don't put multiple competing primary actions inside one Card. A card represents one decision, so keep one prominent action and demote the rest.
-- Don't make every card in a collection selectable by default; selection adds a checkbox affordance and tab stops and should mean the collection can act on the result.
-- Don't let a Card act as a generic page-section wrapper for form groups or plain text that is not an entity.
-- Don't rely on the selected state or an appearance change alone to communicate status; pair it with visible text so the meaning survives outside of styling.
+- Do not wrap every section of a page in a Card - a card is for a discrete self-contained unit, and ordinary page sections are better served by headings and layout spacing.
+- Do not nest Cards inside Cards to express hierarchy, because doubled borders and padding flatten the visual structure and make the grouping ambiguous.
+- Do not use a Divider as a spacer or to manufacture vertical rhythm; use layout spacing for that and keep the divider for genuine boundaries.
+- Do not use a vertical Divider inside a vertical stack of content - a vertical divider separates items arranged in a row.
+- Do not make the whole card a link or button by hand, since that creates nested interactive elements and unpredictably swallows clicks intended for the card's own buttons and links.
+- Do not lean on the subtle or brand divider appearance as the only signal of a meaningful boundary; if the separation matters, back it with structure such as a heading or a distinct section.
+- Do not mix focus modes or selection behavior among cards in the same list, because users should be able to predict how focus enters and moves through every card in the set.
 
 ## Anti-Patterns
 
-### Card used as a universal container
+### Hand-rolling the card surface
 
-❌ Wrapping page sections, form groups, and plain text in Card implies that each block is a discrete, actionable entity. A page built from stacked cards produces many competing edges, and the appearance variants stop signalling any real difference in hierarchy.
+❌ Building a bordered container from plain markup plus custom CSS to get a header, media area, and footer duplicates logic the Card parts already own, and that container will not pick up theme, size, orientation, or focus behavior.
 
-✅ Reserve Card for content that stands on its own as an object a person can scan and act on. Group everything else with plain containers, and separate sections with whitespace and the occasional Divider.
+✅ Compose Card with CardHeader, CardPreview, and CardFooter and drive the look with appearance, size, and orientation; add custom styling only for content the parts genuinely do not cover.
 
-### A fully interactive card with nested controls
+### Whole-card click target built by hand
 
-❌ A Card that is a tab stop and also contains buttons, links, or a Menu makes activation ambiguous: a keyboard user cannot tell whether activating an inner control will also trigger the card, and the tab sequence becomes confusing.
+❌ Making an entire card clickable with a wrapper click handler or an overlay link produces nested interactive elements, breaks expectations such as opening in a new tab, and swallows clicks meant for the card's own controls.
 
-✅ Pick one interaction owner. If the card itself must be activated, use a focusMode that keeps nested controls reachable and set shouldRestrictTriggerAction so inner interactions do not also trigger the card; if the card is only a container, keep it static and place one clear action inside it.
+✅ Use the Card selection model with selected or defaultSelected and onSelectionChange, protect inner controls with shouldRestrictTriggerAction, and use Link or Button in the CardHeader or CardFooter action slot for navigation.
 
-### Dividers as decoration and spacing
+### Selection state carried only by color
 
-❌ Adding a Divider between every block — or stacking dividers against card borders — produces double lines and visual noise, and it makes the boundaries that do matter impossible to recognise.
+❌ Tinting the card surface to indicate selection leaves the state invisible to keyboard and screen reader users and unreliable in forced-colors modes.
 
-✅ Use Divider only for genuine changes of subject, choose inset and alignContent so the line follows the content grid, and vary appearance (subtle, strong, brand) instead of adding more rules.
+✅ Enable the Card checkbox slot so selection is exposed programmatically, keep the card in the focus order through focusMode, and make selection visible with more than hue.
 
-### Mixed sizes, orientations, and appearances inside one collection
+### Dividers used as decoration
 
-❌ A list where some cards are small and vertical and others large and horizontal, or where filled and outline appearances alternate, no longer scans as a set and implies distinctions between items that do not exist.
+❌ Sprinkling Divider between every block, or using it to add vertical rhythm, adds visual noise and asserts boundaries where no structural change exists; a vertical Divider between stacked items reads as a stray line.
 
-✅ Choose one size, appearance, and orientation for the collection and apply it to every card in it. Change a card's presentation only when its state truly differs, such as being selected or disabled.
+✅ Reserve a horizontal Divider for real group boundaries, keep a single divider between adjacent groups rather than doubling it with a border, use layout spacing for rhythm, and reserve vertical dividers for row-based layouts.
 
-### Focus mode chosen for appearance
+### Inconsistent card anatomy within one collection
 
-❌ Setting Card's focusMode to off, or leaving a card non-selectable but visually clickable, removes it from the tab order, so anyone navigating by keyboard loses access to the card and its contents.
+❌ Cards in the same grid that use different orientations, sizes, appearances, or focus modes break scanning and force users to relearn the interaction for each card.
 
-✅ Derive focusMode from the interaction model: off only for static cards with nothing focusable inside, and a tab-inclusive mode for cards users must reach. Keep the focus indicator visible and make the card's purpose clear from its own content.
+✅ Fix the anatomy for a collection - the same orientation, size, appearance, and focus behavior - and let variation come from content such as previews, badges, or avatars.
 
 ## Accessibility
 
-Card's focusMode decides how the container joins the tab order (off, no-tab, tab-exit, tab-only), so choose it from the interaction model rather than from how the focus ring looks: a card that contains buttons, links, or a Menu usually should not also be one large tab stop, because nested controls then become hard to reach and hard to tell apart from the card itself. When a card is both focusable and interactive, keep the two levels unambiguous — use shouldRestrictTriggerAction so an inner activation does not bubble up into the card — and express an unavailable card with the disabled prop rather than a visual-only treatment so assistive technology reports the state. Divider is a purely presentational affordance: it is not focusable and carries no semantics, so never let it be the only signal of a group boundary (headings and page landmarks do that work), never rely on its appearance value or thickness to convey emphasis, and keep reading and keyboard order meaningful without it. For each card that is meant to be selected, make sure the selected condition is discoverable through the card's own content, not just through color, elevation, or a border change.
+Accessibility in this category is mostly about focus and semantics rather than color. A selectable card must be reachable and operable by keyboard: set focusMode to match the interaction so that static content cards do not introduce a redundant tab stop while selectable cards keep a focus stop that still lets users reach inner buttons and links. When selection is enabled, keep the Card checkbox slot present and labeled so state is exposed programmatically instead of being carried by border tint or elevation alone, and make selected, unselected, and mixed states distinguishable without relying on hue. CardHeader does not provide heading semantics on its own, so when a card introduces a region, supply heading structure from the surrounding content. Images placed through CardPreview or the CardHeader image slot need meaningful alternative text, or must be marked decorative when they merely repeat adjacent text. Divider is presentational: it must never be the only signal that content is grouped, its appearance values must remain perceivable in high-contrast and forced-colors modes, and purely decorative dividers should not be announced as content. Finally, keep the composed reading order - preview, title, description, actions - aligned with the visual order so screen reader users encounter the card in a sensible sequence.
 
 ## Components in this category
 
 - [Card](../components/card.md)
+- [CardFooter](../components/card-footer.md)
+- [CardHeader](../components/card-header.md)
+- [CardPreview](../components/card-preview.md)
 - [Divider](../components/divider.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

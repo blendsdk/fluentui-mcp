@@ -7,15 +7,15 @@
 
 ## Overview
 
-Menu is a navigation-category component that presents a list of actions, commands, or links inside a popup surface anchored to a trigger element. The Menu root owns the open/close state machine, the positioning configuration, and the surface motion, and it is composed with sibling parts: MenuTrigger for the anchor, MenuPopover for the popup surface, MenuList as the container of rows, and item components such as MenuItem, MenuItemCheckbox, MenuItemRadio, MenuItemLink, and MenuItemSwitch. Structural parts include MenuGroup, MenuGroupHeader, MenuDivider, and MenuSplitGroup, which produce correct accessible markup for grouped and split-action rows. Menu can be uncontrolled (with defaultOpen) or fully controlled (with open and onOpenChange), can open on click, hover (openOnHover with hoverDelay), or right click (openOnContext), can persist after an item click (persistOnItemClick), can render in DOM order instead of on document.body (inline), and supports nested submenus as well as anchoring to a fully custom target when no MenuTrigger is used. A surfaceMotion slot exposes the popup entrance and exit animation so teams can customize or disable it.
+Menu is the root component of the Fluent UI React v9 menu family and the state container that coordinates a trigger, a popover surface, and the list of items rendered inside it. It does not render a DOM element of its own; instead it owns open/close state, focus management, positioning, and the accessible relationships that its descendants (MenuTrigger, MenuPopover, MenuList, MenuItem and the MenuItem variants) consume. Its children prop is intentionally constrained: it accepts either a MenuTrigger paired with a MenuPopover, or a MenuPopover alone when the menu is anchored to a custom target rather than a declarative trigger. Because it composes freely with MenuList, MenuGroup, MenuGroupHeader, MenuDivider, MenuItemCheckbox, MenuItemRadio, MenuItemSwitch, MenuItemLink, and MenuSplitGroup, a single Menu instance can express simple action menus, selection menus, navigation menus, context menus, and nested submenus. Opening behavior is configurable through open, defaultOpen, onOpenChange, openOnHover, openOnContext, hoverDelay, persistOnItemClick, and closeOnScroll, while positioning and the surfaceMotion slot control how and where the popover appears and how it animates.
 
-**When to use**: Use Menu when the user needs to choose from a set of related commands or destinations that should appear on demand rather than occupy permanent space: overflow command bars, editor actions, right-click context menus, split actions, and navigation lists. Use it for action menus (MenuItem), navigation menus (MenuItemLink), and multi-select or single-select command sets (MenuItemCheckbox, MenuItemRadio, MenuItemSwitch). Prefer Select or Combobox when the user is filling out a form field and needs a persistent, labelled value picker; prefer ContextSelector when the popup switches the context of the whole page or application rather than issuing a command; prefer Popover when the surface contains arbitrary rich content (forms, descriptions, media) instead of a menu list; prefer Tooltip for non-interactive supplementary hints. For commands that live in a toolbar or overflow bar, Menu is typically rendered by the Toolbar overflow behavior rather than placed manually.
+**When to use**: Use Menu when you need to present a temporary, on-demand list of actions, commands, or options that is invoked from a trigger such as a Button or a MenuButton, and when the user is expected to make a single choice and then dismiss the surface. It is the right primitive for command menus (Cut, Copy, Paste), selection menus built from MenuItemCheckbox, MenuItemRadio, or MenuItemSwitch, navigation menus built from MenuItemLink, nested submenus built by nesting another Menu inside a MenuItem or MenuSplitGroup, and context menus via openOnContext. Prefer Menu over Popover when the content is a list of interactive items that should follow menu semantics and roving focus; prefer Popover when the content is arbitrary markup such as a form or explanatory panel. Prefer Dropdown, Select, or Combobox when the user is choosing a value for a form field rather than invoking a command. Prefer Toolbar or Nav when the actions or destinations should remain permanently visible instead of being revealed on demand. Avoid Menu for destructive confirmation flows that need their own explanation — a Dialog is a better fit.
 
 ## Props Reference
 
 | Prop | Type | Default | Required | Description |
 | --- | --- | --- | --- | --- |
-| `children` | `any` | — | Yes | Can contain two children including `MenuTrigger` and `MenuPopover`. Alternatively can only contain `MenuPopover` if using a custom `target`. |
+| `children` | `JSXElement \| [JSXElement, JSXElement]` | — | Yes | Can contain two children including `MenuTrigger` and `MenuPopover`. Alternatively can only contain `MenuPopover` if using a custom `target`. |
 | `closeOnScroll` | `boolean \| undefined` | `false` | No | Close when scroll outside of it |
 | `defaultOpen` | `boolean \| undefined` | `false` | No | Whether the popup is open by default |
 | `hoverDelay` | `number \| undefined` | — | No | Sets the delay for mouse open/close for the popover one mouse enter/leave |
@@ -25,22 +25,22 @@ Menu is a navigation-category component that presents a list of actions, command
 | `openOnContext` | `boolean \| undefined` | `false` | No | Opens the menu on right click (context menu), removes all other menu open interactions |
 | `openOnHover` | `boolean \| undefined` | `false` | No | Opens the menu on hover |
 | `persistOnItemClick` | `boolean \| undefined` | `false` | No | Do not dismiss the menu when a menu item is clicked |
-| `positioning` | `any` | — | No | Configures the positioned menu |
+| `positioning` | `PositioningShorthand \| undefined` | — | No | Configures the positioned menu |
 
 ### Prop Guidance
 
-- **children**: Required. Normally holds a MenuTrigger followed by a MenuPopover; when you anchor the menu to a custom target with the positioning prop, render only the MenuPopover and implement the trigger markup and interactions yourself. `MenuTrigger and MenuPopover, or MenuPopover alone`
-- **open**: Use for controlled visibility. The value is treated as a hint for the open state, so pair it with onOpenChange to react to user-driven requests and keep keyboard interactions intact. `true`
-- **defaultOpen**: Use for uncontrolled menus that should start expanded, for example when demonstrating a persistent menu surface. It has no effect once the open prop is supplied. `true`
-- **onOpenChange**: Called whenever the component requests a state change. The provided data includes the open value and the reason for the change, which lets you filter events such as clickOutside when a custom target is involved, or force the menu open while interacting inside a custom boundary. `(e, data) => setOpen(data.open)`
-- **openOnHover**: Enable when hovering the trigger should reveal the menu, such as in menu bar or ribbon scenarios. Combine with hoverDelay to avoid accidental openings when the pointer merely passes over the trigger. `true`
-- **hoverDelay**: Sets the delay in milliseconds for mouse enter and leave before the popover opens or closes. Use it to add a forgiveness window for pointer travel into submenus or menu bars. `500`
-- **openOnContext**: Enable to open the menu on right click as a context menu. This removes all other open interactions, so the trigger no longer responds to click, Enter, or Space for opening. `true`
-- **persistOnItemClick**: Enable when clicking an item should not dismiss the menu, for example when rows toggle multiple independent settings and the user is expected to make several selections in a row. `true`
-- **inline**: Enable to render root menus in DOM order next to the trigger instead of at the end of document.body. This option is disregarded for submenus. Useful when DOM order matters for reading order, scroll containers, or snapshot testing. `true`
-- **positioning**: Configures the positioned surface: target element, positioning reference, overflow and flip boundaries, and auto sizing. Also used to anchor the menu to a custom target and to manually update position when a custom boundary resizes. `{ autoSize: true }`
-- **closeOnScroll**: Enable to dismiss the menu when the user scrolls outside of it, which is helpful for long or scrollable pages where a detached popup would otherwise float over unrelated content. `true`
-- **surfaceMotion**: Slot for the popup entrance and exit animation. Leave it at its default for standard motion, supply a Motion component to customize, or set it to null to disable animation. `null`
+- **children**: Required. Accepts either two children — a MenuTrigger and a MenuPopover — for the standard triggered menu, or a single MenuPopover when the menu is anchored to a custom target and nothing is rendered as a declarative trigger. Anything else is not a supported composition. `MenuTrigger plus MenuPopover, or MenuPopover alone for a custom target`
+- **open**: Use when you need full control of visibility, such as synchronizing the menu with an external control or reusing one menu instance behind several triggers. The value acts as a hint while you remain responsible for updating it from onOpenChange. `true`
+- **defaultOpen**: Use when the menu should start open but remain uncontrolled afterwards. This is rarely needed in application code and is mostly useful for documentation, testing, or demos. `true`
+- **onOpenChange**: Use with open to observe requests to open or close, including pointer, keyboard, outside click, and item activation sources. Inspect the event type in the callback data when you need to ignore or reinterpret specific close reasons, such as an outside click that lands on your own custom anchor. `(e, data) => setOpen(data.open)`
+- **positioning**: Configures where and how the popover surface is positioned. Use it for auto-sizing behavior, custom boundary elements, flipping and overflow boundaries, and for supplying a positioning imperative ref so you can call updatePosition and setTarget yourself — the latter being required when you anchor the menu to an element outside the menu composition. `autoSize enabled, or a positioningRef plus custom overflow and flip boundaries`
+- **inline**: Set when you need the menu to remain in DOM order instead of being portaled to the end of document.body, for example inside scroll containers, transformed ancestors, or CSS contexts that must cascade into the surface. It has no effect on submenus. `true`
+- **openOnHover**: Enable for hover-driven menus such as menu bar patterns where the user sweeps across several triggers. Always pair it with a sensible hoverDelay so that incidental pointer movement does not open the surface. `true`
+- **hoverDelay**: Sets the delay in milliseconds before the popover opens or closes on mouse enter and mouse leave. Meaningful only when hover interaction is in play, and useful for preventing flicker when the pointer briefly leaves the trigger on its way to the surface. `500`
+- **openOnContext**: Enable to open the menu on right click and disable every other open interaction, producing a context menu. Because all other interactions are removed, you must provide a keyboard-reachable alternative if the same actions are only available through this menu. `true`
+- **persistOnItemClick**: Set when activating an item should not dismiss the menu, which is typical for checkbox, radio, and switch items that the user toggles several times in one visit. Remember that selection state still has to be tracked through checkedValues and onCheckedValueChange. `true`
+- **closeOnScroll**: Enable when the menu should dismiss itself if the page scrolls, which keeps a portaled surface from visually detaching from its trigger on long or dynamically sized pages. `true`
+- **surfaceMotion**: Slot for the popover surface animation. Leave it at its default for the standard enter and exit transition, supply custom children to substitute your own motion, or set it to null to disable animation entirely when the transition conflicts with your layout. `null to disable the transition`
 
 ### Slots
 
@@ -151,107 +151,116 @@ AligningWithSelectableItems.parameters = {
 
 ### Do's
 
-- Always give the trigger an accessible name: a visible Button label, or an aria-label when the trigger is icon-only (as in the split menu item pattern, where the submenu trigger MenuItem receives an explicit aria-label).
-- Compose the trigger with MenuTrigger and pass disableButtonEnhancement when the child is already a Fluent Button, so the injected interaction props do not conflict with the Button's own behaviors.
-- Set hasIcons on the Menu root when only a subset of items have icons, and set hasCheckmarks when only a subset of items are selectable, so the text of all rows stays aligned.
-- Use MenuGroup together with MenuGroupHeader to express logical groups, and reserve MenuDivider for purely visual separation since it carries no accessible markup.
-- Control selectable items through checkedValues and onCheckedValueChange keyed by each item's name and value, mirroring the name/value model of native checkbox and radio inputs.
-- Prefer MenuItemLink with an href for navigation destinations so assistive technology announces a link, instead of attaching an onClick that performs navigation on a plain MenuItem.
-- When you anchor a Menu to a custom target instead of MenuTrigger, add the useRestoreFocusTarget attributes to the target elements and handle the onOpenChange event types you want to ignore, such as clickOutside on the target itself.
-- Limit submenu nesting to about two levels and extract each submenu into its own component for maintainability.
+- Compose the menu with MenuTrigger and MenuPopover as its two children when there is a visible trigger; these are the only child shapes Menu accepts for the triggered case.
+- When reusing one Menu instance in several places, pass only MenuPopover as a child, control it with open and onOpenChange, and anchor it with the positioning prop rather than duplicating the menu.
+- Use MenuItemLink for destinations so the correct link semantics are rendered for screen reader and browser behavior, instead of putting onClick navigation on MenuItem.
+- Set hasIcons when only a subset of the menu items contain an icon, and set hasCheckmarks when only a subset of the items are selectable, so labels stay aligned across the surface.
+- Group related items with MenuGroup and MenuGroupHeader whenever the grouping carries meaning, and reserve MenuDivider by itself for purely visual separation.
+- Add an aria-label to icon-only or split-submenu triggers such as the secondary MenuItem in a MenuSplitGroup so each trigger has a distinct accessible name.
+- Leave the menu uncontrolled with defaultOpen unless you must synchronize the state with external UI, and when you do take control, always honor the hints delivered to onOpenChange.
+- Use persistOnItemClick for checkbox, radio, and switch items that should not dismiss the surface, and control their state through checkedValues together with onCheckedValueChange.
+- Tune openOnHover with hoverDelay so that glance-by pointer movement does not flash the surface open, and combine it with closeOnScroll for long pages where the trigger can scroll out of view.
+- Limit nesting to two levels and extract submenus into their own components so the parent list stays readable and maintainable.
 
 ### Don'ts
 
-- Don't use Menu as a form control for choosing a value that will be submitted with a form; use Select or Combobox instead.
-- Don't place rich composite content such as embedded forms, sliders, or long multi-paragraph layouts inside a menu surface; use Popover or Dialog for that.
-- Don't leave icon-only MenuTrigger children unlabelled; a screen reader will announce an unnamed button with no indication of what it opens.
-- Don't create deep chains of nested submenus, because discovery, keyboard traversal, and positioning all degrade quickly beyond two levels.
-- Don't set the open prop without also handling onOpenChange, unless the menu is intentionally static, because users will then lose the ability to dismiss the menu with Escape or an outside click.
-- Don't use persistOnItemClick as a way to keep a menu permanently visible; it only suppresses dismissal for item clicks, and you should still verify that Escape and outside click behave acceptably.
-- Don't use MenuDivider to convey that items belong to different logical sections; use MenuGroup and MenuGroupHeader so screen readers receive the grouping.
-- Don't rely on a custom child of MenuTrigger that does not forward refs or spread the injected trigger props; the menu cannot position or open correctly without them.
+- Don't nest submenus deeper than two levels; deep hierarchies are hard to navigate with a pointer and nearly unusable with a keyboard.
+- Don't use openOnContext as the only way to reach the menu, because it removes all other open interactions and leaves keyboard-only users with no affordance.
+- Don't drop MenuTrigger for a hand-rolled trigger without replicating its accessibility markup and keyboard interaction — the documented custom-target pattern requires extra work to keep the scenario accessible.
+- Don't pass a custom child into MenuTrigger unless that component forwards refs and accepts the injected trigger props, otherwise the trigger will not open the menu or expose the right semantics.
+- Don't reach for MenuDivider when the items form a logical group; without MenuGroup and MenuGroupHeader, screen reader users lose the section context.
+- Don't use Menu as a replacement for Dropdown, Select, or Combobox in a form; those components carry the correct value and validation semantics for form fields.
+- Don't wrap every item in React.memo by default, since re-rendering menu items is cheap and memoization only pays off for large selectable lists.
+- Don't control open without also thinking through focus restoration and Escape handling; a fully controlled menu degrades quickly if the onOpenChange hints are ignored.
+- Don't disable the surfaceMotion slot gratuitously; set it to null only when the animation actively conflicts with your layout or motion requirements.
 
 ## Anti-Patterns
 
-### Navigation handled by click handlers on plain items
+### Using Menu as a form control
 
-❌ Attaching an onClick that performs routing to a plain MenuItem hides the destination from assistive technology, prevents users from opening links in new tabs or copying the link address, and loses link semantics entirely.
+❌ Menu is not a value selector for forms. It renders no hidden input, exposes no validation or label association, and its selection state is not part of form submission, so a Menu used in place of a form field leaves the field unlabeled and unvalidated for assistive technology.
 
-✅ Use MenuItemLink with an href for navigation destinations so the row is announced and behaves as a link, and reserve MenuItem for commands that perform actions.
+✅ Use Dropdown, Select, or Combobox for choosing a value in a form, and reserve Menu for commands and contextual actions. If a menu-like surface is required for a picker, wrap the real selection component inside the menu rather than faking the semantics with MenuItemRadio.
 
-### Controlled open state that ignores the change hints
+### Submenus nested more than two levels deep
 
-❌ Passing the open prop and either ignoring onOpenChange or always forcing it back to true removes Escape-to-dismiss and outside-click dismissal, which strands keyboard users inside the menu and violates the dismissible requirement for transient content.
+❌ Each additional nesting level adds another focus trap to reason about, another surface that can overflow the viewport, and a navigation path that is slow with a pointer and disorienting with a keyboard. Positional fallbacks also become unpredictable at depth.
 
-✅ Store the open value from the onOpenChange callback, and only override specific event types intentionally, such as suppressing clickOutside for a custom anchor target so it does not close and immediately reopen.
+✅ Cap nesting at two levels and split the remaining hierarchy into a separate surface, a dedicated settings page, or a dialog. Extract each submenu into its own component so the parent list stays legible.
 
-### Custom trigger that does not forward refs or injected props
+### Relying on context-only opening
 
-❌ A custom component used as a child of MenuTrigger must accept a ref and spread the injected interaction and ARIA props; otherwise the popup cannot be positioned, the trigger never reports expanded state, and keyboard opening fails.
+❌ openOnContext removes all other open interactions, so users who cannot right click — keyboard-only users, touch users, and users of assistive technology — have no way to reach the menu contents.
 
-✅ Use ref forwarding in the custom component, spread the injected trigger props onto the DOM element, or use MenuTrigger's function-as-children form to place the props on an inner element of your own markup.
+✅ Always provide an alternative affordance for the same actions, such as a visible trigger button, a keyboard shortcut, or the actions surfaced in a Toolbar, and keep the context menu as an accelerator rather than the only path.
 
-### Deep submenu nesting
+### Faking logical grouping with dividers
 
-❌ Each nested level multiplies the positioning, responsiveness, and keyboard traversal complexity, and users frequently lose track of the hierarchy, especially when the available viewport is narrow.
+❌ MenuDivider is purely visual and carries no accessible markup, so items separated only by a divider are announced as one flat run of menu items with no indication that they belong to different sections.
 
-✅ Keep nesting to roughly two levels, extract each submenu into its own component, and consider restructuring the command set into a flatter menu with groups instead.
+✅ Use MenuGroup with MenuGroupHeader when the separation conveys meaning, and use MenuDivider alone only when the break is purely aesthetic. When both are needed, a divider can visually separate groups whose headers already provide the semantics.
 
-### Using MenuDivider as a semantic section break
+### Hand-rolled triggers with no accessibility work
 
-❌ MenuDivider is purely visual and adds no accessible markup, so screen reader users receive no indication that two sets of rows belong to different sections.
+❌ Replacing MenuTrigger, or passing a custom component that does not forward refs and accept the injected trigger props, breaks opening, roving focus, and the announced relationship between the trigger and the menu. The documented custom-target pattern explicitly warns that accessibility becomes your responsibility.
 
-✅ Wrap each section in MenuGroup with a MenuGroupHeader so the grouping is announced, and keep MenuDivider only for decorative separation.
+✅ Prefer MenuTrigger and let it inject the correct interaction and accessibility attributes into native elements, Fluent components, or a render-function child. If you truly need a custom trigger, implement ref forwarding, supply an accessible name, and reproduce the keyboard interactions yourself.
+
+### Controlling open state without honoring the hints
+
+❌ A controlled Menu whose open value is never updated from onOpenChange will appear frozen — items activate but the surface never closes, Escape appears broken, and focus can be stranded inside a menu the user cannot dismiss. Extra effort is required to keep interactions and keyboard accessibility intact.
+
+✅ Only take control of open when an external synchronization requirement exists, update the state from onOpenChange, and filter close reasons deliberately (for example ignoring clickOutside events originating from your own custom anchors) instead of swallowing all hints.
 
 ## Accessibility
 
-**Requirements**: Menu must satisfy WCAG 2.1 criteria for keyboard operability (2.1.1), no keyboard trap (2.1.2), focus order (2.4.3), focus visible (2.4.7), name/role/value (4.1.2), and content-on-hover-or-focus being dismissible, hoverable, and persistent (1.4.13) — which is why Escape and outside click always dismiss the surface, including when openOnHover or persistOnItemClick is used. Every interactive row must have an accessible name, and selectable rows must expose their checked state. Icon-only triggers and split-menu submenu triggers must carry an explicit aria-label. Disabled rows must remain discoverable to assistive technology rather than disappearing from the list.
+**Requirements**: Menu must be operable by keyboard alone (WCAG 2.1.1) with a visible focus indicator (WCAG 2.4.7), and the trigger must expose an accessible name that describes the menu it opens. The trigger, not the menu surface, is the tab stop; once opened, focus moves into the list and roving focus carries the user through items. Every menu must remain dismissible with Escape (WCAG 1.4.13 / 2.1.2), and the auto-opening behaviors (openOnHover, openOnContext) must never be the only way to invoke the menu. Selection state in MenuItemCheckbox, MenuItemRadio, and MenuItemSwitch must be programmatically exposed, which means driving them with checkedValues and onCheckedValueChange rather than local visual state. Icon-only triggers must supply an aria-label, and any custom trigger that replaces MenuTrigger must reproduce the injected accessibility attributes and keyboard handling itself.
 
 | Key | Action |
 | --- | --- |
-| `Enter` | Opens the menu when focus is on the trigger; activates the focused menu item when the menu is open. |
-| `Space` | Opens the menu when focus is on the trigger; activates the focused menu item when the menu is open. |
-| `ArrowDown` | Opens the menu from the trigger and moves focus to the first item; otherwise moves focus to the next item, wrapping at the end of the list. |
-| `ArrowUp` | Opens the menu from the trigger and moves focus to the last item; otherwise moves focus to the previous item, wrapping at the start of the list. |
-| `ArrowRight` | Opens the focused item's submenu, or moves focus into an already open submenu. |
-| `ArrowLeft` | Closes the current submenu and returns focus to the parent item that opened it. |
-| `Escape` | Closes the open menu or submenu and returns focus to the trigger or parent item. |
-| `Home` | Moves focus to the first item in the menu list. |
-| `End` | Moves focus to the last item in the menu list. |
-| `Tab` | Closes the menu and moves focus out of the menu to the next tabbable element in the document. |
-| `Shift+F10 or Context Menu key` | Opens the menu at the focused element when the Menu is configured with openOnContext. |
-| `Character keys` | Type-ahead: moves focus to the next item whose text starts with the typed characters. |
+| `Enter` | On a closed trigger, opens the menu and places focus on the first item; while open, activates the focused menu item. |
+| `Space` | On a closed trigger, opens the menu; while open, activates the focused menu item. |
+| `ArrowDown` | Moves focus to the next item in the list, opening a submenu when focus lands on a submenu trigger. |
+| `ArrowUp` | Moves focus to the previous item in the list, opening a submenu when appropriate. |
+| `ArrowRight` | Opens the submenu of the focused item; inside an open submenu it can move focus into that submenu. |
+| `ArrowLeft` | Closes the current submenu and returns focus to its parent item in the parent menu. |
+| `Home` | Moves focus to the first item in the current menu surface. |
+| `End` | Moves focus to the last item in the current menu surface. |
+| `Escape` | Closes the current menu surface and returns focus to the element that opened it; pressing Escape in a submenu returns to the parent menu. |
+| `Tab` | Closes the menu without activating an item and moves focus to the next focusable element in the page. |
+| `Typeahead (printable characters)` | Moves focus to the next item whose label begins with the typed characters. |
 
-**ARIA**: aria-haspopup on the trigger to advertise that it opens a menu, aria-expanded on the trigger to reflect the open or closed state, aria-controls linking the trigger to the popup surface, aria-label and aria-labelledby for naming icon-only triggers and for labelling groups from their group headers, aria-disabled on disabled items so they remain announced, aria-checked on MenuItemCheckbox, MenuItemRadio, and MenuItemSwitch rows to convey selection state, role menu on the list container, role menuitem, menuitemcheckbox, and menuitemradio on rows, and role group on grouped sections
+**ARIA**: aria-haspopup, aria-expanded, aria-controls, aria-label, aria-disabled, role with menu and menuitem semantics
 
-**Screen Reader**: Screen readers announce the trigger as a menu button with its expanded or collapsed state, then announce the menu container and its items when it opens. Focus moves into the menu surface, and each row announces its role, accessible name, secondary text such as the shortcut hint, and its disabled or checked state where applicable. Group headers are announced as the label of the group they head, and submenu parents announce that they have a submenu. Because the menu manages focus programmatically, focus must always be returned to the trigger or the parent item when the surface closes.
+**Screen Reader**: The popover surface is announced as a menu and each interactive child is announced as a menu item with its label, disabled state, icon text, secondary content, and submenu indicator. MenuItemCheckbox items announce a checked state, MenuItemRadio items announce a selected state within their named group, and MenuItemSwitch items announce an on/off state, all driven by the checkedValues map and the name and value props. MenuGroupHeader text is announced as a group heading so users hear the section a set of items belongs to, which is why logical groupings should never be faked with MenuDivider alone. When a submenu opens, its parent item is announced as expanded, and focus announcements follow the movement into the nested surface. Because MenuTrigger injects the correct interaction and accessibility attributes into its child automatically, a native element or Fluent component used as the trigger is announced as a button (or the appropriate role) that controls a menu.
 
 ## Styling
 
-Visual customization usually happens on the composed parts rather than the Menu root: target MenuPopover for the surface, MenuList for the container, and MenuItem or its variants for rows, using makeStyles classes and Griffel tokens. Typical values are tokens.colorNeutralBackground1 for the popover surface, tokens.shadow16 for its elevation, tokens.borderRadiusMedium for its corners, tokens.spacingVerticalXS and tokens.spacingHorizontalM for row padding, tokens.colorNeutralBackground1Hover for hover and tokens.colorNeutralBackground1Selected plus tokens.colorNeutralForeground1Selected for selected rows, tokens.colorNeutralForeground1 for primary text, tokens.colorNeutralForeground2 or tokens.colorNeutralForeground3 for subText and secondaryContent, tokens.colorNeutralForegroundDisabled for disabled rows, tokens.fontSizeBase300 for label typography, and tokens.colorStrokeFocus2 with tokens.strokeWidthThin for focus outlines. Before writing custom styles for secondary text, try the built-in subText prop on MenuItem for a second descriptive line and the secondaryContent prop for keyboard shortcut hints. The surfaceMotion slot can be replaced with a Motion component for custom animation or set to null to remove animation entirely, and the inline prop changes whether the popup renders next to its trigger in DOM order instead of at the end of document.body, which affects stacking contexts and scroll behavior.
+Menu itself renders no DOM, so visual customization happens on the descendants: put className or style on MenuPopover for the popover surface, on MenuList for the list container, and on individual MenuItem, MenuItemCheckbox, MenuItemRadio, MenuItemSwitch, or MenuItemLink instances for row-level styling. On the surface, tokens.colorNeutralBackground1 and tokens.borderRadiusMedium define the base look, tokens.shadow16 supplies the elevated shadow, and tokens.colorNeutralStroke1 works as a subtle 1px border when the surface needs definition against a busy background. For density, adjust MenuList and MenuItem padding with tokens.spacingVerticalXS and tokens.spacingHorizontalS; for typography, MenuItem relies on tokens.fontFamilyBase, tokens.fontSizeBase300, and tokens.lineHeightBase300, while secondaryContent and subText use tokens.colorNeutralForeground2 and the smaller text tokens. Selected or checked item affordances commonly use tokens.colorNeutralBackground1Selected or tokens.colorBrandBackground2 with tokens.colorBrandForeground2 for the icon and checkmark. Disabled rows should use tokens.colorNeutralForegroundDisabled. If the default transition does not match your product motion, customize it through the surfaceMotion slot (for example by returning a fade or blur atom from the motion components preview package) or remove it entirely by setting surfaceMotion to null.
 
 ## Performance
 
-Root menus render out of DOM order on document.body by default, which means the popup surface is moved in the DOM when it opens; use the inline prop when you need it to stay in place, for example inside scroll containers or during DOM-order-sensitive testing. Selectable items keep their selection state on the Menu root, so changing a checkbox or radio selection rerenders the items in that menu by default; memoizing item components with React.memo can avoid that churn when items are numerous or expensive, but rerendering menu items is generally cheap and memoization has its own cost, so apply it only when there is a concrete benefit. Positioning work increases with auto sizing and with custom overflow or flip boundaries, and menus with hoverDelay schedule timers on pointer enter and leave. Automatic repositioning on window resize is handled, but custom boundary resizing is not: you must call updatePosition through the positioning reference, and nested submenus may need a deferred update so the root menu is positioned before the submenu recalculates.
+Menu keeps its surface unmounted while closed, so the cost of the composition is paid only when the user opens it; the popover is portaled to document.body by default, which avoids layout work inside deep or scrollable ancestors, but inline can be preferable when portaling causes layout thrash or forces repositioning on every scroll. Positioning recalculation runs on open, on window resize, and on scroll while open, and auto-sizing behavior is opt-in through the positioning prop, so enable it only when the surface must adapt to its content. Nested submenus are positioned lazily but their responsiveness to custom boundaries is not automatic — you must observe the boundary and call updatePosition on the positioning refs, and deferring the nested update until after the root menu has been positioned avoids a double layout pass. Rendering many items is generally cheap, and re-rendering all items whenever a selectable menu changes state is by design; React.memo is worth considering only for large selectable lists with stable props, since memoization itself has a cost. Keep item counts moderate and avoid embedding heavy interactive content inside items, because every item participates in roving focus and in the keyboard navigation order.
 
 ## Theming & Tokens
 
-Menu surfaces and rows are built from the theme's neutral token ramp. The popover surface uses tokens.colorNeutralBackground1 with elevation from tokens.shadow16 and corners from tokens.borderRadiusMedium; rows use tokens.colorNeutralForeground1 for the label, tokens.colorNeutralBackground1Hover for pointer hover, tokens.colorNeutralBackground1Selected and tokens.colorNeutralForeground1Selected for selected checkbox and radio rows, and tokens.colorNeutralForegroundDisabled for disabled rows. Secondary text from subText and shortcut hints from secondaryContent typically resolve to tokens.colorNeutralForeground2 and tokens.colorNeutralForeground3 sized with tokens.fontSizeBase200 or tokens.fontSizeBase300. Focus indication uses tokens.colorStrokeFocus2 with tokens.strokeWidthThin, and disabled and pressed states blend against tokens.colorNeutralBackground1Pressed and tokens.colorNeutralBackground1Selected depending on the interaction. Because all of these are theme tokens, wrapping the menu in a Provider with a custom theme, a brand ramp override, or a dark theme recolors the popup, rows, and motion timing consistently without component-level style overrides.
+Menu inherits everything from the nearest FluentProvider, so the popover surface, item states, and focus rings all derive from theme tokens rather than hard-coded colors. The surface resolves to tokens.colorNeutralBackground1 with tokens.shadow16 for elevation and tokens.borderRadiusMedium for corner rounding; item text uses tokens.colorNeutralForeground1 with tokens.colorNeutralForeground2 for secondaryContent and subText; disabled items resolve to tokens.colorNeutralForegroundDisabled. Hover and pressed states on items map to tokens.colorNeutralBackground1Hover and tokens.colorNeutralBackground1Pressed, and selected checkbox or radio items typically map to tokens.colorNeutralBackground1Selected or to tokens.colorBrandBackground2 with tokens.colorBrandForeground2 for the indicator. Focus indication uses the theme focus stroke token (tokens.colorStrokeFocus2) with tokens.borderRadiusMedium for the outline shape, and dividers resolve to tokens.colorNeutralStroke2 or tokens.colorNeutralStroke1 depending on contrast needs. Spacing inside items and the surface comes from tokens.spacingHorizontalS, tokens.spacingHorizontalMNudge, and tokens.spacingVerticalXS/SNudge, so density follows the theme without overriding component styles.
 
 ## Migration Notes
 
-Compared with the previous major version, Menu in v9 requires explicit composition: you render a MenuTrigger, a MenuPopover, and a MenuList, and place MenuItem-family rows inside the list instead of relying on implicit nesting. Icon and checkmark alignment moved to the Menu root as hasIcons and hasCheckmarks, and selection is now expressed through checkedValues and onCheckedValueChange on the root rather than per-item controlled props. MenuTrigger no longer presumes it should restore focus, so custom targets use the useRestoreFocusTarget hook, and MenuTrigger children must forward refs and spread the injected trigger props when they are custom components. Positioning configuration is now passed through the positioning prop (including a positioningRef and overflow or flip boundaries) instead of positional wrapper props. Surface animation is exposed as the surfaceMotion slot, which can be replaced with a Motion component or set to null to disable animation. Newer row variants such as MenuSplitGroup with a split submenu trigger and MenuItemSwitch were added for split actions and switch-styled selection.
+Earlier generations of Fluent UI shipped a monolithic Menu (and ContextualMenu) configured through a large set of props. In v9 the menu is a composition: Menu only supplies state and context, and the structure is expressed by MenuTrigger, MenuPopover, MenuList, MenuItem, and the MenuItem variants. If you are porting an existing menu, expect to rebuild it as that composition rather than mapping props one to one. State handling maps cleanly — open, defaultOpen, and onOpenChange exist on Menu — but placement and alignment are now expressed with the positioning prop instead of a scattering of alignment and boundary props, and controlling the menu is a matter of passing open while still acting on the onOpenChange hints. Because root menus are rendered out of DOM order on document.body by default, scenarios that previously relied on the menu living inside the surrounding DOM (CSS inheritance, ancestor selectors, or scroll containers) may need the inline prop instead. Menus nested inside other menus are treated as submenus and ignore inline, and their responsiveness to shrinking containers is handled automatically against the viewport but requires manual updatePosition calls plus a ResizeObserver when you supply custom boundaries.
 
 ## Edge Cases
 
-- The inline prop is ignored for submenus; only root menus can be rendered in DOM order next to their trigger.
-- Setting openOnContext removes all other open interactions, so click, Enter, and Space on the trigger no longer open the menu.
-- persistOnItemClick only suppresses dismissal for item clicks; Escape and outside click still close the menu, and controlling the open state manually can defeat dismissal if the change hints are ignored.
-- A custom anchor target requires handling the clickOutside change type in onOpenChange to avoid a close-then-reopen flicker, and requires the useRestoreFocusTarget attributes so focus returns correctly when the menu closes.
-- Custom boundary resizing is not handled automatically; you must observe the boundary and call updatePosition through the positioning reference for both the root menu and any submenu.
-- Custom components used as MenuTrigger children must forward refs and spread the injected trigger props, otherwise positioning and ARIA state are lost.
-- The open prop is only a hint, so a truly static menu that never closes is possible but must be a deliberate choice, since it removes the user's ability to dismiss the surface.
-- Grouped items rendered with MenuDivider alone will look separated but will not be announced as separate sections to screen readers.
+- Root menus are rendered out of DOM order on document.body by default, so descendant selectors, inherited CSS, and container-based scroll behavior may not reach the surface; set inline to render the menu in DOM order. Note that inline is disregarded for submenus.
+- A Menu whose only child is MenuPopover has no declarative trigger, which means the trigger markup, keyboard interactions, and accessible relationship must be implemented by hand — and the menu must be anchored through the positioning prop, typically with a positioning ref and setTarget.
+- Hover and context opening change the interaction model rather than adding to it: openOnHover makes hover the primary open gesture, and openOnContext removes all other open interactions, so an alternate route to the same actions is required for keyboard and touch users.
+- Controlled open state is only a hint loop — if onOpenChange results are not applied back to open, the menu cannot close, Escape appears broken, and focus can be stranded inside the surface.
+- persistOnItemClick keeps the surface open after activation, which is the correct behavior for MenuItemCheckbox, MenuItemRadio, and MenuItemSwitch but means selection state must be tracked with checkedValues and onCheckedValueChange rather than inferred from the menu closing.
+- Nested submenus adapt automatically to the viewport as it shrinks (moving alignment, flipping position, and finally positioning above the parent), but no automatic response is provided for custom boundary elements; you must observe the boundary and call updatePosition on the relevant positioning refs, deferring the nested update until the parent menu has been positioned.
+- MenuSplitGroup places a main action next to a submenu trigger, and the secondary trigger is rendered from a MenuItem that usually has no visible label, so it must be given an aria-label to be announceable.
+- closeOnScroll defaults to false, which means a menu anchored to a trigger in a scrolling region can visually detach from its trigger while remaining open.
+- There is no hasIcons-style alignment for secondary content, and menu items without icons or checkmarks sit flush against the left edge of the list, so mixed item shapes in one surface can look misaligned unless hasIcons or hasCheckmarks is applied consistently.
 
 ## See Also
 

@@ -2,568 +2,732 @@
 
 > **Category**: foundation
 
-## 1. The mental model: tokens → theme → CSS variables → components
+## Why theming works differently in v9
 
-Fluent UI v9 theming is built from four layers. Understanding them once makes every other theming task obvious.
+Fluent UI React v9 has **no monolithic stylesheet** to override. Instead, every visual value a component uses is a **design token**, and tokens are resolved to **CSS custom properties** that live on a single wrapper element. That means:
 
-| Layer | What it is | Where you meet it |
-| --- | --- | --- |
-| **Design tokens** | Semantic design decisions with stable names: `colorBrandBackground`, `fontSizeBase300`, `spacingHorizontalM`, `borderRadiusLarge`, `shadow4`, `durationNormal`. | the `tokens` object, CSS variables |
-| **Theme object** | A plain JavaScript object that gives every token a literal value: `theme.colorBrandBackground === '#0f6cbd'`. | `webLightTheme`, `createLightTheme(brand)` |
-| **CSS custom properties** | The provider writes each token as a CSS variable (`--colorBrandBackground: #0f6cbd`) onto its root element. | `var(--colorBrandBackground)` in your CSS |
-| **Components** | Every v9 component styles itself with `var(--token)` references, so it simply picks up whatever variables are in scope. | `Button`, `Badge`, `Dialog`, `Menu`, … |
+- Changing a theme is swapping one JavaScript object, not shipping a second CSS bundle.
+- Theme changes cascade instantly to every Fluent component and to your own CSS, because CSS variables inherit.
+- You can nest themes, scope a theme to a subtree, and re-theme at runtime with no component re-implementation.
 
-Consequences worth internalising:
-
-- **Re-theming is a data change, not a component change.** You never restyle components to change a brand colour; you hand a new theme object to the provider.
-- **Themes are scoped by the DOM.** Because they are CSS custom properties, nesting a `FluentProvider` redefines variables for that subtree only and leaves the rest of the app untouched.
-- **Themes are partial-friendly.** A theme that defines three tokens inherits every other token from the nearest ancestor provider through normal CSS cascade.
-- **No re-render is required to switch themes.** Style rules already contain `var(...)` references; the browser repaints with the new values.
-
-### 1.1 `tokens` versus a theme object
-
-```tsx
-import { tokens, webLightTheme } from '@fluentui/react-components';
-
-tokens.colorBrandBackground;        // 'var(--colorBrandBackground)'
-webLightTheme.colorBrandBackground; // '#0f6cbd'
+```
+Design tokens (tokens.colorNeutralBackground1)
+        ↓
+Theme object  ({ colorNeutralBackground1: '#ffffff', ... })
+        ↓
+CSS custom properties injected by <FluentProvider theme={...}>
+        ↓
+Component styles  ->  background-color: var(--colorNeutralBackground1)
 ```
 
-- `tokens.*` always returns a **CSS `var()` reference**. Use it inside style declarations: it stays live across theme changes and costs nothing at runtime.
-- A **theme object** (`webLightTheme`, or the result of `createLightTheme(...)`) contains **literal values**. You need it when you must reason about concrete colours in JavaScript (contrast checks, canvas, generating CSS for another document) or when you are defining a new theme.
+## 1. Core imports
 
-Rule of thumb: **use `tokens` in styles; use theme objects when defining or computing a theme.**
+Everything below is exported from the single package `@fluentui/react-components`:
 
-## 2. What is inside a theme
+```ts
+import {
+  // The one component that applies a theme
+  FluentProvider,
+  Portal,
 
-### 2.1 Token groups
+  // Token + styling authoring APIs
+  tokens,
+  makeStyles,
+  mergeClasses,
+  shorthands,
 
-| Token group | Example token | Grouped path on a theme object | Notes |
-| --- | --- | --- | --- |
-| Color | `colorBrandBackground`, `colorNeutralForeground1` | flat on the theme: `theme.colorBrandBackground` | The largest group: neutral, brand, palette, status, focus and shadow colours |
-| Font family | — (no flat token) | `theme.fontFamilies.base / monospace / numeric` | Only exposed through the theme object |
-| Font size | `fontSizeBase300`, `fontSizeHero700` | `theme.fontSizes.base300` | Ramps: `base100`–`base600`, `hero700`–`hero1000` |
-| Font weight | `fontWeightSemibold` | `theme.fontWeights.semibold` | `regular`, `medium`, `semibold`, `bold` |
-| Line height | `lineHeightBase300` | `theme.lineHeights.base300` | Pairs 1:1 with font sizes |
-| Spacing | `spacingHorizontalM`, `spacingVerticalS` | `theme.spacing.horizontal.m` | Steps: `none`, `xxs`, `xs`, `s`, `m`, `l`, `xl`, `xxl`, `xxxl` |
-| Border radius | `borderRadiusMedium`, `borderRadiusCircular` | `theme.borderRadius.medium` | `none`, `small`, `medium`, `large`, `xLarge`, `circular` |
-| Stroke width | `strokeWidthThin`, `strokeWidthThicker` | `theme.strokeWidths.thin` | `thin`, `thick`, `thicker` |
-| Shadow | `shadow2` … `shadow64` (+ `-Brand` variants) | `theme.shadows.shadow4` | Elevation ramp for popups and overlays |
-| Motion | `durationNormal`, `curveEasyEase` | `theme.durations.normal`, `theme.curves.easyEase` | Durations `ultraFast`→`ultraSlow`, plus easing curves |
-| Typography | `theme.typography.body1`, `theme.typography.caption1` | composite style objects | Bundles family + size + weight + line height |
+  // Theme objects and theme factories
+  webLightTheme,
+  webDarkTheme,
+  teamsLightTheme,
+  teamsDarkTheme,
+  createLightTheme,
+  createDarkTheme,
+  createHighContrastTheme,
+  themeToTokensObject,
+} from '@fluentui/react-components';
 
-### 2.2 Color token families
-
-- **Neutral** – `colorNeutralForeground1…4`, `colorNeutralBackground1…6`, `colorNeutralStroke1…3`, plus interactive variants (`…Hover`, `…Pressed`, `…Selected`, `…Disabled`, `…Brand`).
-- **Brand** – `colorBrandBackground`, `colorBrandBackground2`, `colorBrandForeground1/2`, `colorBrandForegroundLink`, `colorBrandStroke1/2`, `colorCompoundBrandBackground` (used by checked Checkbox/Switch surfaces).
-- **Palette** – raw hue families for data visualization and status accents: `colorPaletteRed*`, `colorPaletteGreen*`, `colorPaletteYellow*`, and so on, each with `Background/Border/Foreground` roles.
-- **Status** – `colorStatusSuccess*`, `colorStatusWarning*`, `colorStatusDanger*`, `colorStatusInfo*` with `Background/Foreground/Border` roles plus index variants.
-- **Focus and shadow** – `colorStrokeFocus1/2` (the visible focus ring) and `colorNeutralShadowAmbient` / `colorNeutralShadowKey` (the colors that build elevation shadows).
-
-The naming pattern is `<subject><role><variant><index>` (for example `colorBrandBackgroundHover`). Learn the pattern once and you can guess most token names correctly.
-
-## 3. Applying a theme with `FluentProvider`
-
-The provider is exported as `FluentProvider` from `@fluentui/react-components` (package-level docs and older examples refer to it as `FluentProvider`). It renders a root element, generates a CSS class containing the theme's custom properties, injects the class definition as a style tag, and applies the class to its root element. Every descendant inherits the variables.
-
-FluentProvider props that matter for theming:
-
-| Prop | Type | Theming purpose |
-| --- | --- | --- |
-| `theme` | `PartialTheme` | The theme for this subtree. Any token you omit cascades from the parent provider. At the app root, omitting the prop gives you the default web light theme. |
-| `dir` | `'ltr' \| 'rtl'` | Writing direction for the subtree. Not a token — it mirrors layout, logical CSS properties and component behaviour such as arrow-key navigation. |
-| `targetDocument` | `Document` | The document into which the provider's generated theme styles are injected. Required when you render into an iframe or another document through `Portal`. |
-| `applyStylesToPortals` | `boolean` (default `true`) | Applies the provider's classes to portal containers so overlay content (Dialog, Popover, Menu, Tooltip) stays themed. |
-| `customStyleHooks_unstable` | `FluentProviderCustomStyleHooks` | An unstable escape hatch keyed by component style hooks (`use*Styles_unstable`), letting you inject extra classes/overrides at the component level. Not a token API. |
-| `overrides_unstable` | `OverridesContextValue_unstable` | Miscellaneous provider-level behaviour overrides (for example default input appearance). Not a theming surface — prefer `theme`. |
-
-Notes:
-
-- A theme object produced by `createLightTheme` / `createDarkTheme` is a `Theme`, which is assignable to the `PartialTheme` prop, so shipped and custom themes both drop straight in.
-- Nested providers are the supported way to do **scoped theming** (per section, per surface, per embedded app).
-- The provider is also how you theme content that escapes the React tree: portals via `applyStylesToPortals`, other documents via `targetDocument`.
-
-## 4. Shipped themes and brand ramps
-
-All of the following are imported from `@fluentui/react-components`:
-
-| Export | What it is | Typical use |
-| --- | --- | --- |
-| `webLightTheme` | Fluent 2 web light palette | Default theme for most apps |
-| `webDarkTheme` | Fluent 2 web dark palette | Dark mode / theme toggles |
-| `teamsLightTheme` | Teams light palette | Apps that must match Microsoft Teams |
-| `teamsDarkTheme` | Teams dark palette | Teams dark mode |
-| `teamsHighContrastTheme` | System-colour, high-contrast palette | Users who request high contrast |
-| `brandWeb` | `BrandVariants` ramp behind the web themes | Starting point for a custom brand |
-| `brandTeams` | `BrandVariants` ramp behind the Teams themes | Starting point for a Teams-aligned brand |
-| `createLightTheme` / `createDarkTheme` / `createTeamsDarkTheme` | Theme factories taking a `BrandVariants` ramp | Producing a light + dark pair for your brand |
-| `createHighContrastTheme` | Builds a system-colour theme | Programmatic high-contrast support |
-
-The standalone `@fluentui/tokens` package ships the same token types, the shipped themes and helper utilities such as `themeToTokensObject` (converts a theme into an object of `var()` references for styling libraries that do not understand Fluent themes) and `createShadowTokens` (re-derives the shadow ramp from a shadow colour).
-
-## 5. Creating a custom theme
-
-### 5.1 Brand ramps
-
-A `BrandVariants` ramp is a 16-stop object keyed **10 → 160**. Stop 10 is the darkest colour and 160 the lightest; the numeric keys are ordered and each step should keep the same hue while moving monotonically in lightness.
-
-How the stops are consumed (typical light-theme mapping):
-
-- **10–60** — dark brand shades used for pressed states, brand text on light backgrounds, and dark brand surfaces.
-- **70–90** — the primary brand colour: solid brand backgrounds and the main brand foreground.
-- **100–160** — light tints used for subtle brand backgrounds, hover tints and brand strokes.
-
-In the dark theme the roles invert: the light stops provide the solid brand surfaces and the dark stops provide the subtle backgrounds, which is why you should always generate **both** themes from the same ramp instead of hand-picking colors per mode.
-
-Use the Fluent 2 theme designer (linked from the Fluent UI React docs) to generate a compliant ramp rather than eyeballing sixteen hex values — it also reports the contrast ratios of the resulting brand tokens.
-
-### 5.2 Theme factories
-
-```tsx
-createLightTheme(brand);          // Theme — light palette for the ramp
-createDarkTheme(brand);           // Theme — matched dark palette
-createTeamsDarkTheme(brand);      // Theme — Teams-flavoured dark palette
-createHighContrastTheme();        // Theme — system colours, no brand input
+import type { Theme, BrandVariants, PartialTheme } from '@fluentui/react-components';
 ```
 
-### 5.3 Deriving a variant from a base theme
+## 2. Anatomy of a theme object
 
-Because a theme is plain data, you can derive variants by spreading. Always spread the *group* you are modifying, never replace it:
+A `Theme` is a **flat object with camelCase keys**, one per token. Keys map 1:1 to CSS variable names (`colorNeutralBackground1` → `var(--colorNeutralBackground1)`).
 
-```tsx
-const compact = {
-  ...webLightTheme,
-  borderRadius: { ...webLightTheme.borderRadius, medium: '2px' },
-};
+| Token group | Representative tokens | Controls |
+| --- | --- | --- |
+| Color – neutral | `colorNeutralBackground1`…`6`, `colorNeutralForeground1`…`6`, `colorNeutralStroke1`…`3` | Surfaces, text, borders. The number is a depth/emphasis step (1 = closest to the canvas) |
+| Color – brand | `colorBrandBackground`, `colorBrandBackgroundHover`, `colorBrandBackgroundPressed`, `colorBrandForeground1`, `colorBrandStroke1` | Primary actions and brand accents |
+| Color – palette | `colorPaletteRedBackground3`, `colorPaletteRedForeground1`, `colorPaletteGreenBackground3`, … | Status/semantic colors used by Badge, MessageBar, ProgressBar |
+| Color – compound | `colorCompoundBrandBackground`, `colorCompoundBrandForeground1`, `colorCompoundBrandStroke` | Controls that fill with brand color (Checkbox, Switch, Slider, Rating) |
+| Color – utility | `colorStrokeFocus1`, `colorStrokeFocus2`, `colorSubtleBackground`, `colorSubtleBackgroundHover`, `colorTransparentBackground`, `colorNeutralForegroundOnBrand` | Focus rings, hover-only surfaces, text drawn on top of brand fills |
+| Typography | `fontFamilyBase`, `fontFamilyMonospace`, `fontFamilyNumeric`, `fontSizeBase100`…`1000`, `fontWeightRegular/Medium/Semibold/Bold`, `lineHeightBase100`…`1000` | Type scale (100 ≈ 10px caption, 300 ≈ 14px body, 900 ≈ 68px display) |
+| Spacing | `spacingHorizontalNone|XXS|XS|SNudge|S|M|L|XL|XXL|XXXL`, same for `spacingVertical*` | Padding, margins, gaps |
+| Stroke | `strokeWidthThin`, `strokeWidthThick`, `strokeWidthThicker`, `strokeWidthThickest` | Border widths |
+| Shape | `borderRadiusNone|Small|Medium|Large|XLarge|Circular` | Corner radii |
+| Elevation | `shadow2`, `shadow4`, `shadow8`, `shadow16`, `shadow28`, `shadow64` (+ brand/floating variants) | `box-shadow` |
+| Motion | `durationUltraFast|Faster|Fast|Normal|Slow|Slower|UltraSlow`, `curveAccelerateMax|…Mid|…Min`, `curveDecelerateMax|…Mid|…Min`, `curveEasyEase`, `curveLinear` | Transitions and animations |
+
+### Naming conventions worth memorizing
+
+- **State suffixes** are appended to the base token: `colorNeutralBackground1Hover`, `colorBrandBackgroundPressed`, `colorNeutralStroke1Selected`, `colorBrandForegroundLinkDisabled`.
+- **`On` prefix** means “foreground drawn on that background”: `colorNeutralForegroundOnBrand`, `colorPaletteRedForeground1`.
+- **Numeric ramps** (`1`…`6`, `100`…`1000`, brand stops `10`…`160`) encode depth, emphasis and type size — never use them to mean something else.
+
+## 3. Built-in themes
+
+| Theme | Look |
+| --- | --- |
+| `webLightTheme` | Default light theme (the provider's fallback) |
+| `webDarkTheme` | Default dark theme |
+| `teamsLightTheme` / `teamsDarkTheme` | Microsoft Teams densities and colors |
+
+Built-in themes are frozen, module-level objects: import them, never mutate them. Treat them as read-only reference values.
+
+## 4. Branding: `BrandVariants` + theme factories
+
+A brand ramp is **16 stops**, keys `10` (darkest) → `160` (lightest). Stop `80` is the seed the generator treats as your primary brand color. From one ramp you can generate consistent light and dark themes:
+
+```ts
+const brandRamp: BrandVariants = { 10: '#020305', /* … */ 80: '#1267b4', /* … */ 160: '#cdd8ef' };
+const light = createLightTheme(brandRamp);
+const dark = createDarkTheme(brandRamp);
 ```
 
-Replacing `borderRadius` outright (`{ borderRadius: { medium: '2px' } }`) drops every other radius token and silently breaks pills, circles and large surfaces.
+`createDarkTheme` flips the neutral ramp, so a single brand ramp yields coherent light **and** dark surfaces. `createHighContrastTheme()` produces a theme that pairs with Windows high-contrast / forced-colors modes.
 
-## 6. Consuming tokens in your own styles
+Generated themes are complete, but the generator cannot know every nuance (for example, brand text on dark surfaces needs a lighter stop than brand fill). Patch individual tokens on the generated object after creation:
 
-You have four practical options, in order of preference:
+```ts
+dark.colorBrandForeground1 = brandRamp[110];
+dark.colorBrandForegroundLink = brandRamp[120];
+```
 
-1. **`tokens` inside Fluent's styling engine** — `makeStyles`, `mergeClasses` and `tokens` are all re-exported from `@fluentui/react-components`, so component styles stay in one system.
-2. **Raw CSS custom properties** — `var(--colorBrandBackground)`. The variable name is exactly the token name with a `--` prefix, so plain `.css` files, CSS modules or any other styling solution can participate in theming.
-3. **Literal values from a theme object** — `webLightTheme.colorBrandBackground` when you genuinely need a concrete value (contrast math, canvas rendering, generating a stylesheet for a third-party widget).
-4. **Composite typography styles** — `theme.typography.body1` and friends when you want the full font family + size + weight + line height combination in one value.
+## 5. Applying a theme: `FluentProvider`
 
-Avoid hard-coded hex values in your own styles. They are the single most common cause of "dark mode broke my component".
+`FluentProvider` is the **only** component that puts a theme into scope. It renders a wrapper element (the `root` slot) that carries the generated theme class containing all CSS custom properties.
 
-## 7. Scoping themes
+| Prop | Type | What it does |
+| --- | --- | --- |
+| `theme` | `Partial<Theme>` | Theme for the subtree. Renders the CSS custom properties on the provider element |
+| `dir` | `'ltr' \| 'rtl'` | Text/layout direction used by the subtree and its portals |
+| `targetDocument` | `Document` | Document used for portals and injected styles — required for iframes, popouts, shadow DOM |
+| `applyStylesToPortals` | `boolean` | Applies the theme's style element to portal hosts so Portaled content keeps the theme (defaults to `true`) |
+| `customStyleHooks_unstable` | `Partial<{ useButtonStyles_unstable, useCardStyles_unstable, useDialogSurfaceStyles_unstable, … }>` | Theme-wide override of any component's style hook, keyed by hook name |
+| `overrides_unstable` | `OverridesContextValue` | Escape hatch for opt-in unstable behavior overrides (for example the default appearance applied to `Input`-family components) |
 
-Because theming is CSS-variable based, scoping is just nesting:
+Because `theme` is typed `Partial<Theme>` you can pass overrides. **At the root of the app, pass a complete theme** — the provider falls back to `webLightTheme` only when `theme` is `undefined`; it does not deep-merge your partial object, so any token you omit would resolve to nothing. The reliable pattern is to spread a base theme:
+
+```ts
+const myTheme: Theme = { ...webLightTheme, colorNeutralBackground1: '#fafafa' };
+```
+
+In a **nested** provider a partial object is fine, because unspecified variables simply inherit from the nearest ancestor scope:
 
 ```tsx
-<FluentProvider theme={webLightTheme}>      {/* app default */}
-  <Button appearance="primary">Global primary</Button>
-  <FluentProvider theme={{ colorBrandBackground: tokens.colorPaletteRedBackground3 }}>
-    <Button appearance="primary">Danger-zone primary</Button>
+<FluentProvider theme={webDarkTheme}>
+  <FluentProvider theme={{ colorNeutralBackground1: '#1b1a19' }}>
+    {/* everything except background1 comes from the dark theme above */}
   </FluentProvider>
 </FluentProvider>
 ```
 
-The inner provider redefines only the tokens you list; everything else — neutrals, typography, spacing, shadows — cascades from the outer provider. This is the recommended way to build section-level accents, embedded sub-apps, or a preview pane that renders a different theme next to the host UI.
+## 6. Scoping, nesting and portals
 
-Guidance: use **one provider per theme boundary**, not one per component. Each provider adds a wrapper element, a CSS class and a style tag.
+- **Nesting is scoping.** A nested `FluentProvider` with a `theme` starts a new theme scope for its entire subtree — nothing leaks outwards or inwards.
+- **Nesting without `theme`** simply inherits the ancestor's variables (no new style element is generated).
+- **Portals keep the scope automatically** for Fluent's own overlays (Popover, Menu, Tooltip, Dialog, Drawer, Toast), because they read the provider context and re-apply the theme class where they render. `applyStylesToPortals` controls whether the theme class is also applied to portal hosts.
+- **Explicit `Portal` usage** with `mountNode` renders into a node you choose. If that node is inside a themed element, plain CSS variables still apply; if it is outside, wrap the Portaled content in its own `FluentProvider` or point the provider's `targetDocument` at the right document.
+- **iframes / popouts** need `targetDocument` so Fluent injects styles and theme variables into the correct document.
 
-## 8. Portals, iframes and other documents
+## 7. Consuming tokens in your own styles
 
-- **Portals.** `Dialog`, `Popover`, `Menu` and `Tooltip` render their surfaces into a portal, which by default lives outside the provider's DOM subtree. `applyStylesToPortals` (default `true`) applies the provider's theme class to the portal container so the surface stays themed. Only turn it off if the portal target is already covered by the same class.
-- **Iframes / separate documents.** When you render themed content into another document — typically through `Portal mountNode` — pass that document to `targetDocument`. The provider then injects its generated theme styles into that document; without it, the CSS class exists only in the host document and the iframe content renders unstyled.
-- **Shadow DOM.** Content rendered inside a shadow root does not inherit custom properties from outside the boundary. Mount the provider *inside* the shadow root so the variables are defined where they are consumed.
+Tokens are strings that evaluate to CSS variables, so you can use them anywhere a CSS value is accepted.
 
-## 9. Direction (RTL)
+- **Griffel (recommended)** — `makeStyles` + `tokens`: styles are compiled at build time into atomic classes and stay reactive to theme swaps.
+- **Plain CSS** — read the same variables directly: `var(--colorNeutralBackground1)`, `var(--borderRadiusMedium)`, `var(--spacingHorizontalM)`.
+- **Inline styles** — `style={{ color: tokens.colorNeutralForeground1 }}` also works, but loses Griffel's atomic deduplication.
 
-`dir` lives on the provider, not in the theme, because direction is a layout concern rather than a colour/type decision:
+Use `mergeClasses` (never string concatenation or template literals) to combine class names, so conflicting atomic classes resolve predictably — later arguments win.
 
-```tsx
-<FluentProvider theme={webLightTheme} dir="rtl">…</FluentProvider>
-```
+## 8. Per-component overrides
 
-Components use logical CSS properties, so padding, borders and icon placement mirror automatically. Direction-sensitive icons (chevrons, arrows) should be mirrored in your own assets, and the same `dir` value should be used for every nested provider that renders portals.
+1. **Local** — pass a Griffel class through the component's `className`, composing with `mergeClasses`.
+2. **Theme-wide, per component** — `customStyleHooks_unstable` on `FluentProvider`. Each entry is a style hook that receives the component's internal state and can append classes to any slot, e.g. `useButtonStyles_unstable`, `useCardStyles_unstable`, `useDialogSurfaceStyles_unstable`, `useMenuItemStyles_unstable`. Because they are hooks, they run during render and must be called unconditionally.
+3. **Unstable behavior** — `overrides_unstable` for opt-in behavioral defaults that are not purely visual.
 
-## 10. Performance rules of thumb
+## 9. Runtime theme switching
 
-- **Create themes outside render.** Module scope or `React.useMemo`. A new theme object identity makes the provider generate a new CSS class and style tag.
-- **Prefer `tokens` in static styles.** Style objects built once with `var()` references need no updates when the theme changes.
-- **Don't nest a provider for every component.** Each boundary costs a DOM element, a class and a style tag.
-- **Ship one theme per mode.** Generate light and dark from the same ramp once, then toggle between two stable objects instead of rebuilding themes on every render.
+- Compute the active theme with `React.useMemo` (or a module-level constant) so the object identity is stable; a new object identity on every render re-generates and re-applies the theme class.
+- Follow the system with `window.matchMedia('(prefers-color-scheme: dark)')`, and re-evaluate on `change`.
+- Handle `(forced-colors: active)` and switch to `createHighContrastTheme()` when it matches.
+- Persist the user's explicit choice (for example in `localStorage`) and treat `'system'` as a third mode.
+- Use the provider's `dir` prop, not CSS hacks, when the direction changes.
 
-## 11. Troubleshooting
+## 10. SSR, performance and bundle size
 
-| Symptom | Likely cause | Fix |
-| --- | --- | --- |
-| Overlay (Dialog/Popover/Menu/Tooltip) looks unthemed | `applyStylesToPortals` disabled, or the portal target lives outside the provider and outside a themed document | Leave `applyStylesToPortals` at its default, or move the provider so the portal target is inside it |
-| Content inside an iframe renders unstyled | The theme styles were never injected into that document | Pass `targetDocument` to `FluentProvider` |
-| Dark mode leaves light-coloured patches | Hard-coded hex/rgb values in your own styles or third-party CSS | Replace them with `tokens.*` or `var(--*)` |
-| Only the solid brand colour changed; hover/pressed/stroke still look wrong | A partial theme overrode one token instead of the whole brand ramp | Provide the full ramp to `createLightTheme`/`createDarkTheme` |
-| All radius values collapsed to one value | A theme group was replaced instead of spread (`borderRadius: { medium: '2px' }`) | Spread the base group: `{ ...base.borderRadius, medium: '2px' }` |
-| `tokens.colorBrandBackground` logs `var(--colorBrandBackground)` instead of a hex value | `tokens` holds `var()` references by design | Read the value from a theme object (`webLightTheme.colorBrandBackground`) when you need a literal |
-| Style tags accumulate / theme flickers | Themes constructed inline in render | Hoist to module scope or memoize |
+- Theme objects are plain data — safe to serialize and use on the server. Keep custom themes in their own module and import them everywhere they are needed.
+- Griffel has a **zero-runtime cost**: `makeStyles` returns class names; only `mergeClasses` runs at render time. Theme switching only re-writes the `--*` variables.
+- Prefer the provided `webLightTheme` / `webDarkTheme` with token overrides over generating many brand themes at runtime.
+- When rendering on the server with `@griffel/react`'s SSR helpers, style elements are extracted once — but always render the same provider/theme pair on the client to avoid hydration mismatches.
 
-## 12. Accessibility
+## 11. Accessibility implications of theming
 
-- Every shipped theme meets Fluent's contrast targets; **custom ramps are your responsibility**. Validate text-on-brand combinations in both light and dark themes (4.5:1 for body text, 3:1 for large text and for UI component boundaries, states and focus indicators).
-- Never communicate state by colour alone. Pair colour tokens with icons or text (for example a `Badge` or `MessageBar` that carries both a colour and a label).
-- Focus visibility relies on `colorStrokeFocus1` / `colorStrokeFocus2`. If you override strokes, keep the focus ring at least 2px and clearly distinct from the surrounding surface.
-- Provide and test a high-contrast path (`teamsHighContrastTheme`, or your own `createHighContrastTheme()` result) and verify the UI under forced-colours mode.
-- Re-check direction: with `dir="rtl"` confirm that mirrored layout does not hide or clip content, and that any directional iconography matches.
+Custom themes are the fastest way to break accessibility. Always verify:
 
-## 13. Quick reference
-
-1. Wrap the app: `<FluentProvider theme={webLightTheme}>`.
-2. Brand it: build a 16-stop `BrandVariants` ramp, then `createLightTheme(ramp)` + `createDarkTheme(ramp)` once at module scope.
-3. Style your own UI with `tokens.*` (or `var(--tokenName)` in plain CSS) — never with raw colours.
-4. Scope overrides by nesting a `FluentProvider` with a partial theme.
-5. Keep portals themed (`applyStylesToPortals`) and other documents themed (`targetDocument`).
-6. Verify contrast and high contrast for every custom ramp you ship.
+- **Contrast**: body text ≥ 4.5:1, large text and interactive boundaries ≥ 3:1 against the surface they sit on — in *every* theme you ship, including the nested scopes.
+- **Never encode meaning in color alone**; pair status colors (`colorPalette*`) with text or icons.
+- **Focus visibility**: `colorStrokeFocus1` / `colorStrokeFocus2` must stay clearly visible against both the surface and the focused control.
+- **High contrast / forced colors**: provide a `createHighContrastTheme()` path and honor `forced-colors: active`; do not rely on `box-shadow` for the only visual boundary.
+- **Respect `prefers-reduced-motion`** in addition to the theme's `duration*` / `curve*` tokens.
+- **RTL**: set `dir` on `FluentProvider` so logical properties and overlays flip correctly.
 
 ## Key Takeaways
 
-- A v9 theme is plain data: an object mapping token names to literal values. Provider turns it into CSS custom properties on its root element, and every component reads those variables, so changing a theme requires no component changes and no re-render logic.
-- Use tokens (var() references) in your own styles instead of hard-coded colours, so your UI automatically follows light, dark, high-contrast and brand themes. Read literal values from theme objects only when you need concrete colours in JavaScript.
-- Custom brands are a 16-stop BrandVariants ramp (10 darkest to 160 lightest) fed to createLightTheme and createDarkTheme; always generate both modes from the same ramp instead of overriding single tokens.
-- Themes are DOM-scoped: nesting a Provider applies a partial override for that subtree while everything else cascades from the ancestor provider, which is the recommended pattern for section accents and embedded sub-apps.
-- Portals and other documents need explicit theming through the provider: applyStylesToPortals keeps Dialog/Popover/Menu/Tooltip content themed, and targetDocument injects the theme styles into iframes or any other document.
-- Build themes once at module scope or memoize them. A new theme object identity makes Provider generate a new CSS class and style tag.
+- A theme is a flat object of design-token values; FluentProvider turns it into CSS custom properties on a wrapper element, so changing the theme object re-themes everything in the subtree at once.
+- `<FluentProvider theme={...}>` is the only way to put a theme in scope. Nesting providers creates independent scopes, and Fluent's portals (Popover, Menu, Tooltip, Dialog, Drawer, Toast) inherit the nearest scope automatically.
+- At the root, always pass a COMPLETE theme by spreading a base theme (`{ ...webLightTheme, ...overrides }`) - the provider does not deep-merge partial themes; only nested providers can safely use partial overrides because the missing variables inherit.
+- Generate branded light/dark pairs from a single 16-stop `BrandVariants` ramp with `createLightTheme` / `createDarkTheme`, then hand-tune tokens such as `colorBrandForeground1` that a generator cannot infer.
+- Consume tokens (`tokens.colorNeutralBackground1`, `tokens.spacingHorizontalM`, `tokens.borderRadiusMedium`) instead of hard-coded hex/px values; they resolve to CSS variables like `var(--colorNeutralBackground1)` that work in Griffel styles, plain CSS and inline styles.
+- Use `customStyleHooks_unstable` on FluentProvider (for example `useButtonStyles_unstable`) when a visual override must apply to every instance of a component rather than a single `className`.
+- Keep themes as module-level constants or `useMemo` values so their identity is stable; treat built-in themes as frozen and never mutate a shared theme object.
+- Set `dir` for RTL and `targetDocument` plus `applyStylesToPortals` when rendering into iframes or custom portal hosts - theming correctness depends on where the variables live.
 
 ## Examples
 
-### Apply a shipped theme at the app root
+### Swapping built-in themes with FluentProvider
 
-Wraps an app in Provider with webLightTheme. Every Fluent component inside reads its colours, typography, spacing, radius and shadows from the theme applied by the nearest provider — swapping the theme swaps the rendering with no component changes.
-
-```tsx
-import * as React from 'react';
-import { FluentProvider, Button, Badge, Text, webLightTheme } from '@fluentui/react-components';
-
-export default function App() {
-  return (
-    // Everything inside Provider picks up the theme of the nearest Provider.
-    <FluentProvider theme={webLightTheme}>
-      <div style={{ display: 'grid', rowGap: 12, padding: 24 }}>
-        <Text size={500} weight="semibold">
-          Themed with Provider
-        </Text>
-        <Text>
-          Replace webLightTheme with webDarkTheme (or your own theme) and this
-          UI re-colours itself - no component code changes.
-        </Text>
-        <div style={{ display: 'flex', alignItems: 'center', columnGap: 8 }}>
-          <Button appearance="primary">Save</Button>
-          <Button appearance="secondary">Cancel</Button>
-          <Badge appearance="filled" color="brand">
-            New
-          </Badge>
-        </div>
-      </div>
-    </FluentProvider>
-  );
-}
-```
-
-### Custom brand ramp with matching light and dark themes
-
-Defines a 16-stop BrandVariants ramp (10 = darkest, 160 = lightest, one consistent hue) and generates a light and a dark theme from it. Both themes are created once at module scope so the Provider does not regenerate its CSS class on every render. A Switch toggles between the two themes.
+The minimum theming setup: choose a complete theme object, pass it to FluentProvider, and style your own markup with the same design tokens so everything re-themes together.
 
 ```tsx
 import * as React from 'react';
-import { FluentProvider, Button, Switch, createLightTheme, createDarkTheme, type BrandVariants } from '@fluentui/react-components';
+import {
+  Button,
+  Card,
+  CardHeader,
+  FluentProvider,
+  Text,
+  makeStyles,
+  tokens,
+  webDarkTheme,
+  webLightTheme,
+} from '@fluentui/react-components';
 
-// A brand ramp is 16 stops: 10 is the darkest, 160 the lightest.
-// Keep a single hue and move monotonically in lightness.
-const contosoBrand: BrandVariants = {
-  10: '#0a0410',
-  20: '#1a0b2e',
-  30: '#280f45',
-  40: '#34125b',
-  50: '#3f1472',
-  60: '#4b1788',
-  70: '#5a1fa3',
-  80: '#6b2dbd',
-  90: '#8043cf',
-  100: '#9659df',
-  110: '#a973ea',
-  120: '#bf91f2',
-  130: '#d3b2f7',
-  140: '#e3cefa',
-  150: '#f1e6fc',
-  160: '#f9f4fe',
-};
+const useStyles = makeStyles({
+  page: {
+    minHeight: '100vh',
+    boxSizing: 'border-box',
+    padding: tokens.spacingVerticalXXL,
+    backgroundColor: tokens.colorNeutralBackground2,
+    color: tokens.colorNeutralForeground1,
+  },
+  card: {
+    maxWidth: '420px',
+    rowGap: tokens.spacingVerticalM,
+  },
+});
 
-// Build the themes once, at module scope. A new theme object identity forces
-// Provider to generate a new CSS class and style tag.
-const contosoLightTheme = createLightTheme(contosoBrand);
-const contosoDarkTheme = createDarkTheme(contosoBrand);
-
-export default function App() {
+export const App = () => {
+  const styles = useStyles();
   const [isDark, setIsDark] = React.useState(false);
 
+  // Switching the theme object only rewrites CSS custom properties on the
+  // FluentProvider element - no component needs to know about it.
+  const theme = isDark ? webDarkTheme : webLightTheme;
+
   return (
-    <FluentProvider theme={isDark ? contosoDarkTheme : contosoLightTheme}>
-      <div style={{ display: 'grid', rowGap: 12, padding: 24 }}>
-        <Switch
-          checked={isDark}
-          onChange={(_, data) => setIsDark(data.checked)}
-          label={isDark ? 'Dark theme' : 'Light theme'}
-        />
-        <Button appearance="primary">Branded primary action</Button>
-        <Button appearance="outline">Branded outline action</Button>
+    <FluentProvider theme={theme}>
+      <div className={styles.page}>
+        <Card className={styles.card}>
+          <CardHeader
+            header={<Text weight="semibold">Themed surface</Text>}
+            description={
+              <Text size={200}>
+                Colors, spacing and radii all come from design tokens.
+              </Text>
+            }
+          />
+          <Button appearance="primary" onClick={() => setIsDark(previous => !previous)}>
+            {isDark ? 'Use light theme' : 'Use dark theme'}
+          </Button>
+        </Card>
       </div>
     </FluentProvider>
   );
-}
+};
+
+export default App;
 ```
 
-### Scoped brand override with a nested Provider
+### Generating light and dark themes from a brand ramp
 
-Shows a partial theme: the inner Provider redefines only a few brand tokens, while neutrals, typography, spacing, radius and shadows cascade from the outer webLightTheme. This is the supported way to build section-level accents without forking the whole theme.
+Defines a 16-stop BrandVariants ramp and uses createLightTheme / createDarkTheme to produce two complete, brand-consistent themes, then patches the brand foreground tokens the generator cannot infer.
 
 ```tsx
 import * as React from 'react';
-import { FluentProvider, Button, MessageBar, tokens, webLightTheme } from '@fluentui/react-components';
+import {
+  Button,
+  FluentProvider,
+  createDarkTheme,
+  createLightTheme,
+  type BrandVariants,
+  type Theme,
+} from '@fluentui/react-components';
 
-// A partial theme only redefines the tokens it lists. `tokens.*` yields
-// var() references, so these overrides follow whatever theme is active.
-const dangerZoneTheme = {
-  colorBrandBackground: tokens.colorPaletteRedBackground3,
-  colorBrandForeground1: tokens.colorPaletteRedForeground1,
-  colorBrandStroke1: tokens.colorPaletteRedBackground3,
+/**
+ * A brand ramp has 16 stops: 10 (darkest) through 160 (lightest).
+ * Stop 80 is the seed used as the primary brand color for `colorBrandBackground`.
+ */
+const brandRamp: BrandVariants = {
+  10: '#020305',
+  20: '#111723',
+  30: '#16263d',
+  40: '#193253',
+  50: '#1b3f6a',
+  60: '#1b4c82',
+  70: '#18599b',
+  80: '#1267b4',
+  90: '#3174c2',
+  100: '#4f82c8',
+  110: '#6790cf',
+  120: '#7d9ed5',
+  130: '#92acdc',
+  140: '#a6bae2',
+  150: '#bac9e9',
+  160: '#cdd8ef',
 };
 
-export default function App() {
+/** Complete themes generated from the ramp. */
+export const brandLightTheme: Theme = { ...createLightTheme(brandRamp) };
+export const brandDarkTheme: Theme = { ...createDarkTheme(brandRamp) };
+
+// Fine-tune tokens the generator cannot reason about. Brand text on a dark
+// surface needs a lighter stop than the brand fill, for example.
+brandDarkTheme.colorBrandForeground1 = brandRamp[110];
+brandDarkTheme.colorBrandForeground2 = brandRamp[120];
+brandDarkTheme.colorBrandForegroundLink = brandRamp[120];
+
+brandLightTheme.colorBrandForeground1 = brandRamp[70];
+
+/** High-contrast themes follow the same shape. */
+// import { createHighContrastTheme } from '@fluentui/react-components';
+// export const brandHighContrastTheme: Theme = createHighContrastTheme(brandRamp);
+
+export const BrandedApp = ({ isDark }: { isDark: boolean }) => (
+  <FluentProvider theme={isDark ? brandDarkTheme : brandLightTheme}>
+    <Button appearance="primary">Branded primary action</Button>
+  </FluentProvider>
+);
+```
+
+### Composing a complete custom theme from a base theme
+
+Shows the safe way to override individual tokens: spread a complete base theme so no token is left undefined, and keep the result in a module-level constant for a stable identity.
+
+```tsx
+import { webLightTheme, type Theme, type PartialTheme } from '@fluentui/react-components';
+
+/**
+ * Always spread a complete base theme. FluentProvider does not deep-merge a
+ * partial theme - the object you pass is rendered as-is into CSS variables, so
+ * a root-level partial theme would leave the omitted variables unset.
+ */
+export const contosoLightTheme: Theme = {
+  ...webLightTheme,
+
+  // Brand
+  colorBrandBackground: '#0f6cbd',
+  colorBrandBackgroundHover: '#115ea3',
+  colorBrandBackgroundPressed: '#0c3b5e',
+  colorBrandForeground1: '#0f6cbd',
+  colorBrandStroke1: '#0f6cbd',
+
+  // Neutrals
+  colorNeutralBackground1: '#ffffff',
+  colorNeutralBackground2: '#fafafa',
+  colorNeutralBackground3: '#f5f5f5',
+  colorNeutralForeground1: '#242424',
+  colorNeutralForeground2: '#424242',
+  colorNeutralStroke1: '#d1d1d1',
+
+  // Type scale
+  fontFamilyBase: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+  fontSizeBase300: '14px',
+  lineHeightBase300: '20px',
+
+  // Shape and density
+  borderRadiusMedium: '6px',
+  borderRadiusLarge: '10px',
+  spacingHorizontalM: '12px',
+  spacingVerticalM: '12px',
+
+  // Elevation and focus
+  shadow4: '0 2px 4px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12)',
+  colorStrokeFocus2: '#0f6cbd',
+};
+
+/** Safe to pass from a *nested* provider: missing tokens inherit from the parent scope. */
+export const contosoSidebarOverride: PartialTheme = {
+  colorNeutralBackground1: '#1b1a19',
+  colorNeutralForeground1: '#ffffff',
+};
+```
+
+### Styling your own components with tokens, makeStyles and mergeClasses
+
+Demonstrates module-level makeStyles using token values for color, typography, spacing, shape and elevation, plus conditional class composition with mergeClasses so overrides win predictably.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  makeStyles,
+  mergeClasses,
+  shorthands,
+  tokens,
+} from '@fluentui/react-components';
+
+const useStyles = makeStyles({
+  card: {
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap(tokens.spacingVerticalS),
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke1),
+    ...shorthands.borderRadius(tokens.borderRadiusLarge),
+    backgroundColor: tokens.colorNeutralBackground1,
+    color: tokens.colorNeutralForeground1,
+    boxShadow: tokens.shadow4,
+    // Tokens are CSS variables, so every value above follows the active theme.
+  },
+  cardAccent: {
+    backgroundColor: tokens.colorBrandBackground2,
+    ...shorthands.border('1px', 'solid', tokens.colorBrandStroke1),
+  },
+  title: {
+    fontFamily: tokens.fontFamilyBase,
+    fontSize: tokens.fontSizeBase400,
+    fontWeight: tokens.fontWeightSemibold,
+    lineHeight: tokens.lineHeightBase400,
+  },
+  muted: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+  },
+});
+
+type TokenCardProps = {
+  accent?: boolean;
+  title: string;
+  children?: React.ReactNode;
+};
+
+export const TokenCard = ({ accent, title, children }: TokenCardProps) => {
+  const styles = useStyles();
+
+  return (
+    <div className={mergeClasses(styles.card, accent && styles.cardAccent)}>
+      <span className={styles.title}>{title}</span>
+      <span className={styles.muted}>{children}</span>
+      <Button appearance="secondary" size="small">
+        Themed action
+      </Button>
+    </div>
+  );
+};
+```
+
+### Runtime theme resolution: system preference, forced colors and persistence
+
+A reusable hook that resolves light / dark / system mode, listens for prefers-color-scheme and forced-colors changes, persists the user's explicit choice, and memoizes the resulting theme object.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  FluentProvider,
+  createHighContrastTheme,
+  webDarkTheme,
+  webLightTheme,
+  type Theme,
+} from '@fluentui/react-components';
+
+export type ThemeMode = 'light' | 'dark' | 'system';
+
+const STORAGE_KEY = 'app-theme-mode';
+
+const readStoredMode = (): ThemeMode => {
+  if (typeof window === 'undefined') {
+    return 'system';
+  }
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+};
+
+export const useAppTheme = () => {
+  const [mode, setMode] = React.useState<ThemeMode>(readStoredMode);
+  const [prefersDark, setPrefersDark] = React.useState(false);
+  const [forcedColors, setForcedColors] = React.useState(false);
+
+  React.useEffect(() => {
+    const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const contrastQuery = window.matchMedia('(forced-colors: active)');
+
+    setPrefersDark(darkQuery.matches);
+    setForcedColors(contrastQuery.matches);
+
+    const onDarkChange = (event: MediaQueryListEvent) => setPrefersDark(event.matches);
+    const onContrastChange = (event: MediaQueryListEvent) => setForcedColors(event.matches);
+
+    darkQuery.addEventListener('change', onDarkChange);
+    contrastQuery.addEventListener('change', onContrastChange);
+
+    return () => {
+      darkQuery.removeEventListener('change', onDarkChange);
+      contrastQuery.removeEventListener('change', onContrastChange);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEY, mode);
+  }, [mode]);
+
+  // Memoize so the theme object identity is stable across renders.
+  const theme = React.useMemo<Theme>(() => {
+    if (forcedColors) {
+      return createHighContrastTheme();
+    }
+    const isDark = mode === 'dark' || (mode === 'system' && prefersDark);
+    return isDark ? webDarkTheme : webLightTheme;
+  }, [forcedColors, mode, prefersDark]);
+
+  return { mode, setMode, theme };
+};
+
+export const App = () => {
+  const { mode, setMode, theme } = useAppTheme();
+
+  return (
+    <FluentProvider theme={theme}>
+      <Button
+        appearance="primary"
+        onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}
+      >
+        Toggle theme (current: {mode})
+      </Button>
+    </FluentProvider>
+  );
+};
+```
+
+### Scoped themes: nested FluentProviders, portals and explicit Portal mounts
+
+Shows how a nested provider creates an independent theme scope, how Fluent overlays keep that scope through their own portals, and how to portal explicitly with the Portal mountNode prop.
+
+```tsx
+import * as React from 'react';
+import {
+  Button,
+  FluentProvider,
+  Popover,
+  PopoverSurface,
+  PopoverTrigger,
+  Portal,
+  makeStyles,
+  tokens,
+  webDarkTheme,
+  webLightTheme,
+} from '@fluentui/react-components';
+
+const useStyles = makeStyles({
+  shell: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 320px',
+    gap: tokens.spacingHorizontalL,
+    padding: tokens.spacingVerticalL,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  panel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+    padding: tokens.spacingVerticalM,
+    backgroundColor: tokens.colorNeutralBackground1,
+    color: tokens.colorNeutralForeground1,
+    borderRadius: tokens.borderRadiusMedium,
+    boxShadow: tokens.shadow2,
+  },
+});
+
+export const Shell = () => {
+  const styles = useStyles();
+  const [mountNode, setMountNode] = React.useState<HTMLDivElement | null>(null);
+
   return (
     <FluentProvider theme={webLightTheme}>
-      <div style={{ display: 'grid', rowGap: 12, padding: 24 }}>
-        <Button appearance="primary">Global primary</Button>
+      <div className={styles.shell}>
+        <div className={styles.panel}>
+          <Popover>
+            <PopoverTrigger disableButtonEnhancement>
+              <Button>Light popover</Button>
+            </PopoverTrigger>
+            <PopoverSurface>
+              Portaled content keeps the light theme automatically.
+            </PopoverSurface>
+          </Popover>
+        </div>
 
-        <FluentProvider theme={dangerZoneTheme}>
-          <div style={{ display: 'grid', rowGap: 12 }}>
-            <MessageBar intent="warning">
-              This section uses a scoped brand override; everything else still
-              comes from webLightTheme.
-            </MessageBar>
-            <Button appearance="primary">Scoped primary</Button>
+        {/* A nested provider starts a brand new theme scope for its subtree. */}
+        <FluentProvider theme={webDarkTheme}>
+          <div className={styles.panel}>
+            <Popover>
+              <PopoverTrigger disableButtonEnhancement>
+                <Button appearance="primary">Dark popover</Button>
+              </PopoverTrigger>
+              <PopoverSurface>
+                The overlay renders in a portal but stays inside the dark scope.
+              </PopoverSurface>
+            </Popover>
+
+            {/* Explicit portals can target an arbitrary node in the document. */}
+            <div ref={setMountNode} />
+            <Portal mountNode={mountNode}>
+              <div className={styles.panel}>Rendered inside the dark scope.</div>
+            </Portal>
           </div>
         </FluentProvider>
       </div>
     </FluentProvider>
   );
-}
+};
 ```
 
-### Building component styles from tokens
+### Theme-wide component styling with customStyleHooks_unstable
 
-Uses tokens (re-exported from @fluentui/react-components) together with makeStyles to author custom surfaces that automatically follow the active theme. Every colour, radius, shadow, spacing and typography value is a var() reference resolved by the Provider.
+Overrides how every Button in the subtree is styled by appending Griffel classes from a style hook supplied to FluentProvider, instead of touching each Button instance.
 
 ```tsx
 import * as React from 'react';
-// `tokens` and `makeStyles` are re-exported from @fluentui/react-components.
-import { makeStyles, tokens, Button, Text } from '@fluentui/react-components';
+import {
+  Button,
+  FluentProvider,
+  makeStyles,
+  mergeClasses,
+  tokens,
+  webLightTheme,
+} from '@fluentui/react-components';
 
-const useStyles = makeStyles({
-  panel: {
-    backgroundColor: tokens.colorNeutralBackground1,
-    color: tokens.colorNeutralForeground1,
-    border: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke1}`,
-    borderRadius: tokens.borderRadiusLarge,
-    boxShadow: tokens.shadow4,
-    padding: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalL}`,
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalS,
-  },
-  highlight: {
-    backgroundColor: tokens.colorBrandBackground2,
-    color: tokens.colorBrandForeground1,
-    borderRadius: tokens.borderRadiusMedium,
-    padding: `${tokens.spacingVerticalXXS} ${tokens.spacingHorizontalS}`,
-    fontSize: tokens.fontSizeBase200,
-    fontWeight: tokens.fontWeightSemibold,
-    lineHeight: tokens.lineHeightBase200,
+const useButtonOverrides = makeStyles({
+  root: {
+    backgroundColor: tokens.colorPaletteRedBackground3,
+    color: tokens.colorNeutralForegroundOnBrand,
+    ':hover': {
+      backgroundColor: tokens.colorPaletteRedForeground1,
+      color: tokens.colorNeutralForegroundOnBrand,
+    },
   },
 });
 
-export default function TokenDrivenPanel() {
-  const styles = useStyles();
-
-  return (
-    <div className={styles.panel}>
-      <Text size={400} weight="semibold">
-        Styles built from tokens follow the active theme
-      </Text>
-      <span className={styles.highlight}>
-        colorBrandForeground1 on colorBrandBackground2
-      </span>
-      <div>
-        <Button appearance="primary" size="small">
-          Action
-        </Button>
-      </div>
-    </div>
-  );
-}
-```
-
-### Plain CSS consuming the provider's CSS variables
-
-The Provider writes every token as a CSS custom property named after the token (token name plus a -- prefix) on its root element, so any descendant can consume them from ordinary stylesheets with no build-time coupling to Fluent.
-
-```css
-/* app.css
-   The custom properties are written by Provider onto its root element, so any
-   descendant can consume them. Variable names are token names with a -- prefix. */
-
-.app-panel {
-  background-color: var(--colorNeutralBackground1);
-  color: var(--colorNeutralForeground1);
-  border: var(--strokeWidthThin) solid var(--colorNeutralStroke1);
-  border-radius: var(--borderRadiusLarge);
-  box-shadow: var(--shadow4);
-  padding: var(--spacingVerticalL) var(--spacingHorizontalL);
-}
-
-.app-panel__title {
-  font-size: var(--fontSizeBase400);
-  font-weight: var(--fontWeightSemibold);
-  line-height: var(--lineHeightBase400);
-  color: var(--colorBrandForeground1);
-}
-
-.app-panel__badge {
-  background-color: var(--colorBrandBackground2);
-  color: var(--colorBrandForeground2);
-  border-radius: var(--borderRadiusCircular);
-  padding: var(--spacingVerticalXXS) var(--spacingHorizontalS);
-}
-```
-
-### Theming content rendered into an iframe
-
-targetDocument injects the provider's generated theme styles into another document, and Portal mounts children into that document. Together they let preview panes, email editors and embedded surfaces render fully themed Fluent content outside the host document.
-
-```tsx
-import * as React from 'react';
-import { FluentProvider, Portal, Button, webDarkTheme } from '@fluentui/react-components';
-
-export default function IframeThemedPreview() {
-  const iframeRef = React.useRef<HTMLIFrameElement>(null);
-  const [targetDocument, setTargetDocument] = React.useState<Document | null>(null);
-
-  return (
-    <div style={{ display: 'grid', rowGap: 8 }}>
-      <iframe
-        ref={iframeRef}
-        title="Themed preview"
-        style={{ width: '100%', height: 200, border: 'none' }}
-        onLoad={() => setTargetDocument(iframeRef.current?.contentDocument ?? null)}
-      />
-
-      {targetDocument && (
-        // targetDocument injects the theme styles into the iframe document;
-        // Portal then renders the children into that same document.
-        <FluentProvider theme={webDarkTheme} targetDocument={targetDocument}>
-          <Portal mountNode={targetDocument.body}>
-            <div style={{ padding: 16 }}>
-              <Button appearance="primary">Themed inside the iframe</Button>
-            </div>
-          </Portal>
-        </FluentProvider>
-      )}
-    </div>
-  );
-}
-```
-
-### Memoized theme variant derived from a base theme
-
-Shows the safe way to derive a theme: spread the base theme and spread any token group you modify, then memoize the result. Replacing a group (borderRadius: { medium: '2px' }) would drop every other radius token, and building the theme inline in render would regenerate the provider's CSS on every pass.
-
-```tsx
-import * as React from 'react';
-import { FluentProvider, Button, Switch, createLightTheme, createDarkTheme, type BrandVariants, type Theme } from '@fluentui/react-components';
-
-const brand: BrandVariants = {
-  10: '#020305',
-  20: '#0b1a2a',
-  30: '#102a45',
-  40: '#143a5f',
-  50: '#164a7a',
-  60: '#175a96',
-  70: '#186bb3',
-  80: '#1a7dcf',
-  90: '#2f92e0',
-  100: '#4ba4ea',
-  110: '#6cb6f0',
-  120: '#93c8f5',
-  130: '#b6d9f8',
-  140: '#d3e8fb',
-  150: '#eaf4fd',
-  160: '#f6fbff',
+/**
+ * The hook receives the component's internal state (the same object the
+ * component's own style hooks receive). It must be a hook - call it
+ * unconditionally during render, exactly like a component style hook.
+ */
+const useCustomButtonStyles = (state: { root: { className: string } }) => {
+  const styles = useButtonOverrides();
+  state.root.className = mergeClasses(state.root.className, styles.root);
 };
 
-const light = createLightTheme(brand);
-const dark = createDarkTheme(brand);
+export const App = () => (
+  <FluentProvider
+    theme={webLightTheme}
+    customStyleHooks_unstable={{
+      useButtonStyles_unstable: useCustomButtonStyles,
+    }}
+  >
+    <Button appearance="primary">Every button in this subtree</Button>
+  </FluentProvider>
+);
+```
 
-/** Returns a stable theme object for the requested mode and density. */
-function useAppTheme(mode: 'light' | 'dark', compact: boolean): Theme {
-  const base = mode === 'dark' ? dark : light;
+### Reading theme tokens from plain CSS
 
-  return React.useMemo(() => {
-    if (!compact) {
-      return base;
-    }
+Because the theme is emitted as CSS custom properties on the provider element, ordinary stylesheets anywhere in the subtree can consume the exact same tokens - including for markup that Fluent does not own.
 
-    // Spread the base group - never replace it, or every other radius token
-    // disappears from the theme.
-    return {
-      ...base,
-      borderRadius: { ...base.borderRadius, medium: '2px' },
-    };
-  }, [base, compact]);
+```css
+/*
+  The active theme is applied as CSS custom properties on the FluentProvider
+  element, so any descendant selector can read them. No build step required.
+*/
+.my-surface {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacingVerticalS);
+
+  background-color: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+
+  border: var(--strokeWidthThin) solid var(--colorNeutralStroke1);
+  border-radius: var(--borderRadiusMedium);
+  box-shadow: var(--shadow4);
+
+  padding: var(--spacingVerticalM) var(--spacingHorizontalL);
+
+  font-family: var(--fontFamilyBase);
+  font-size: var(--fontSizeBase300);
+  line-height: var(--lineHeightBase300);
+  font-weight: var(--fontWeightRegular);
+
+  transition-property: background-color, box-shadow;
+  transition-duration: var(--durationNormal);
+  transition-timing-function: var(--curveEasyEase);
 }
 
-export default function App() {
-  const [isDark, setIsDark] = React.useState(false);
-  const [compact, setCompact] = React.useState(false);
-  const theme = useAppTheme(isDark ? 'dark' : 'light', compact);
-
-  return (
-    <FluentProvider theme={theme}>
-      <div style={{ display: 'grid', rowGap: 12, padding: 24 }}>
-        <Switch
-          checked={isDark}
-          onChange={(_, data) => setIsDark(data.checked)}
-          label="Dark"
-        />
-        <Switch
-          checked={compact}
-          onChange={(_, data) => setCompact(data.checked)}
-          label="Compact radius"
-        />
-        <Button appearance="primary">Themed button</Button>
-      </div>
-    </FluentProvider>
-  );
+.my-surface:hover {
+  background-color: var(--colorNeutralBackground1Hover);
 }
+
+.my-surface-brand {
+  background-color: var(--colorBrandBackground);
+  color: var(--colorNeutralForegroundOnBrand);
+}
+
+/*
+  Optional: strongly typed access to the same variable names in TypeScript.
+
+  import { themeToTokensObject, webLightTheme } from '@fluentui/react-components';
+
+  const themeTokens = themeToTokensObject(webLightTheme);
+  // themeTokens.colorNeutralBackground1 === 'var(--colorNeutralBackground1)'
+*/
 ```
 
 ## Pitfalls
 
-- Hard-coding hex, rgb or hsl values in your own styles instead of using tokens or var(--tokenName). The result looks fine in the default theme and breaks in dark mode, high contrast and custom brand themes.
-- Constructing themes inside render (<Provider theme={createLightTheme(brand)}>). Each pass produces a new object identity, forcing the provider to generate a fresh CSS class and style tag, which causes churn and accumulating styles.
-- Replacing a token group instead of spreading it: theme={{ borderRadius: { medium: '2px' } }} drops every other radius token. Always write { ...base.borderRadius, medium: '2px' }.
-- Expecting tokens.colorBrandBackground to be a colour string. It is 'var(--colorBrandBackground)'; use a theme object (for example webLightTheme.colorBrandBackground) when you need a literal value.
-- Re-branding by overriding only colorBrandBackground in a partial theme, leaving hover, pressed, selected, stroke and foreground tokens on the old brand. Provide a full ramp to createLightTheme/createDarkTheme instead.
-- Forgetting that overlays render in portals and that other documents are separate style scopes. Overlays need applyStylesToPortals (default true) and iframe content needs targetDocument on the Provider.
-- Using palette or ramp values (for example colorPaletteRedBackground3) as everyday UI colours rather than semantic tokens (colorStatusDangerBackground3, colorBrandBackground). Palette values do not adapt to theme or contrast changes the way semantic tokens do.
-- Nesting a Provider per component. Every boundary costs a wrapper element, a CSS class and a style tag; keep one provider per theme boundary.
+- Passing an incomplete theme to a root FluentProvider. The prop is typed `Partial<Theme>`, but FluentProvider only falls back to `webLightTheme` when `theme` is `undefined` - it does not merge. Omitting tokens leaves their CSS variables unset.
+- Creating the theme object inline on every render (`theme={{ ...webLightTheme, ...draft }}` or `theme={isDark ? createDarkTheme(ramp) : createLightTheme(ramp)}`). A new identity re-generates and re-applies the theme class; hoist themes to module scope or wrap them in `useMemo`.
+- Hard-coding hex or pixel values in `makeStyles` instead of using tokens. Those values silently break in dark mode, high contrast and any customer theme.
+- Calling `makeStyles` inside a component body or inside a conditional. Style hooks are hooks: define them once at module scope and call them unconditionally.
+- Combining class names with string concatenation or template literals. Griffel emits atomic classes, so two classes can both set the same property; only `mergeClasses` resolves the conflict deterministically (later arguments win).
+- Assuming nested providers merge themes. A nested provider's theme fully wins inside its subtree for the tokens it defines; tokens it omits inherit from the ancestor variables, which is behaviour, not automatic merging.
+- Mutating imported themes (`webLightTheme.colorBrandBackground = '#...'`). Built-in themes are shared module singletons; clone first (`{ ...webDarkTheme }`) and patch the clone.
+- Forgetting the portal/document plumbing: Portaling into a DOM node outside a themed element, or into another document without `targetDocument`, produces unthemed surfaces; Fluent's overlays keep the scope only when the provider context is available.
+- Ignoring forced colors and RTL: custom palettes often fail WCAG contrast, and hard-coded physical CSS properties (left/right) instead of `dir` on FluentProvider break mirrored layouts.
+- Treating `customStyleHooks_unstable` as stable, or invoking new hooks inside those hooks' callbacks. The prop name signals churn; keep its usage thin and centralised.
 
 ## Accessibility
 
-Theming directly determines contrast and focus visibility, so treat it as an accessibility surface. Fluent's shipped themes (webLightTheme, webDarkTheme, teamsLightTheme, teamsDarkTheme) are validated for contrast, but any custom brand ramp is your responsibility: verify text-on-brand combinations at 4.5:1 for body text and 3:1 for large text, and ensure UI component boundaries, states and focus indicators keep at least 3:1 against adjacent colours, in both the light and dark themes generated from the ramp. Never encode meaning in colour alone — pair a colour token with an icon or text, for example a Badge or MessageBar whose intent is carried by both colour and label. Focus visibility depends on colorStrokeFocus1 and colorStrokeFocus2; if you override stroke tokens, keep the focus ring clearly distinguishable (Fluent renders a 2px outline) and never remove it. Provide a high-contrast path for users who request it — teamsHighContrastTheme or a theme built from createHighContrastTheme() — and test the UI under forced-colours mode, remembering that system colours override theme colours there. Finally, re-check direction: with dir="rtl" on the Provider, confirm that mirrored layouts do not clip content and that directional icons are flipped consistently.
+Theming is where accessibility is most easily lost, because a single token edit affects every component at once.
 
-**Referenced components**: Provider, Button, Switch, Text, Badge, MessageBar, Portal
+- **Contrast:** verify body text at >= 4.5:1 and large text / interactive boundaries / icons at >= 3:1 in every theme you ship, including nested scopes. Pay special attention to `colorNeutralForeground1/2/3` on `colorNeutralBackground1..3`, `colorNeutralForegroundOnBrand` on `colorBrandBackground`, and the `colorPalette*` status pairs used by Badge, MessageBar and ProgressBar.
+- **Never encode meaning in color alone:** status tokens must be accompanied by text or icons; Badge and MessageBar support `intent`-style semantics precisely so color is not the only signal.
+- **Focus visibility:** keep `colorStrokeFocus1` / `colorStrokeFocus2` strongly contrasting against both the surface and the focused control; a focus ring that disappears in one theme is a release blocker.
+- **High contrast / forced colors:** honor `(forced-colors: active)` with `window.matchMedia` and switch to `createHighContrastTheme()`; do not rely on `box-shadow` or subtle neutral strokes as the only boundary between surfaces, because forced-colors mode discards them.
+- **Reduced motion:** theme `duration*` / `curve*` tokens do not override the user's `prefers-reduced-motion` setting - keep custom transitions behind an explicit check.
+- **Direction:** set `dir` on `FluentProvider` rather than flipping with CSS transforms; logical spacing tokens and Fluent overlays follow the provider's direction.
+- **Theme switching controls:** the control that toggles themes must itself be keyboard operable and labelled; announce the change through visible UI rather than relying on a silent visual swap.
+- **Test matrix:** light, dark, high contrast, RTL, and any branded theme - ideally automated with a contrast checker run over rendered screenshots.
+
+**Referenced components**: FluentProvider, Portal, Button, Card, CardHeader, Text, Popover, PopoverTrigger, PopoverSurface, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem, Dialog, DialogSurface, DialogBody, DialogTrigger, Input, Checkbox, Switch, Slider, Rating, Badge, MessageBar, ProgressBar, Tooltip, Drawer, Toast
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

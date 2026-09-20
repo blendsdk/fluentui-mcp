@@ -2,82 +2,105 @@
 
 ## Overview
 
-Overlays are surfaces that float above the page instead of taking part in its layout: Popover for small, anchored, contextual content; Drawer for larger panels that either push page content aside or cover it (chosen with the Drawer type prop of inline or overlay); and TeachingPopover for guided, step-by-step coachmarks. They share the same mechanics — a trigger, an anchored floating surface, focus handling, dismissal, and motion — and in Fluent UI v9 those mechanics are exposed rather than hard-coded, so the open prop and onOpenChange give you explicit control, trapFocus, inertTrapFocus and legacyTrapFocus decide how focus is contained, closeOnScroll and closeOnIframeFocus decide when the surface goes away, and positioning decides where it lands. Supporting utilities in this space do the plumbing: Portal places a surface into a mount node, Positioning anchors a popping surface to a target, Provider carries theme and direction (dir) into portals through applyStylesToPortals and targetDocument, Aria provides off-screen text for overlay content without visible labels, and the surfaceMotion slot plus the Motion utilities drive enter and exit animation. Choosing an overlay is therefore a question of modality, persistence, and anchoring, not of visual preference.
+Overlays are the surfaces that float above the rest of the page: anchored popovers that appear next to the element that opened them, drawers that slide in from an edge and either push the layout or float over it, and teaching popovers that walk a user through new functionality step by step. The category is built from containers paired with structure parts: Drawer with InlineDrawer or OverlayDrawer plus DrawerHeader, DrawerHeaderNavigation, DrawerHeaderTitle, DrawerBody and DrawerFooter; Popover with PopoverTrigger and PopoverSurface; and TeachingPopover with its surface, header, title, body, footer and carousel pieces. Every family shares the same contract — something triggers presence, the surface is positioned and layered above the page, the user can dismiss it, and focus returns to where it started.
 
 ## When to Use
 
-Reach for an overlay when information or a task is contextual, transient, or secondary to the page and would be disruptive if it occupied permanent layout space. Use Popover when the content is small, anchored to a specific trigger, and non-modal — inspective details, a small set of options, a compact form, or a hover/focus hint that is too large for a Tooltip; it can open on click, hover (openOnHover with mouseLeaveDelay), or context (openOnContext), and its appearance, size, inline, and withArrow props tune the surface. Use Drawer when the overlay needs real estate and structure: a filter panel, a details view, a settings pane. Choose type inline when the panel should participate in the page flow and push content, and type overlay when it should cover content; combine it with the surrounding layout rather than treating it as a floating bubble. Use TeachingPopover when you are teaching a feature across a sequence of steps rather than showing incidental content — it supplies the coachmark anatomy (icon, title, body, dismissButton), step navigation (navType of next or prev, handleButtonClick), step wording (initialStepText, finalStepText), and carousel media via mediaLength, value, altText, layout, and footerLayout. For anything that must block the rest of the page until dismissed, this category is the wrong tool: Dialog belongs to the feedback category and is the modal primitive (modalType, inertTrapFocus, unmountOnClose), while Menu (navigation) owns command lists and flyout submenus and Tooltip (feedback) owns brief, non-interactive descriptions. When several of these need to coexist or the surface must render outside the app root, Portal, Positioning, and Provider are the utilities that make that composition work.
+Reach for an overlay when content should appear on demand without navigating away or permanently consuming layout space. Use Popover for short, anchored, non-blocking content tied to a trigger, such as extra detail, a compact set of actions or a small form, and treat openOnHover and openOnContext as supplements to a click and keyboard path rather than the only way in. Use InlineDrawer when a panel should sit in the layout and push the main content aside, and OverlayDrawer when the panel should cover content with a backdrop instead. Use TeachingPopover when you need guided, multi-step onboarding or coach marks, and its carousel parts when the flow has several steps with previous and next navigation. If the user must answer before continuing, a blocking modal surface from another category is usually a better fit than any of these.
 
 ## Best Practices
 
 ### Do's
 
-- Pick the overlay by modality and persistence first: Popover for anchored, non-modal context; Drawer for structural panels with type inline or overlay; TeachingPopover for sequenced onboarding; Dialog for anything that must block the page until it is answered.
-- Anchor overlays to a real, focusable, labeled control — a Button with a subtle or transparent appearance and an icon, for example — so the surface can be opened and reached by keyboard and is announced as a control rather than an inert decoration.
-- Choose open-state handling deliberately: use defaultOpen for simple, self-contained surfaces, and switch to the controlled pair (open plus onOpenChange) when you must react to dismissal, coordinate multiple overlays, or keep application state in sync with what is visible.
-- Match dismissal behavior to intent instead of accepting defaults blindly: closeOnScroll and closeOnIframeFocus for surfaces that would otherwise detach visually from their anchor, mouseLeaveDelay when opening on hover, and a short, intentional motion via the surfaceMotion slot rather than long or decorative animation.
-- Let the framework position the surface — use the positioning prop and the Positioning utility that anchors a popping surface to its target — so the overlay flips and repositions as the viewport, scroll container, or anchor moves.
-- When a surface is rendered through a portal or into a different mount node, keep it inside the Provider tree and rely on applyStylesToPortals and targetDocument so theme tokens, direction (dir), and style overrides reach the floating content; otherwise the overlay renders with default tokens and can break in right-to-left layouts.
-- Keep overlay content short, scannable, and self-sufficient: a heading or label, one or two sentences or controls, and a clear way to dismiss. If the content needs scrolling, sections, or its own navigation, promote it to a Drawer.
-- Give non-textual overlay content an accessible name: use Aria for off-screen text that labels an icon-only trigger or an illustrated TeachingPopover step, and make sure the altText and step text you supply for a TeachingPopover genuinely describe what the user is looking at.
+- Choose the drawer variant deliberately: set type to inline when the panel should participate in layout and push content, and to overlay when it should float above the page with a backdrop and a dismissible scrim.
+- Compose drawer content from the provided parts — DrawerHeaderTitle for the heading and trailing action, DrawerHeaderNavigation for navigation, DrawerBody for the scrolling region and DrawerFooter for actions — instead of hand-rolling spacing inside a bare drawer.
+- Use the separator option on drawer headers so the title and close affordance stay visually anchored while the body scrolls underneath.
+- Drive visibility from application state when the overlay matters to routing or deep links by pairing open with onOpenChange, and fall back to defaultOpen only for simple uncontrolled cases.
+- Always wire the trigger with PopoverTrigger or TeachingPopoverTrigger rather than toggling open state from a raw click handler, so positioning, keyboard activation and focus return are handled for you, and use disableButtonEnhancement when the child is already an interactive element.
+- Give every overlay surface a heading — the heading slot on DrawerHeaderTitle, and TeachingPopoverHeader plus TeachingPopoverTitle for teaching experiences — keeping the heading level consistent with the surrounding page outline.
+- Reserve trapFocus or inertTrapFocus on Popover for surfaces that behave modally, and use unstable_disableAutoFocus when you deliberately do not want focus moved into a hint or preview.
+- Tune placement with positioning and withArrow so the surface stays visually attached to its trigger, and turn on closeOnScroll when the trigger lives inside a scrolling region.
+- Build multi-step guidance with TeachingPopoverCarousel, one TeachingPopoverCarouselCard with a unique value per step, TeachingPopoverCarouselNav for step navigation, TeachingPopoverCarouselPageCount for progress and TeachingPopoverFooter with its primary and secondary slots plus initialStepText and finalStepText.
+- Keep the built-in motion slots — backdropMotion and surfaceMotion on OverlayDrawer — at their defaults unless you have a specific reason, so overlay animation stays consistent with the rest of the product.
+- Render overlays inside FluentProvider so theme and direction reach portal-rendered surfaces, using its applyStylesToPortals option when surface content is portalled.
 
 ### Don'ts
 
-- Don't use Popover as a dialog. It does not block the rest of the page, so users can tab away from it and screen readers can wander behind it; when a task must be completed before continuing, use Dialog with an appropriate modalType and inertTrapFocus.
-- Don't leave interactive overlay content without focus containment. If the surface holds buttons, inputs, or links, keep focus trapping enabled (trapFocus or inertTrapFocus) and treat legacyTrapFocus and unstable_disableAutoFocus as exceptions you can justify, not as defaults.
-- Don't hand-roll positioning with fixed coordinates, hard-coded offsets, or absolutely positioned wrappers. That approach ignores scroll containers and viewport edges, and it duplicates what the positioning prop and the Positioning utility already do reliably.
-- Don't stack overlays on top of overlays — a Popover inside a Drawer inside another Popover, or a surface that opens another surface on the same click. It creates competing focus containers, ambiguous Escape handling, and confusing dismissal order.
-- Don't put essential or error-critical information only behind a hover-triggered overlay. Hover-only surfaces are unreachable for touch and keyboard users and are easily missed; use an inline, persistent treatment (such as MessageBar or Field validation) for anything the user must act on.
-- Don't hide the only path to an important action inside a transient overlay, and don't rely on it as the sole means of navigation. Overlays are dismissible by design; durable destinations belong on the page or in persistent navigation components.
-- Don't rebuild onboarding as a loose sequence of independent Popovers with your own step counters and next buttons. TeachingPopover already models a multi-step coachmark with step navigation, initial and final step text, media, and a dismissButton, and hand-rolled equivalents drift in copy, order, and dismissal.
-- Don't render overlay surfaces outside the theming and direction context. Portaling content without the Provider context (and without applyStylesToPortals when styles must follow the surface) yields unthemed, directionally broken content.
+- Don't stack overlays — opening a popover from inside a popover surface, or a drawer from inside an open popover, creates competing layers, competing focus behaviour and ambiguous dismissal order.
+- Don't use Popover for panel-sized content such as navigation trees, multi-section settings or long forms that a user must scroll through and return to; that content belongs in a drawer.
+- Don't rely solely on openOnHover or openOnContext, because hover-only content is unreachable for keyboard and touch users and can vanish before it has been read.
+- Don't reimplement overlay plumbing with manual portals, manual Escape handling and manual focus restoration, because you lose the behaviour the components already coordinate, including returning focus to the trigger.
+- Don't ship an overlay with no exit: an OverlayDrawer needs a visible dismiss affordance and onOpenChange handling so Escape and backdrop interaction actually close it.
+- Don't fake a guided tour by chaining several plain popovers, since each step then re-solves step state, progress display and next and previous affordances.
+- Don't hide the only copy of essential information inside a surface that closes on scroll, outside click or Escape.
 
 ## Anti-Patterns
 
-### Treating a popover as a modal dialog
+### Making every overlay modal
 
-❌ Popover is a non-modal anchored surface. When it is used for a blocking task, the rest of the page stays focusable and readable, the user can tab into controls behind the surface, and there is no scrim or modal semantics to tell assistive technology that the page is temporarily unavailable.
+❌ Treating popovers and drawers as blocking surfaces — trapping focus and dimming everything behind them — for content that is merely supplementary turns a quick peek into an interruption and trains users to dismiss without reading.
 
-✅ Use Dialog with a modalType and inertTrapFocus for tasks that must be completed before the user continues, and reserve Popover for contextual, dismissible, non-blocking content such as details or a small set of choices anchored to their trigger.
+✅ Match the surface to the intent: keep Popover non-trapping and undimmed for hints, previews and short action lists, reserve trapFocus or inertTrapFocus for surfaces that truly require a response, and let Escape close all of them.
 
-### Reimplementing focus, dismissal, and positioning by hand
+### Using a popover where a drawer belongs
 
-❌ Manual Escape handling, hand-written focus traps, and absolutely positioned wrappers duplicate behavior the components already provide, and they typically miss edge cases: focus escaping to the document body, surfaces not returning focus to the trigger, overlays drifting out of view on scroll, or surfaces staying open when the page scrolls underneath them.
+❌ Popovers are anchored to a trigger and reposition or dismiss easily, so panel-shaped content such as navigation, long forms or multi-section settings becomes cramped, awkward to scroll and easy to lose by accident.
 
-✅ Lean on the built-in controls — trapFocus or inertTrapFocus for containment, onOpenChange with open for state coordination, closeOnScroll and closeOnIframeFocus for lifecycle, and the positioning prop plus Positioning for placement — and only step outside them (legacyTrapFocus, unstable_disableAutoFocus) with a specific, documented reason.
+✅ Move that content into InlineDrawer or OverlayDrawer and compose it with DrawerHeaderTitle, DrawerHeaderNavigation, DrawerBody and DrawerFooter so it gets a stable frame, a scrollable body and its own actions.
 
-### Stacking overlay surfaces
+### Rebuilding overlay behaviour by hand
 
-❌ Opening a Popover from inside a Drawer that itself contains another popping surface produces competing focus containers, undefined Escape behavior, and dismissal orders users cannot predict. It also makes z-order, positioning, and scroll dismissal fragile.
+❌ Hand-rolled portals with manual Escape handling and manual focus restoration drift from the rest of the product and typically lose focus return, consistent dismissal and portal theming, even though the components already own that work.
 
-✅ Flatten the flow: prefer a Drawer with enough structure for the whole task over layered popovers, use Menu for nested command sets, complete one surface before opening another, and if two overlays truly must coexist, drive them from explicit open state so only one holds focus at a time.
+✅ Use Popover with PopoverTrigger and PopoverSurface, TeachingPopover with its trigger, surface, header, body and footer parts, and the Drawer parts; keep a FluentProvider around overlay content so portal-rendered surfaces stay themed.
 
-### Portaling overlay content out of the theme and direction context
+### Faking a tour with a chain of popovers
 
-❌ Rendering a surface into an unrelated mount node detaches it from the theme, the text direction, and any style overrides applied higher in the tree, so the overlay ships with default tokens, misaligned arrows, and incorrect layout in right-to-left locales.
+❌ Sequencing several independent popovers to simulate onboarding gives no shared step state, no progress indicator and inconsistent next and previous affordances, and each step must re-solve focus and placement.
 
-✅ Keep portaled surfaces inside the Provider tree and configure Provider with applyStylesToPortals and targetDocument when the mount node lives outside the root, so theme, dir, and overrides reach the floating content.
+✅ Use TeachingPopover with TeachingPopoverCarousel, one TeachingPopoverCarouselCard with a unique value per step, TeachingPopoverCarouselNav for navigation, TeachingPopoverCarouselPageCount for progress, and TeachingPopoverFooter with initialStepText, finalStepText and primary and secondary actions.
 
-### Hover-only or content-only overlays carrying important information
+### Stacking overlays on top of each other
 
-❌ Surfaces opened with openOnHover and no equivalent focus or click path are unreachable on touch devices and awkward for keyboard users, and information that lives only in a transient overlay disappears the moment the pointer moves.
+❌ Opening a drawer from inside a popover, or another popover from inside an open popover surface, produces layered surfaces with competing focus behaviour and an unclear dismissal order for the user.
 
-✅ Open overlays from a focusable trigger that works with pointer, keyboard, and touch; when a Tooltip is used for supplementary text, set its relationship prop to make the semantics explicit; and move anything the user must act on into persistent page content such as a MessageBar, field validation, or an inline description.
+✅ Keep one overlay at a time: dismiss or collapse the current surface before presenting the next, or promote the follow-up content into its own top-level overlay that the user opens deliberately.
 
-### Improvised multi-step onboarding
+### Hiding the only copy of important information in a transient surface
 
-❌ A chain of unrelated Popovers with hand-built step counters, next buttons, and dismiss affordances produces inconsistent copy, unpredictable dismissal, and no reliable progress model, and it duplicates behavior that already exists.
+❌ Popovers close on scroll, outside click and Escape, so errors, confirmations or instructions that live only there are easily missed and cannot be re-read after dismissal.
 
-✅ Use TeachingPopover for guided flows: supply the step content and media, drive navigation with navType and handleButtonClick, set initialStepText and finalStepText, use footerLayout and layout for the step chrome, and always render a dismissButton so users can leave the tour at any point.
+✅ Keep essential messaging in persistent surfaces and use overlays for optional detail; when an overlay genuinely carries a decision, make its result visible in the page after the surface closes.
 
 ## Accessibility
 
-Every overlay in this category must be operable without a pointer. The trigger has to be a real focusable element with an accessible name, and when the surface opens, focus should move into it and be contained there for the duration — that is what trapFocus and inertTrapFocus control, and surfaces with interactive content should keep containment on. When the surface closes, focus must return to the element that opened it so keyboard users do not lose their place. Escape or an equivalent, always-present dismiss control (such as the TeachingPopover dismissButton) must close the surface, and dismissal must not be the only way to reach important content. Because these surfaces are anchored and moved by the framework, their exposed accessibility relationship must be explicit: describe what the popover is doing for the user rather than assuming proximity to the trigger conveys meaning, use Aria for off-screen labels on icon-only overlays, and when a Tooltip is used alongside an overlay, set its relationship prop so assistive technology treats the text as a label or a description rather than as an inaccessible ornament. Motion through the surfaceMotion slot should be brief and should not block input or delay focus; content must be readable and reachable with the keyboard in both left-to-right and right-to-left layouts, which is why Provider's dir, targetDocument, and applyStylesToPortals matter when the surface is portaled. TeachingPopover steps must be navigable in order with clear, labeled controls, and their media needs meaningful alternative text rather than decorative fills.
+Every component in this category is an on-demand surface, so screen reader and keyboard users must be able to discover it, understand it and leave it without losing their place. Name the surface: put a real heading in the heading slot of DrawerHeaderTitle and in TeachingPopoverHeader or TeachingPopoverTitle, and match the heading level to the page outline, because the trigger alone rarely explains what just appeared. Manage focus deliberately: the trigger components move focus into the surface and return it to the trigger on dismissal, so avoid unmounting or rebuilding the trigger while a surface is open, use the focus-trapping options on Popover only for surfaces that are genuinely modal, and use unstable_disableAutoFocus when the content is a non-interactive hint. Keep Escape working as the universal dismiss gesture, and never make an overlay openable only by pointer — hover and context opening must always have a click or keyboard equivalent, which is exactly what openOnHover and openOnContext are meant to supplement. Inside teaching experiences, the carousel navigation buttons require accessible text for every step, and TeachingPopoverCarouselPageCount lets progress be conveyed as text instead of dots alone. Because overlay surfaces are typically rendered through a portal, keep a FluentProvider above them so theming and direction are inherited, and check contrast carefully when choosing the brand or inverted surface appearance.
 
 ## Components in this category
 
 - [Drawer](../components/drawer.md)
+- [DrawerBody](../components/drawer-body.md)
+- [DrawerFooter](../components/drawer-footer.md)
+- [DrawerHeader](../components/drawer-header.md)
+- [DrawerHeaderNavigation](../components/drawer-header-navigation.md)
+- [DrawerHeaderTitle](../components/drawer-header-title.md)
+- [InlineDrawer](../components/inline-drawer.md)
+- [OverlayDrawer](../components/overlay-drawer.md)
 - [Popover](../components/popover.md)
+- [PopoverSurface](../components/popover-surface.md)
+- [PopoverTrigger](../components/popover-trigger.md)
 - [TeachingPopover](../components/teaching-popover.md)
+- [TeachingPopoverBody](../components/teaching-popover-body.md)
+- [TeachingPopoverCarousel](../components/teaching-popover-carousel.md)
+- [TeachingPopoverCarouselCard](../components/teaching-popover-carousel-card.md)
+- [TeachingPopoverCarouselFooter](../components/teaching-popover-carousel-footer.md)
+- [TeachingPopoverCarouselNav](../components/teaching-popover-carousel-nav.md)
+- [TeachingPopoverCarouselNavButton](../components/teaching-popover-carousel-nav-button.md)
+- [TeachingPopoverCarouselPageCount](../components/teaching-popover-carousel-page-count.md)
+- [TeachingPopoverFooter](../components/teaching-popover-footer.md)
+- [TeachingPopoverHeader](../components/teaching-popover-header.md)
+- [TeachingPopoverSurface](../components/teaching-popover-surface.md)
+- [TeachingPopoverTitle](../components/teaching-popover-title.md)
+- [TeachingPopoverTrigger](../components/teaching-popover-trigger.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

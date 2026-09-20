@@ -7,9 +7,9 @@
 
 ## Overview
 
-Rating is a form input that lets a user express a judgment on a fixed, ordered scale by choosing one of a row of icons. Internally each position is a native radio input, so Rating is a single-choice control whose selection carries a numeric value rather than free-form text. It renders filled icons for every item at or below the current value and outline icons for the rest, giving an immediately readable 1-to-max score. The component supports controlled and uncontrolled value management, half-step precision for half-icon ratings, four sizes, three color treatments (neutral, brand, and marigold), and complete icon replacement through the iconFilled and iconOutline props. Because it is radio based, it participates in ordinary form semantics through the name prop, and each item's accessible name is produced by the itemLabel function, which defaults to the bare number.
+Rating is an input component that lets someone express a score by picking one of a row of selectable icons, which are stars by default. Under the hood each item is a native radio input, so a Rating behaves like a single-choice group: the current selection is submitted with a form, announced to assistive technology, and changed with the keyboard. The scale is configurable through max (default 5, and it must be a whole number greater than 1), whole or half-point precision through step (1 by default, 0.5 for half-filled shapes), four icon sizes through size (small, medium, large, or the default extra-large), and three color treatments through color (neutral by default, plus brand and marigold). Rating can be uncontrolled with defaultValue or fully controlled with value and onChange, and its glyphs can be swapped by supplying component references to iconFilled and iconOutline. A single root slot carries the rendered items, so layout and spacing are applied to the component's root element.
 
-**When to use**: Use Rating when the answer is a small, ordered, iconographic judgment: product or media reviews, satisfaction surveys, quality scores, or any prompt where picking one of a handful of levels is faster and friendlier than typing. Prefer Slider when the scale is continuous, wide, or numeric rather than symbolic, or when the user should drag to an approximate position. Prefer Spinbutton when the exact number matters and typing it should be possible. Prefer Radio when the choices are unordered categories or each option needs its own visible text label rather than an icon position on a scale. Choose Rating with a controlled value plus a separate clear action when the score must be resettable, because the component has no built-in clear affordance. In every case pair the control with visible text that names what is being rated and what the scale means, since the component itself renders only icons.
+**When to use**: Use Rating when the person interacting with the UI needs to supply a subjective score: product reviews, satisfaction surveys, feedback after a support interaction, prioritizing backlog items, or rating a piece of media. Use it when the score is genuinely an input that you intend to collect, submit, or react to through onChange. If you only need to show an already-computed score such as an average review value, use RatingDisplay instead, because it is read-only and does not invite interaction. If the value the person must enter is numeric but not a fixed small scale, or needs precision finer than half a point, choose Slider, SpinButton, or Select rather than stretching Rating past its model. Rating is also a poor fit for scales with more than roughly ten options, since every option becomes another radio input to traverse.
 
 ## Props Reference
 
@@ -17,29 +17,29 @@ Rating is a form input that lets a user express a judgment on a fixed, ordered s
 | --- | --- | --- | --- | --- |
 | `color` | `"brand" \| "marigold" \| "neutral" \| undefined` | `neutral` | No | Controls the color of the Rating. |
 | `defaultValue` | `number \| undefined` | — | No | Default value of the Rating |
-| `iconFilled` | `any` | — | No | The icon to display when the rating value is greater than or equal to the item's value. |
-| `iconOutline` | `any` | — | No | The icon to display when the rating value is less than the item's value. |
+| `iconFilled` | `React.ElementType<any, keyof React.JSX.IntrinsicElements> \| undefined` | — | No | The icon to display when the rating value is greater than or equal to the item's value. |
+| `iconOutline` | `React.ElementType<any, keyof React.JSX.IntrinsicElements> \| undefined` | — | No | The icon to display when the rating value is less than the item's value. |
 | `itemLabel` | `((rating: number) => string) \| undefined` | `(rating) =\> `${rating}`` | No | Prop to generate the aria-label for the rating inputs. |
 | `max` | `number \| undefined` | `5` | No | The max value of the rating. This controls the number of rating items displayed. Must be a whole number greater than 1. |
 | `name` | `string \| undefined` | — | No | Name for the Radio inputs. If not provided, one will be automatically generated |
-| `onChange` | `any` | — | No | Callback when the rating value is changed by the user. |
+| `onChange` | `EventHandler<RatingOnChangeEventData> \| undefined` | — | No | Callback when the rating value is changed by the user. |
 | `size` | `"small" \| "medium" \| "large" \| "extra-large" \| undefined` | `extra-large` | No | Sets the size of the Rating items. |
 | `step` | `0.5 \| 1 \| undefined` | `1` | No | Sets the precision to allow half-filled shapes in Rating |
 | `value` | `number \| undefined` | — | No | The value of the rating |
 
 ### Prop Guidance
 
-- **color**: Sets the fill color of the rating icons. Leave it at the neutral default for inline, low-emphasis ratings that should sit quietly beside other content; use brand for primary feedback flows such as a review prompt that drives a decision; use marigold for warm, editorial, or celebratory contexts where the brand hue would compete with the surrounding interface. `brand`
-- **defaultValue**: Sets the initial value for an uncontrolled rating that manages its own state. Use it with simple, self-contained ratings and with fractional values when step is 0.5. Never combine it with value, which switches the component to controlled mode. `3.5`
-- **iconFilled**: Supplies the icon shown for every item whose value is less than or equal to the current rating. Pass an icon component from an icon package and keep it visually paired with iconOutline so checked and unchecked items differ only by fill. Use it when the default star does not fit the domain, such as hearts for favorites or circles for a sentiment scale. `a filled circle icon paired with its outline counterpart`
-- **iconOutline**: Supplies the icon shown for items above the current rating. It must be the outline counterpart of iconFilled from the same family and weight; if the two shapes differ in more than fill, users cannot read the score by shape alone and low-vision or color-blind users are especially affected. `the outline circle icon matching the filled circle`
-- **itemLabel**: A function that turns each item's numeric position into that radio input's aria-label. The default returns the bare number, which gives screen reader users no scale context. Return descriptive strings, either numeric phrasing with units or anchored descriptors, and make the meaning of the lowest and highest values explicit. Reuse a stable function reference instead of creating a new one on every render. `1 star, 2 stars, 3 stars, 4 stars, 5 stars - Excellent`
-- **max**: Sets the number of rating items rendered and therefore the top of the scale. It must be a whole number greater than 1. Keep the conventional 5, use 10 only when the domain expects a decimal score, and avoid larger values because every item is a separate radio input that keyboard users must traverse with arrow keys. `10`
-- **name**: Names the internal radio group shared by all items. Provide an explicit, unique name when several Rating instances appear in one form or when the score must be submitted under a known key. If omitted, the component generates a name automatically so separate instances stay independent, but relying on that is risky when you also render your own radios. `productRating`
-- **onChange**: Called when the user changes the rating, with the new value in the callback data, including 0 when the value is cleared programmatically. Pair it with value for a controlled rating, or use it alone when the parent only needs notification and the component should keep its own state through defaultValue. `store the reported value in state and pass it back through value, or reset the rating to 0 from a separate Button`
-- **step**: Controls the precision of the scale. Keep the default of 1 for ordinary satisfaction and review scales; set 0.5 only when half-item precision is meaningful and the chosen icons read well when half filled. Anything finer than a half step is not supported, and enabling half steps doubles the number of radio inputs to navigate. `0.5`
-- **size**: Sets the size of the rating items across small, medium, large, and extra-large, with extra-large as the default. Use small for dense table rows or inline metadata, medium and large for standard form areas, and keep extra-large for hero review prompts where the rating is the primary interaction, since it also produces the most comfortable pointer and touch targets. `small`
-- **value**: The controlled value of the rating. Pass it together with onChange and write the reported value back into state, otherwise the rating appears frozen while focus moves. Setting it to 0 clears the selection, which is how a Clear Rating action is typically implemented. Do not use it together with defaultValue. `4`
+- **color**: Controls the color of the filled items. Use the neutral default for general-purpose ratings, brand when the score should adopt the app's brand color, and marigold when the rating should read like a favorite or highlight, as the Color story demonstrates. `marigold`
+- **defaultValue**: Sets the uncontrolled starting value. Use it when you do not need to mirror every change in state; you can still observe changes through onChange. Do not pass it alongside value on the same instance, and keep it inside the 0 to max range and on the step grid. `3`
+- **iconFilled**: Swaps the glyph shown for items whose value is less than or equal to the current rating. Pass a stable component reference, such as an icon imported from the icon package, and pair it with iconOutline so both states stay readable. `CircleFilled`
+- **iconOutline**: Swaps the glyph shown for items whose value is greater than the current rating, in other words the unfilled counterpart of iconFilled. Choose a shape whose filled and outline forms are clearly different at the size being used. `CircleRegular`
+- **itemLabel**: A function that receives the numeric rating for an option and returns the accessible name for that input. The default returns the bare number, which gives a screen reader user no scale context, so override it whenever the rating is not self-explanatory and localize the resulting string. With step set to 0.5 the function is also called for half values. `A formatter producing text such as 3 out of 5 stars`
+- **max**: The top of the scale and the number of rating items rendered; it defaults to 5. It must be a whole number greater than 1. Raise it to 10 only when the scale genuinely calls for it, since each option is another interactive radio input and another keyboard stop. `10`
+- **name**: The name applied to the underlying radio inputs, which is what groups them into one mutually exclusive set. If you omit it a name is generated for you; pass an explicit name when you need it for form submission or testing, and make sure it is unique per Rating on the page. `product-rating`
+- **onChange**: Fires when a person changes the rating through the radio inputs and receives both the event and rating data carrying the new value. Use it to keep controlled value state in sync or to persist the score; remember that clearing produces a value of 0. `Store the new value from the rating data on every change`
+- **step**: Sets the precision of the scale. The default of 1 exposes only whole items, while 0.5 allows half-filled shapes so intermediate values such as 3.5 can be shown, as in the Step story. No other value is supported. `0.5`
+- **size**: Sets the size of the rating items to small, medium, large, or the default extra-large. Match it to the surrounding density: small fits inline inside cards and table cells, while large and extra-large suit survey or hero contexts where the rating is the focus. `small`
+- **value**: The controlled value of the rating. Combine it with onChange for a fully controlled component, and set it to 0 to clear every filled item, the approach used by the Clear Rating button in the ControlledValue story. Keep it within 0 to max and aligned to the step grid. `4`
 
 ### Slots
 
@@ -122,110 +122,99 @@ ControlledValue.parameters = {
 
 ### Do's
 
-- Decide ownership of the value up front: pass defaultValue for a self-managed rating, and pass value together with onChange when surrounding UI must read, reset, persist, or validate the score.
-- Always supply a meaningful itemLabel, for example strings such as 1 star through 5 stars, or anchored labels such as Poor, Fair, Good, Very good, Excellent, so each radio input has a name that communicates the scale.
-- Pair the rating with visible text that states what is being rated and which end of the scale is best, because the component renders only icons and carries no visible label of its own.
-- Keep max at 5 for conventional star scales and only go to 10 when a decimal score domain requires it, and keep step at 1 unless half-step precision is genuinely meaningful, since every item is a separate radio that keyboard users must traverse.
-- Provide an explicit, unique name when more than one Rating appears in the same form, so the groups stay independent and any submitted value is predictable.
-- Choose iconFilled and iconOutline from the same icon family and weight so selected and unselected items differ only by fill, which is what makes the score readable at a glance.
-- Offer a separate reset affordance, such as a Button that sets a controlled value back to 0, when users must be able to withdraw a rating they already gave.
-- Match color and size to context: neutral with small or medium for inline metadata in tables and cards, brand for primary feedback prompts, and the default extra-large for touch-first review flows where the rating is the main interaction.
+- Give every Rating on a page its own name when several ratings can appear together; the name groups the underlying radio inputs, and sharing one value links ratings that should be independent.
+- Always supply itemLabel when the bare number would be meaningless on its own, formatting it with scale context such as 3 out of 5 stars so the group is understandable when read aloud.
+- Use value together with onChange for controlled ratings, and treat a value of 0 as the way to clear the rating, the technique the ControlledValue story uses for its Clear Rating button.
+- Choose step 0.5 only when half-point precision is meaningful for the data you collect; otherwise keep the default of 1 so each selection is unambiguous.
+- Keep max small and human-parsable, such as 5 or 10, and always a whole number greater than 1, because every item renders an interactive radio input.
+- Pass both iconFilled and iconOutline when customizing the glyphs, as the Shape story does with the circle and square icon pairs, so the chosen and unchosen states remain visually distinct.
+- Pair the Rating with a visible Label or supporting Text that says what is being rated and what the ends of the scale mean, so the icons are not the only source of meaning.
+- Pick color deliberately: neutral for general use, brand when the rating should read as part of the product chrome, and marigold when the score connotes favorites or highlights.
 
 ### Don'ts
 
-- Don't use Rating for continuous or very wide measurement ranges; it renders a fixed set of discrete radio items, so use Slider for continuous input or Spinbutton when the exact value must be typed.
-- Don't leave itemLabel at its default of a bare number when the scale needs interpretation, because a screen reader user hearing only 3 cannot tell whether higher is better or what the maximum is.
-- Don't pass value without wiring onChange to update it in state, and don't pass value alongside defaultValue; mixing controlled and uncontrolled usage leaves the control looking frozen or behaving unpredictably.
-- Don't set max to 1 or to a fractional number; the maximum must be a whole number greater than 1, and it directly determines how many radio inputs are rendered.
-- Don't combine a step of 0.5 with a large max such as 10, because half steps double the number of radio inputs and arrow-key navigation becomes tedious.
-- Don't use Rating as a decorative, read-only display of an aggregate score, because every item is a focusable radio input and screen reader users will encounter an operable form control that looks static.
-- Don't rely on the color prop to carry meaning; it only offers three hues (neutral, brand, and marigold) and no thresholds, so any state distinction must also be expressed in text.
-- Don't assign the same name to two ratings that should be independent, because they will merge into one radio group and selecting in one will clear the other.
-- Don't drop to the small size in touch-first layouts; the icons themselves are the pointer targets, so shrinking them hurts accuracy.
+- Don't mix value and defaultValue on the same instance; decide between controlled and uncontrolled and stay there.
+- Don't pass a fractional max or a max of 1 or below, since the prop contract requires a whole number greater than 1.
+- Don't set step to anything other than 0.5 or 1; there is no support for quarter steps or arbitrary precision.
+- Don't use Rating to display a read-only aggregate score such as an average review value, because it is announced and behaves as an editable radio group; use RatingDisplay for that.
+- Don't rely on color alone to communicate the score, since the filled versus outline state and the accessible label are what actually carry the meaning.
+- Don't substitute iconFilled and iconOutline with two glyphs that look nearly identical at the small size, because the selected state becomes impossible to scan.
+- Don't feed the component a defaultValue above max, a negative value, or a value that falls between step increments, since none of those states can be represented cleanly.
+- Don't stack several unlabeled ratings in a tight list without visible or accessible context; repeated identical radio groups are hard to tell apart with a screen reader.
 
 ## Anti-Patterns
 
-### Read-only averages rendered as a Rating
+### Leaving the default numeric accessible name in place
 
-❌ An average score such as 4.2 shown with a Rating looks static but is actually a group of focusable radio inputs, so keyboard and screen reader users encounter an operable form control that appears to be plain content and can accidentally change it.
+❌ The default itemLabel formatter returns just the number, so a screen reader user arrowing through the group hears unexplained digits such as 3 or 4 with no indication of the scale or what is being rated.
 
-✅ Render display-only icons (or a text score with a small icon) when the value must not be edited, and reserve Rating for moments when the user is genuinely choosing a score.
+✅ Pass itemLabel with a formatter that includes scale context and localizes the wording, for example text that reads like 3 out of 5 stars, so each option is self-describing when announced.
 
-### Bare numeric accessible names
+### Sharing one name across multiple ratings
 
-❌ Leaving itemLabel at its default makes each radio announce only a number, with no indication of the maximum, the direction of the scale, or what the rating is about, which fails the intent of descriptive labelling.
+❌ The name prop groups the underlying radio inputs. If two Rating instances on the same page use the same explicit name, they behave as one radio group, so selecting a value in one clears the other.
 
-✅ Pass an itemLabel that returns meaningful strings, for example 1 star through 5 stars or anchored words such as Poor and Excellent, and place visible text nearby that names what is being rated.
+✅ Give every Rating a unique name when you set one explicitly, or omit name entirely and let the component generate one per instance.
 
-### Controlled value that is never updated
+### Using Rating to show a read-only score
 
-❌ Passing value without writing the change back into state, or passing value and defaultValue together, leaves the rating visually stuck even though focus moves, and it makes the component behave unpredictably when the parent re-renders.
+❌ Rating is an editable radio group, so rendering an average or already-known score with it announces and behaves like an input, invites pointless interaction, and fires change handling that serves no purpose.
 
-✅ Use value plus onChange that stores the reported value, or drop value entirely and use defaultValue for a self-managed rating; never mix the two.
+✅ Use RatingDisplay for scores that are only meant to be read, and reserve Rating for situations where the person must supply the score.
 
-### Half steps on a long scale
+### Blowing up the scale with a large max
 
-❌ Combining a step of 0.5 with a max of 10 renders twenty radio inputs, so keyboard users must press an arrow key up to nineteen times to reach the top, and the row becomes visually cluttered.
+❌ Every step of the scale becomes a separate radio input in the DOM and a separate stop in keyboard traversal, so a max of 50 or 100 makes the group unwieldy and slow to operate.
 
-✅ Keep the scale short when half steps are needed, typically 5 items, or keep the full step of 1 when a longer scale is required.
+✅ Keep max within a small range such as 5 or 10, and switch to Slider, SpinButton, or Select when the value being collected is a wide numeric range rather than a small set of levels.
 
-### Sharing one name across independent ratings
+### Defining custom icons inline during render
 
-❌ Two ratings that should be judged separately but share the same name merge into a single radio group, so choosing a value in one silently clears the other.
+❌ Passing a component that is created inside the render function to iconFilled or iconOutline yields a new component identity on every render, forcing each item's glyph to unmount and remount and potentially dropping focus.
 
-✅ Give each rating its own unique name, or omit name entirely and let the component generate a per-instance group name.
-
-### Encoding meaning only in color
-
-❌ The color prop offers only neutral, brand, and marigold tones, so using it to signal good or bad scores conveys nothing to users who cannot distinguish the hues and is not announced by assistive technology.
-
-✅ Express meaning in text, for example a label such as Average or Excellent beside the rating, and treat color as decoration only.
+✅ Reference icons defined at module scope, such as those imported from the icon package, so their identity is stable across renders.
 
 ## Accessibility
 
-**Requirements**: Rating must satisfy the standard requirements for a grouped single-choice control: WCAG 1.3.1 for structure and relationships, 2.1.1 for full keyboard operability, 2.4.6 for descriptive labels, 4.1.2 for name, role, and value, and 2.5.8 for target size (the default extra-large size gives the most comfortable targets, and small should be avoided on touch devices). WCAG 1.4.1 also applies because the filled versus outline distinction must not be the only carrier of meaning: if a score threshold matters, state it in text. Filled icons are graphical objects, so they must meet WCAG 1.4.11 non-text contrast of at least 3:1 against the surrounding surface in every theme, including high contrast, where the tokens resolve to system colors. Because each item is a radio input, the group needs an accessible name that describes what is being rated; the component supplies only per-item names through itemLabel, so external visible text or a labelling relationship on the surrounding element is required for full context.
+**Requirements**: Rating follows the radio group pattern, so it must satisfy WCAG 4.1.2 Name, Role, Value: every selectable option needs an accessible name, which comes from itemLabel, and the current selection must be programmatically determinable, which the native radio inputs provide. Provide context for the scale itself, since a row of five values with no visible label fails 1.3.1 and 3.3.2 for people who cannot infer what is being rated. Do not encode the score in color alone (1.4.1) and make sure the focus indicator is visible on the item that has focus (2.4.7), including in high contrast themes. Consider target size (2.5.8) when using the small size, and add padding or a surrounding Label when the hit areas are tight.
 
 | Key | Action |
 | --- | --- |
-| `Tab` | Moves focus into the rating group and lands on the selected radio input, or on the first input when no value is selected; the whole group occupies a single tab stop. |
-| `Shift+Tab` | Moves focus out of the rating group back to the previously focused element. |
-| `ArrowRight` | Moves to the next rating item and selects it, updating the value because selection follows focus in a radio group. |
-| `ArrowDown` | Moves to the next rating item and selects it, behaving identically to ArrowRight. |
-| `ArrowLeft` | Moves to the previous rating item and selects it, lowering the value by one step. |
-| `ArrowUp` | Moves to the previous rating item and selects it, behaving identically to ArrowLeft. |
-| `Space` | Selects the focused rating item if it is not already selected; within an established group this usually results in no change since arrow navigation already selected it. |
-| `Enter` | Does not change the rating; inside a form it submits the form, matching native radio behavior, so never rely on Enter to confirm a score. |
-| `Home / End` | In several browsers these move focus to the first or last item of the radio group as browser-level behavior for native radios; do not depend on them for value changes in your design. |
+| `Tab` | Moves focus into the rating group; the currently selected item, or the first item when nothing is selected, receives focus. |
+| `Shift+Tab` | Moves focus out of the rating group to the previous focusable element. |
+| `Arrow Right / Arrow Down` | Moves focus to and selects the next rating item, raising the value. |
+| `Arrow Left / Arrow Up` | Moves focus to and selects the previous rating item, lowering the value. |
+| `Space` | Selects the rating item that currently has focus, consistent with the radio input the item is built on. |
 
-**ARIA**: aria-label — generated for each internal radio input by the itemLabel function; its default is the bare number, so override it for meaningful announcements, role of radio and its checked state — exposed implicitly by the internal native radio inputs, so no explicit ARIA is required from the consumer, the name attribute — groups the internal radios into a single group so only one item is in the tab order and only one can be checked, aria-labelledby or a labelled surrounding region on a wrapper element — the recommended way to give the group as a whole a visible name, since the component renders only icons
+**ARIA**: aria-label on each rating input, generated from the itemLabel function, name, which groups the rating inputs into a single radio group and determines which ratings are mutually exclusive, the native radio role exposed by each item's input element, the checked state of each item, managed by the native radio inputs rather than by hand-written aria-checked attributes
 
-**Screen Reader**: Because Rating is built from native radio inputs, screen readers announce each position as a radio button with its checked or unchecked state and the label produced by itemLabel. Navigation follows focus, so pressing an arrow key both moves and selects, and the announcement updates immediately with the newly checked item and its label. The icon shape and fill count convey nothing to a screen reader, which means any meaning carried only by the number of filled icons must also exist in the itemLabel text. With the default itemLabel, users hear a raw number with no indication of the maximum or of which direction is better, and they receive no announcement of the scale length unless the group itself is labelled by visible text or a surrounding description.
+**Screen Reader**: The rating is encountered as a group of radio buttons whose option count reflects the scale: max options for whole-step ratings, and additional intermediate options when step is 0.5. As focus moves through the group, the selected option is announced with whatever text itemLabel returns, so with the default formatter a screen reader user hears only a bare number. Because the filled and outline icons are decorative, they contribute nothing to the announcement; the accessible name is entirely determined by itemLabel, and the change in value is reported through the normal radio change event when onChange fires.
 
 ## Styling
 
-The only exported slot is root, which is a single container holding every rating item, so most customization happens by targeting the root with makeStyles and className. Use spacing tokens such as tokens.spacingHorizontalXS and tokens.spacingHorizontalSNudge to tune the gap between items, and tokens.colorTransparentBackground plus a hover token such as tokens.colorSubtleBackgroundHover or tokens.colorNeutralBackground1Hover if you add a hover surface behind each item. Focus visuals come from tokens.colorStrokeFocus2 and tokens.colorStrokeFocus1; keep an inset ring on the root or on each item so the focus indicator is never clipped. The color prop maps to theme foreground tokens rather than hard-coded hex values, so if you need a custom hue, build it through a theme rather than overriding color directly. The size prop drives the icon size through font-size and line-height tokens (tokens.fontSizeBase200 for small through tokens.fontSizeBase600 for extra-large), which means custom icons passed to iconFilled and iconOutline should be sized in em units and use currentColor so they inherit both the size and the color treatment. If you enlarge the hit area, do it with padding on the root rather than by scaling the icons unevenly, and keep any borderRadius you add at or below tokens.borderRadiusMedium so the focus ring geometry stays consistent with other Fluent controls.
+Rating exposes a single root slot, so a className or style passed to the component lands on the root element, and the stories use a makeStyles-styled wrapper div to lay out several ratings in a row. Use tokens.spacingHorizontalXS or tokens.spacingHorizontalS for the gap between a Rating and an adjacent control such as a Button, and tokens.spacingVerticalS or tokens.spacingVerticalM when stacking multiple ratings. The color prop already resolves to theme foreground tokens, so prefer switching color over hard-coding colors in styles. Item size is driven by the theme's type ramp, so fine-tune with fontSizeBase* tokens applied on the root rather than targeting internals, and keep the focus indicator intact, since it draws on the shared focus tokens such as tokens.colorStrokeFocus2 and tokens.strokeWidthThick. When you need a custom container, wrap the Rating in a surface styled with tokens.colorNeutralBackground1 and tokens.borderRadiusMedium instead of trying to restyle internal elements, which are not part of the public API.
 
 ## Performance
 
-Each rating item costs a radio input plus an icon, so the DOM size grows linearly with max and doubles when step is 0.5; keep max small and avoid large scales in dense layouts. Ratings are frequently repeated many times, for example one per product Card or Table row, so prefer uncontrolled defaultValue so that a change re-renders only the touched instance instead of the whole list; when the parent needs the score, memoize the row component and update only the changed item. Pass a stable function reference to itemLabel, either defined at module scope or wrapped in useCallback, so aria-labels are not recomputed and the inputs keep referentially stable props on every render. Custom icon components should be lightweight and memoized, since they render once per item and re-render with each value change. There is no virtualization or measurement logic in the component, so interaction cost is dominated by the number of rendered items rather than by any internal work.
+Rating renders a small, fixed number of hidden radio inputs equal to the scale, so the DOM cost is negligible: max options for whole steps and additional intermediate options when step is 0.5. The meaningful cost is the icons, which means iconFilled and iconOutline should be stable module-level component references rather than components created during render. itemLabel is invoked per option on each render, so keep it a cheap pure function or memoize it when the parent re-renders frequently, as happens in large forms. Because every option is focusable, a large max multiplies both the rendered nodes and the keyboard traversal length, so keep the scale modest. The component itself holds no expensive derived state, so re-renders are driven almost entirely by changes to value or defaultValue in the parent.
 
 ## Theming & Tokens
 
-The color prop resolves entirely through theme tokens, which is why neutral, brand, and marigold adapt correctly in light, dark, and high contrast themes applied by the Fluent provider. Neutral selections use neutral foreground tokens such as tokens.colorNeutralForeground1 for filled items and a lighter neutral such as tokens.colorNeutralForeground3 for outline items, with tokens.colorNeutralForegroundDisabled available for subdued treatments. The brand option draws on tokens.colorBrandForeground1 and its interaction variants such as tokens.colorCompoundBrandForeground1, while the marigold option draws from the marigold palette foreground family. Size is expressed with typography tokens ranging from tokens.fontSizeBase200 for small to tokens.fontSizeBase600 for extra-large, so scaling the theme's type ramp also scales the icons. Focus and hover feedback uses tokens.colorStrokeFocus2 and tokens.colorStrokeFocus1 for the ring and hover tokens such as tokens.colorSubtleBackgroundHover for the surface, while spacing between items comes from tokens.spacingHorizontalXS and tokens.spacingHorizontalSNudge. Switching a custom brand ramp or high contrast theme through the provider re-colors the filled icons automatically because no hard-coded colors are baked into the component.
+The color prop is the main theme lever: neutral resolves through the neutral foreground ramp, brand through tokens.colorBrandForeground1 and its companions so the filled items follow the brand ramp set on FluentProvider, and marigold through the marigold foreground tokens for a favorite-style highlight. Because all three resolve through tokens, dark theme, high contrast themes, and custom brand ramps update the Rating automatically. Unfilled items and surrounding surfaces come from neutral tokens such as tokens.colorNeutralForeground2, tokens.colorNeutralForeground3, and tokens.colorNeutralBackground1, and the item glyph sizing follows the shared type ramp used by other Fluent components, so themes that redefine fontSizeBase* and lineHeightBase* proportions change the Rating as well. Focus indication uses the shared focus tokens, notably tokens.colorStrokeFocus2 together with tokens.strokeWidthThick, which is why the focus ring stays correct across themes without extra styling.
 
 ## Migration Notes
 
-Rating is a v9 component with no counterpart in the older v8 @fluentui/react-components surface, so code moving from the Fabric-era office-ui-fabric-react Rating needs a prop-level rewrite rather than a simple import swap. The single rating value becomes value for controlled usage or defaultValue for uncontrolled usage, and the change callback becomes onChange, whose second argument carries the new value in its value field. Scale configuration stays on max, but the old label-formatting function is now itemLabel and should return strings such as 1 star or 5 stars. Icon customization moves from a single icon prop to the paired iconFilled and iconOutline props, which must be supplied together to keep selected and unselected states distinguishable. Theming moves from style or theme props to design tokens resolved through the FluentProvider, and the color prop replaces ad-hoc palette overrides for the supported neutral, brand, and marigold treatments.
+Rating is a v9 addition with no direct counterpart in Fluent UI React v8, so most migration work replaces bespoke star implementations rather than a library component. When porting one, map the old star count to max, the old display precision to step, and the current score to value with onChange, or to defaultValue if the rating can stay uncontrolled. Move any score that was only ever displayed, never edited, to RatingDisplay. Re-derive accessible labels through itemLabel instead of leaving hard-coded aria-labels on wrapper elements, because Rating now owns the underlying radio inputs and the name that groups them.
 
 ## Edge Cases
 
-- max must be a whole number greater than 1; passing 1 or a fractional value does not produce a valid single-item scale.
-- The filled state is applied to every item whose value is less than or equal to the current rating, so a value that does not land on a step boundary (for example 3.3 with step 1) still fills the items below it and rounds the visible score in unexpected ways.
-- There is no built-in clear affordance; clearing means programmatically setting a controlled value to 0, as the controlled example does with a separate Button, and 0 renders an entirely outline row.
-- Omitting name lets the component generate a group name per instance, which keeps separate ratings independent, but passing the same name to two ratings merges them into one radio group where only one selection can exist.
-- An itemLabel that returns an empty string or a meaningless token removes the accessible name from the radio inputs, leaving screen reader users with unlabeled controls.
-- Half-step mode doubles the number of radio inputs, so the arrow-key distance from the lowest to the highest score doubles as well; this is easy to overlook when max is already large.
-- Custom icons supplied through iconFilled and iconOutline must be visually distinct as a pair and sized in em units; icons with fixed pixel sizes ignore the size prop and break the row's rhythm.
+- max must be a whole number greater than 1. Values of 1, 0, or 2.5 fall outside the documented contract, so validate any max that comes from configuration or user data before wiring it to the component.
+- Values that do not land on the step grid cannot be represented as a clean fill state: with step 1 a value of 3.7 has no matching configuration, and with step 0.5 neither does 2.3. Round incoming data to the nearest valid step.
+- A value of 0 is how you express not rated. It clears every filled item, exactly as the Clear Rating button does in the ControlledValue story, so do not treat 0 as a one-star rating.
+- Passing a defaultValue above max or a negative value produces a state the item rendering cannot express; clamp any server-provided or persisted score before handing it to the component.
+- When step is 0.5 the number of selectable options grows for the same max, which lengthens keyboard traversal and means itemLabel is called with half values, so the formatter has to produce sensible text for them.
+- Because the name prop defines one radio group, two ratings rendered together with the same explicit name are linked: choosing a value in the second clears the first.
+- Custom icons must be supplied as pairs. Passing only iconFilled leaves the unselected items on their default glyph, and the resulting mixture of shapes can look like a rendering bug rather than a deliberate style.
 
 ## See Also
 

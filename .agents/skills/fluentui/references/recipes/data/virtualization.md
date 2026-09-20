@@ -4,1097 +4,504 @@
 
 ## Goal
 
-Render very large data sets (thousands to hundreds of thousands of rows, cards, or feed entries) with FluentUI React v9 components by mounting only the rows inside the scroll viewport, while preserving keyboard navigation, screen-reader semantics, and cheap loading/append flows.
+Render very large data collections (thousands to hundreds of thousands of rows) in a Fluent UI v9 React app without mounting a DOM node per item, by wiring the Fluent virtualizer (useStaticVirtualizerMeasure + VirtualizerScrollView) around ordinary Fluent UI row content such as Card, Avatar, Text and Badge.
 
 ## When to Use
 
-Use this recipe when a list, feed, or grid of rich FluentUI content is large enough that rendering every row would create thousands of DOM nodes and make scrolling, filtering, or appending janky. It fits long contact directories, activity/chat feeds, log viewers, asset galleries, and responsive card grids, especially when the list lives inside a fixed-height region (Dialog, Drawer, Tab, split pane) and must still be fully keyboard and screen-reader accessible.
+Use this recipe when a scrollable collection is large enough that mounting every item hurts scroll performance, memory or initial render time (roughly 1,000+ rows): activity feeds, inboxes, log viewers, contact pickers, product grids. It is also the right choice when rows have a uniform height and you want real Fluent UI components inside each row instead of a hand-rolled grid.
 
 ## When Not to Use
 
-Avoid it for small lists (fewer than roughly 100-200 simple rows): the windowing hook, spacer, and offset bookkeeping cost more than they save, so render normally or paginate. Avoid it when row heights are unknowable or unbounded (infinitely expanding rows) - use pagination or disclosure instead. Avoid hand-rolling offsets for data grids that need column resizing, sorting, and selection semantics; build those on FluentUI's data grid primitives plus a dedicated virtualizer. Avoid windowing rows that host Portal-rendered popups (Menu, Popover, Tooltip) whose content is positioned outside the scroll container. Finally, avoid it on pages that must print or be crawled in full without a fallback that renders all rows.
+Avoid virtualization for small lists (a few hundred rows or less) that fit in one or two viewports: it adds complexity and it breaks browser Ctrl+F / find-in-page, printing and full-document screen-reader traversal, because offscreen rows are not in the DOM. For tabular data that needs sorting, selection and column resizing, prefer DataGrid with paging over a hand-built virtualized table. For shrinking toolbars use Overflow/OverflowItem; for paging through a small set of slides use Carousel. If row heights vary a lot and cannot be normalized, use the dynamic measuring variant (useDynamicVirtualizerMeasure + VirtualizerScrollViewDynamic) or a non-virtualized list with pagination.
 
-FluentUI v9 ships rich, style-heavy components (`Card`, `Avatar`, `Badge`, `Text`) and no general-purpose windowing primitive in `@fluentui/react-components`. Virtualization is therefore a **rendering strategy you apply around** those components: the data set stays large, the DOM stays tiny.
+Keep the DOM small while scrolling through tens of thousands of rows, and still use normal Fluent UI components for each row.
 
-## Outcome
+`@fluentui/react-components` ships a virtualizer: a measure hook plus a scroll-view component. You own the scrolling element and the row markup; the virtualizer owns *how many* rows exist at any moment and *where* they are positioned.
 
-- A fixed-height scroll container.
-- A spacer whose height equals `itemCount * rowHeight`, so the scrollbar tells the truth.
-- Only the rows intersecting the viewport (plus overscan) are mounted as `Card` / `Avatar` / `Text` / `Badge`.
-- Keyboard navigation that survives rows unmounting, because focus stays on the container and `aria-activedescendant` points at the active row.
-- Variants for responsive card grids and for variable-height rows.
+## How the pieces fit together
 
-## Anatomy
+| Piece | Responsibility |
+| --- | --- |
+| `useStaticVirtualizerMeasure({ defaultItemSize })` | Measures the scroll container and returns `virtualizerLength` (how many rows may be mounted at once), `bufferItems` / `bufferSize` (extra rows kept above and below the visible window), plus the `scrollRef` and `containerSizeRef` you must wire up. |
+| `VirtualizerScrollView` | Renders an element sized `numItems * itemSize` and mounts only the window plus buffer, repositioning rows as the user scrolls. |
+| Your scroll container | A `div` with a **bounded height** and `overflow-y: auto`. `scrollRef` is attached here and passed to the virtualizer as `scrollViewRef`. |
+
+`virtualizerLength`, `bufferItems` and `bufferSize` are pure plumbing. Never compute them by hand — pass through exactly what the hook returns, and keep `itemSize` in sync with the row height you actually render.
+
+## Step-by-step
+
+1. **Pick a row height.** Define a single constant (`const ROW_HEIGHT = 56`) and pass it to `useStaticVirtualizerMeasure({ defaultItemSize: ROW_HEIGHT })`. This is the contract between your markup and the virtualizer's scroll math.
+2. **Give the scroll container a definite height.** `height: '480px'`, or in a flex layout `flex: 1 1 auto` *plus* `min-height: 0`. An auto-height container measures as 0 and the list renders nothing (or a single row).
+3. **Attach `scrollRef`** to that container and pass the same ref as `scrollViewRef` on the virtualizer. `scrollRef` must point at the element that actually scrolls — the one with `overflow-y: auto`.
+4. **Render `VirtualizerScrollView` inside the container** with `numItems`, `itemSize`, `virtualizerLength`, `bufferItems`, `bufferSize`, `scrollViewRef` and `containerSizeRef`. Its children are a render function: `(index: number) => React.ReactNode`.
+5. **Render each row exactly `itemSize` tall.** Use `boxSizing: 'border-box'`, `height: itemSize`, and put spacing in `padding` — never `margin`. Keep text on one line (`<Text truncate>` or `whiteSpace: 'nowrap'`).
+6. **Drive the collection with `numItems`.** The virtualizer is fully controlled by this prop: append to your state array (infinite scroll / "Load more") and the newly added rows become scrollable immediately. Changing `itemSize` at runtime re-measures too.
 
 ```tsx
-<div ref={scrollRef} style={{ height: 420, overflowY: 'auto' }}>        {/* scroller  */}
-  <div style={{ position: 'relative', height: totalHeight }}>          {/* spacer    */}
-    <div style={{ position: 'absolute', top: offsetTop }}>…Card…</div>  {/* window    */}
-  </div>
+const { virtualizerLength, bufferItems, bufferSize, scrollRef, containerSizeRef } =
+  useStaticVirtualizerMeasure({ defaultItemSize: ROW_HEIGHT });
+
+<div ref={scrollRef} style={{ height: 480, overflowY: 'auto' }}>
+  <VirtualizerScrollView
+    numItems={items.length}
+    itemSize={ROW_HEIGHT}
+    virtualizerLength={virtualizerLength}
+    bufferItems={bufferItems}
+    bufferSize={bufferSize}
+    scrollViewRef={scrollRef}
+    containerSizeRef={containerSizeRef}
+  >
+    {(index: number) => renderRow(items[index], index)}
+  </VirtualizerScrollView>
 </div>
 ```
 
-Three numbers drive everything: `scrollTop`, `viewportHeight`, and `itemHeight` (or measured heights).
+## Composing Fluent components inside a virtual row
 
-## Step 1 - Measure the container, not the window
+Rows are ordinary React nodes, so anything from the library works — as long as the row's outer element owns the fixed height:
 
-`window.innerHeight` is wrong the moment the list lives inside a `Dialog`, `Drawer`, a `Tab` panel, or a split pane. Observe the scroller itself:
+- **People rows:** `<Avatar name={c.name} size={32} />` plus two `<Text>` lines (`weight="semibold"` + `size={200}`) inside a `min-width: 0` flex column so `truncate` works.
+- **Status:** `<Badge appearance="tint" color={...} />` for a compact trailing indicator.
+- **Cards in a grid:** virtualize *rows of tiles*, not tiles. Chunk the data (`products.slice(rowIndex * COLUMNS, ...)`) and set `numItems={Math.ceil(products.length / COLUMNS)}`. A CSS grid row with `gridTemplateColumns: repeat(3, minmax(0, 1fr))` keeps every virtual item the same height.
+- **Sticky headers, dividers and toolbars:** render them *outside* the scroll container. `position: sticky` does not work inside virtualized rows because rows are absolutely positioned by the virtualizer.
 
-```tsx
-const observer = new ResizeObserver(() => setViewportHeight(node.clientHeight));
-observer.observe(node);
-```
+## Keyboard scrolling and jumping to a row
 
-Read `node.scrollTop` / `node.clientHeight` once on mount so the first paint is already correct.
+Because `scrollRef.current` is the real scrolling element, you can compute a scroll position directly: `container.scrollTop = index * itemSize`. This is the reliable way to "jump to" a row — `element.scrollIntoView()` is useless for a row that is not currently mounted.
 
-## Step 2 - Coalesce scroll events
+## Infinite scroll
 
-A raw `scroll` listener fires far more often than the display refreshes. Schedule at most one state update per animation frame and keep the listener passive:
+Attach a scroll listener to the container (or an `IntersectionObserver` on a sentinel rendered as the last row) and append a page to your array. Growing `numItems` keeps the current scroll offset and mounts the new rows on demand; there is no need to reset the virtualizer.
 
-```tsx
-const onScroll = () => {
-  if (frameRef.current !== null) return;
-  frameRef.current = requestAnimationFrame(() => {
-    frameRef.current = null;
-    setScrollTop(node.scrollTop);
-  });
-};
-node.addEventListener('scroll', onScroll, { passive: true });
-```
+## Variable heights and horizontal lists
 
-Keep `scrollTop` local to the list component. Putting it in a context or a shared store re-renders everything on every frame.
-
-## Step 3 - Window math
-
-```tsx
-const firstVisible = Math.floor(scrollTop / itemHeight);
-const visibleCount = Math.max(1, Math.ceil(viewportHeight / itemHeight));
-const startIndex = Math.max(0, firstVisible - overscan);
-const endIndex = Math.min(itemCount, firstVisible + visibleCount + overscan);
-```
-
-`overscan` of 4-10 rows absorbs flick scrolling and smooth `scrollTo` animations. Zero overscan produces visible blank gaps; hundreds of overscanned rows means you are paying for rows nobody sees.
-
-## Step 4 - Reset the window when the data changes
-
-Filtering, sorting, or reloading changes `itemCount`. If you never reset `scrollTop`, the viewport can sit past the end of the shorter data set and the list looks empty:
-
-```tsx
-React.useEffect(() => {
-  setActiveIndex(0);
-  scrollRef.current?.scrollTo({ top: 0 });
-}, [query]);
-```
-
-Also clamp any stored active index to `contacts.length - 1` before rendering, because the index can point past the new result set for one frame.
-
-## Step 5 - Keyboard and focus
-
-Rows unmount, so **never** park keyboard focus on a row. Put focus on the scroller (`tabIndex={0}`) and describe the active row with `aria-activedescendant`:
-
-```tsx
-<div
-  ref={scrollRef}
-  tabIndex={0}
-  role='listbox'
-  aria-label='People'
-  aria-activedescendant={activeIndex >= 0 ? `${baseId}-${activeIndex}` : undefined}
-  onKeyDown={onKeyDown}
->
-```
-
-Handle ArrowUp/ArrowDown, Home/End, PageUp/PageDown, and Enter/Space, and after every move call `scrollToIndex(nextIndex, 'nearest')` so the active row is guaranteed to be mounted before you rely on its id. Rows expose `aria-setsize` and `aria-posinset` so assistive technology announces '4,812 of 10,000' even though 40 rows exist in the DOM.
-
-## Step 6 - Grids: virtualize rows, never cells
-
-For a responsive gallery, compute the column count from the measured container width and window over *rows*:
-
-```tsx
-const columns = Math.max(1, Math.floor((width - gap) / (minCardWidth + gap)));
-const rowCount = Math.ceil(items.length / columns);
-```
-
-Each mounted row is a CSS grid (`gridTemplateColumns: repeat(columns, minmax(0, 1fr))`) with a fixed height, so the fixed-height window math still applies. Changing the window width changes only the column count and the row count - the windowing hook does not change at all.
-
-## Step 7 - Variable row heights
-
-Keep an array of measured heights, measure each mounted row in a stable ref callback, and recompute prefix offsets when a measurement changes by more than a fraction of a pixel:
-
-```tsx
-offsets[0] = 0;
-for (let i = 0; i < itemCount; i += 1) {
-  offsets[i + 1] = offsets[i] + (heights[i] ?? estimateHeight);
-}
-```
-
-Find the first visible row with a binary search over `offsets`, sum to `offsets[itemCount]` for the spacer height, and cache the per-index ref callbacks in a `Map` so React does not treat them as new functions on every render. Clear the cache and the heights whenever the container width changes, because wrapped text reflows.
-
-## Step 8 - Loading, appending, and empty states
-
-- Appending 600 rows changes only `itemCount`; the render cost is one re-render plus the newly visible rows. This is the cheapest 'load more' you can build.
-- Show `Skeleton` placeholders only for the rows you are genuinely fetching. Render them after the spacer so they read as 'more content below'.
-- Set `aria-busy` on the scroll region while loading and use a single `Spinner` in the toolbar rather than one per row.
-- Announce meaningful events (filter applied, item selected) with `MessageBar` and `politeness='polite'`; never announce on scroll.
-
-## FluentUI-specific notes
-
-- Keep the row visual cheap: `Card` + `Avatar` + `Text` + `Badge`. Do not mount `Menu`, `Popover`, or `Tooltip` per row - each adds a Portal and a positioning engine.
-- If rows need a menu, render one shared `Menu` and position it against the active row index instead of one per row.
-- Keep popup/focus state keyed by data id, not by row element, since the element can unmount at any time.
-- Use design tokens (`var(--colorNeutralStroke1)`, `var(--borderRadiusMedium)`, `var(--colorNeutralForeground3)`) for container chrome so dark and high-contrast themes keep working.
-- `Combobox` / `Select` option lists are not windowed by this recipe: filter or page the data before it reaches them.
-
-## Checklist
-
-1. Scroller has an explicit height and `overflow-y: auto`.
-2. Spacer height is `itemCount * rowHeight` (or the measured total).
-3. `scrollTop` and `viewportHeight` come from the container, updated at most once per frame.
-4. Every virtual row is absolutely positioned at its computed `top` and has the exact height the math assumes.
-5. `scrollTop` resets when the data set or filter changes; active index is clamped.
-6. Keyboard focus stays on the container; `aria-activedescendant`, `aria-setsize`, and `aria-posinset` are set.
-7. Listeners, observers, and pending animation frames are cleaned up on unmount.
+If rows genuinely differ in height, swap `useStaticVirtualizerMeasure` for `useDynamicVirtualizerMeasure` and `VirtualizerScrollView` for `VirtualizerScrollViewDynamic`; the dynamic variant measures rendered rows and repositions the ones below. For horizontal strips, measure with a horizontal direction in the measure hook and let the same `VirtualizerScrollView` handle the axis. Both variants keep identical `numItems` / `virtualizerLength` / `bufferItems` / `bufferSize` / `scrollViewRef` / `containerSizeRef` plumbing.
 
 ## Examples
 
-### VirtualizedPeopleDirectory (fixed-height rows, keyboard, search)
+### Virtualized contact list (uniform rows)
 
-A single-select directory of 10,000 contacts where only ~30 rows exist in the DOM. Includes the reusable windowing hook, rAF-coalesced scroll tracking, ResizeObserver-based viewport measurement, aria-activedescendant keyboard navigation, aria-setsize/aria-posinset on unmounted-agnostic options, filter-reset handling, and first/last jump buttons.
+10,000 contacts rendered with Avatar, Text and Badge inside fixed-height virtualized rows, with proper list semantics and a keyboard-focusable scroll region.
 
 ```tsx
-// VirtualizedPeopleDirectory.tsx
 import * as React from 'react';
-import { Avatar, Badge, Button, Card, Divider, Field, Input, MessageBar, Text } from '@fluentui/react-components';
+import {
+  Avatar,
+  Badge,
+  FluentProvider,
+  Text,
+} from '@fluentui/react-components';
+import {
+  VirtualizerScrollView,
+  useStaticVirtualizerMeasure,
+} from '@fluentui/react-components/unstable';
 
-/* ------------------------------------------------------------------ */
-/* 1. The windowing hook: the DOM only ever holds the visible rows.    */
-/* ------------------------------------------------------------------ */
+type ContactStatus = 'active' | 'away' | 'offline';
 
-export interface VirtualItem {
-  index: number;
-  offsetTop: number;
-}
-
-export interface UseVirtualWindowOptions {
-  /** Rows in the data set, not rows in the DOM. */
-  itemCount: number;
-  /** Fixed row height in pixels - every virtual row must be exactly this tall. */
-  itemHeight: number;
-  /** The element that owns the scrollbar. */
-  scrollRef: React.RefObject<HTMLDivElement | null>;
-  /** Rows rendered above and below the viewport. */
-  overscan?: number;
-}
-
-export interface VirtualWindow {
-  virtualItems: VirtualItem[];
-  totalHeight: number;
-  scrollToIndex: (index: number, align?: 'start' | 'center' | 'nearest') => void;
-}
-
-const prefersReducedMotion = () =>
-  typeof window !== 'undefined' &&
-  typeof window.matchMedia === 'function' &&
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-export function useVirtualWindow({
-  itemCount,
-  itemHeight,
-  scrollRef,
-  overscan = 6,
-}: UseVirtualWindowOptions): VirtualWindow {
-  const [scrollTop, setScrollTop] = React.useState(0);
-  const [viewportHeight, setViewportHeight] = React.useState(0);
-  const frameRef = React.useRef<number | null>(null);
-
-  // Measure the container (not the window) and coalesce scroll events.
-  React.useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-
-    const onScroll = () => {
-      if (frameRef.current !== null) return;
-      frameRef.current = requestAnimationFrame(() => {
-        frameRef.current = null;
-        setScrollTop(node.scrollTop);
-      });
-    };
-
-    setScrollTop(node.scrollTop);
-    setViewportHeight(node.clientHeight);
-    node.addEventListener('scroll', onScroll, { passive: true });
-
-    const observer = new ResizeObserver(() => setViewportHeight(node.clientHeight));
-    observer.observe(node);
-
-    return () => {
-      node.removeEventListener('scroll', onScroll);
-      observer.disconnect();
-      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
-    };
-  }, [scrollRef]);
-
-  const totalHeight = itemCount * itemHeight;
-  const firstVisible = Math.floor(scrollTop / itemHeight);
-  const visibleCount = Math.max(1, Math.ceil(viewportHeight / itemHeight));
-  const startIndex = Math.max(0, firstVisible - overscan);
-  const endIndex = Math.min(itemCount, firstVisible + visibleCount + overscan);
-
-  const virtualItems = React.useMemo(() => {
-    const items: VirtualItem[] = [];
-    for (let index = startIndex; index < endIndex; index += 1) {
-      items.push({ index, offsetTop: index * itemHeight });
-    }
-    return items;
-  }, [startIndex, endIndex, itemHeight]);
-
-  const scrollToIndex = React.useCallback<VirtualWindow['scrollToIndex']>(
-    (index, align = 'nearest') => {
-      const node = scrollRef.current;
-      if (!node) return;
-      const itemTop = index * itemHeight;
-      const itemBottom = itemTop + itemHeight;
-      const viewTop = node.scrollTop;
-      const viewBottom = viewTop + node.clientHeight;
-
-      let next = viewTop;
-      if (align === 'start') next = itemTop;
-      else if (align === 'center') next = itemTop - (node.clientHeight - itemHeight) / 2;
-      else if (itemTop < viewTop) next = itemTop;
-      else if (itemBottom > viewBottom) next = itemBottom - node.clientHeight;
-
-      node.scrollTo({
-        top: Math.max(0, Math.min(next, totalHeight - node.clientHeight)),
-        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-      });
-    },
-    [itemHeight, scrollRef, totalHeight],
-  );
-
-  return { virtualItems, totalHeight, scrollToIndex };
-}
-
-/* ------------------------------------------------------------------ */
-/* 2. Data model                                                       */
-/* ------------------------------------------------------------------ */
-
-export interface Contact {
+interface Contact {
   id: string;
   name: string;
-  role: string;
-  team: string;
-  status: 'available' | 'busy' | 'offline';
+  email: string;
+  status: ContactStatus;
 }
 
-const FIRST_NAMES = ['Ada', 'Grace', 'Alan', 'Katherine', 'Linus', 'Margaret', 'Barbara', 'Ken'];
-const LAST_NAMES = ['Lovelace', 'Hopper', 'Turing', 'Johnson', 'Torvalds', 'Hamilton', 'Liskov', 'Thompson'];
-const TEAMS = ['Platform', 'Design systems', 'Data', 'Growth', 'Mobile', 'Security'];
-const ROLES = ['Engineer', 'Designer', 'Program manager', 'Data scientist'];
+/** Every virtual row must render exactly this tall. */
+const ROW_HEIGHT = 56;
 
-function buildContacts(count: number): Contact[] {
-  const contacts: Contact[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const first = FIRST_NAMES[index % FIRST_NAMES.length];
-    const last = LAST_NAMES[Math.floor(index / FIRST_NAMES.length) % LAST_NAMES.length];
-    contacts.push({
-      id: `contact-${index}`,
-      name: `${first} ${last}`,
-      role: ROLES[index % ROLES.length],
-      team: TEAMS[index % TEAMS.length],
-      status: index % 7 === 0 ? 'offline' : index % 4 === 0 ? 'busy' : 'available',
-    });
-  }
-  return contacts;
+const STATUS_COLOR: Record<ContactStatus, 'success' | 'warning' | 'subtle'> = {
+  active: 'success',
+  away: 'warning',
+  offline: 'subtle',
+};
+
+function createContacts(count: number): Contact[] {
+  const statuses: ContactStatus[] = ['active', 'away', 'offline'];
+  return Array.from({ length: count }, (_, index) => ({
+    id: `contact-${index}`,
+    name: `Contact ${index + 1}`,
+    email: `contact${index + 1}@contoso.com`,
+    status: statuses[index % statuses.length],
+  }));
 }
 
-const statusColor = (status: Contact['status']): 'success' | 'danger' | 'subtle' =>
-  status === 'available' ? 'success' : status === 'busy' ? 'danger' : 'subtle';
+export const VirtualizedContactList: React.FC = () => {
+  const contacts = React.useMemo(() => createContacts(10000), []);
 
-const ROW_HEIGHT = 64;
-const VIEWPORT_HEIGHT = 420;
-const TOTAL_CONTACTS = 10000;
-
-/* ------------------------------------------------------------------ */
-/* 3. The virtualized list                                             */
-/* ------------------------------------------------------------------ */
-
-export const VirtualizedPeopleDirectory: React.FC = () => {
-  const [allContacts] = React.useState(() => buildContacts(TOTAL_CONTACTS));
-  const [query, setQuery] = React.useState('');
-  const [activeIndex, setActiveIndex] = React.useState(0);
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const scrollRef = React.useRef<HTMLDivElement | null>(null);
-  const optionBaseId = React.useId();
-
-  const contacts = React.useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (needle.length === 0) return allContacts;
-    return allContacts.filter(
-      contact =>
-        contact.name.toLowerCase().includes(needle) ||
-        contact.role.toLowerCase().includes(needle) ||
-        contact.team.toLowerCase().includes(needle),
-    );
-  }, [allContacts, query]);
-
-  const { virtualItems, totalHeight, scrollToIndex } = useVirtualWindow({
-    itemCount: contacts.length,
-    itemHeight: ROW_HEIGHT,
-    overscan: 8,
-    scrollRef,
-  });
-
-  // A new result set invalidates the old scroll offset; without this the
-  // viewport can sit past the end of the list and render nothing.
-  React.useEffect(() => {
-    setActiveIndex(0);
-    scrollRef.current?.scrollTo({ top: 0 });
-  }, [query]);
-
-  const activeIndexSafe = Math.min(activeIndex, Math.max(0, contacts.length - 1));
-  const selected = contacts.find(contact => contact.id === selectedId);
-
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (contacts.length === 0) return;
-    let nextIndex = activeIndexSafe;
-    switch (event.key) {
-      case 'ArrowDown':
-        nextIndex = Math.min(activeIndexSafe + 1, contacts.length - 1);
-        break;
-      case 'ArrowUp':
-        nextIndex = Math.max(activeIndexSafe - 1, 0);
-        break;
-      case 'Home':
-        nextIndex = 0;
-        break;
-      case 'End':
-        nextIndex = contacts.length - 1;
-        break;
-      case 'PageDown':
-        nextIndex = Math.min(activeIndexSafe + 10, contacts.length - 1);
-        break;
-      case 'PageUp':
-        nextIndex = Math.max(activeIndexSafe - 10, 0);
-        break;
-      case 'Enter':
-      case ' ':
-        event.preventDefault();
-        setSelectedId(contacts[activeIndexSafe].id);
-        return;
-      default:
-        return;
-    }
-    event.preventDefault();
-    setActiveIndex(nextIndex);
-    scrollToIndex(nextIndex, 'nearest');
-  };
+  const { virtualizerLength, bufferItems, bufferSize, scrollRef, containerSizeRef } =
+    useStaticVirtualizerMeasure({ defaultItemSize: ROW_HEIGHT });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 720 }}>
-      <Field
-        label='Search people'
-        hint={`${contacts.length.toLocaleString()} of ${TOTAL_CONTACTS.toLocaleString()} people match`}
+    <FluentProvider>
+      {/* The scroll container: bounded height + overflow. scrollRef lives here. */}
+      <div
+        ref={scrollRef}
+        tabIndex={0}
+        role="group"
+        aria-label="Contacts"
+        style={{
+          height: '480px',
+          overflowY: 'auto',
+          border: '1px solid #d1d1d1',
+          borderRadius: '4px',
+          backgroundColor: '#ffffff',
+        }}
       >
-        <Input type='search' value={query} onChange={(_event, data) => setQuery(data.value)} />
-      </Field>
+        <VirtualizerScrollView
+          numItems={contacts.length}
+          itemSize={ROW_HEIGHT}
+          virtualizerLength={virtualizerLength}
+          bufferItems={bufferItems}
+          bufferSize={bufferSize}
+          scrollViewRef={scrollRef}
+          containerSizeRef={containerSizeRef}
+          role="list"
+        >
+          {(index: number) => {
+            const contact = contacts[index];
+            return (
+              <div
+                key={contact.id}
+                role="listitem"
+                aria-setsize={contacts.length}
+                aria-posinset={index + 1}
+                style={{
+                  boxSizing: 'border-box',
+                  height: ROW_HEIGHT,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '0 12px',
+                  borderBottom: '1px solid #f0f0f0',
+                }}
+              >
+                <Avatar name={contact.name} size={32} />
+                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                  <Text weight="semibold" truncate>
+                    {contact.name}
+                  </Text>
+                  <Text size={200} truncate>
+                    {contact.email}
+                  </Text>
+                </div>
+                <Badge appearance="tint" color={STATUS_COLOR[contact.status]}>
+                  {contact.status}
+                </Badge>
+              </div>
+            );
+          }}
+        </VirtualizerScrollView>
+      </div>
+    </FluentProvider>
+  );
+};
+```
 
-      {contacts.length === 0 ? (
-        <MessageBar intent='warning' politeness='polite'>
-          No people match “{query}”.
-        </MessageBar>
-      ) : (
+### Virtualized 3-column card grid with incremental loading
+
+Chunks a product array into grid rows, virtualizes the rows (numItems counts rows, not tiles), composes Card/CardPreview/CardHeader per tile, and appends pages of data by growing numItems.
+
+```tsx
+import * as React from 'react';
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  CardPreview,
+  FluentProvider,
+  Image,
+  Text,
+} from '@fluentui/react-components';
+import {
+  VirtualizerScrollView,
+  useStaticVirtualizerMeasure,
+} from '@fluentui/react-components/unstable';
+
+interface Product {
+  id: string;
+  name: string;
+  category: string;
+  price: string;
+  imageUrl: string;
+}
+
+const COLUMNS = 3;
+const TILE_HEIGHT = 220;
+const GRID_GAP = 16;
+/** One virtual item === one grid row: the tiles plus the gap below them. */
+const ROW_HEIGHT = TILE_HEIGHT + GRID_GAP;
+const PAGE_SIZE = 300;
+
+const CATEGORIES = ['Furniture', 'Lighting', 'Textiles', 'Decor'];
+
+function createProducts(start: number, count: number): Product[] {
+  return Array.from({ length: count }, (_, offset) => {
+    const index = start + offset;
+    return {
+      id: `product-${index}`,
+      name: `Product ${index + 1}`,
+      category: CATEGORIES[index % CATEGORIES.length],
+      price: `$${((index % 90) + 10).toFixed(2)}`,
+      imageUrl: `https://picsum.photos/seed/product-${index}/320/160`,
+    };
+  });
+}
+
+export const VirtualizedProductGrid: React.FC = () => {
+  const [products, setProducts] = React.useState<Product[]>(() => createProducts(0, PAGE_SIZE));
+
+  const { virtualizerLength, bufferItems, bufferSize, scrollRef, containerSizeRef } =
+    useStaticVirtualizerMeasure({ defaultItemSize: ROW_HEIGHT });
+
+  // numItems counts ROWS. Growing the product array is all the virtualizer needs.
+  const rowCount = Math.ceil(products.length / COLUMNS);
+
+  const loadMore = () =>
+    setProducts(previous => [...previous, ...createProducts(previous.length, PAGE_SIZE)]);
+
+  return (
+    <FluentProvider>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text weight="semibold">
+            {products.length} products / {rowCount} virtual rows
+          </Text>
+          <Button appearance="primary" onClick={loadMore}>
+            Load {PAGE_SIZE} more
+          </Button>
+        </div>
+
         <div
           ref={scrollRef}
           tabIndex={0}
-          role='listbox'
-          aria-label='People'
-          aria-activedescendant={contacts.length > 0 ? `${optionBaseId}-${activeIndexSafe}` : undefined}
-          onKeyDown={onKeyDown}
+          role="group"
+          aria-label="Products"
           style={{
-            position: 'relative',
-            height: VIEWPORT_HEIGHT,
+            height: '560px',
             overflowY: 'auto',
-            contain: 'strict',
-            border: '1px solid var(--colorNeutralStroke1)',
-            borderRadius: 'var(--borderRadiusMedium)',
+            padding: '0 12px',
+            border: '1px solid #d1d1d1',
+            borderRadius: '4px',
           }}
         >
-          {/* The spacer gives the scrollbar the real data-set height. */}
-          <div style={{ position: 'relative', height: totalHeight }}>
-            {virtualItems.map(({ index, offsetTop }) => {
-              const contact = contacts[index];
-              const isActive = index === activeIndexSafe;
-              const isSelected = contact.id === selectedId;
+          <VirtualizerScrollView
+            numItems={rowCount}
+            itemSize={ROW_HEIGHT}
+            virtualizerLength={virtualizerLength}
+            bufferItems={bufferItems}
+            bufferSize={bufferSize}
+            scrollViewRef={scrollRef}
+            containerSizeRef={containerSizeRef}
+            role="list"
+          >
+            {(rowIndex: number) => {
+              const firstIndex = rowIndex * COLUMNS;
+              const row = products.slice(firstIndex, firstIndex + COLUMNS);
               return (
                 <div
-                  key={contact.id}
-                  id={`${optionBaseId}-${index}`}
-                  role='option'
-                  aria-selected={isSelected}
-                  aria-setsize={contacts.length}
-                  aria-posinset={index + 1}
-                  onMouseDown={() => {
-                    setActiveIndex(index);
-                    setSelectedId(contact.id);
-                  }}
+                  key={rowIndex}
+                  role="listitem"
+                  aria-setsize={rowCount}
+                  aria-posinset={rowIndex + 1}
                   style={{
-                    position: 'absolute',
-                    top: offsetTop,
-                    left: 0,
-                    right: 0,
-                    height: ROW_HEIGHT,
-                    padding: 6,
                     boxSizing: 'border-box',
+                    height: ROW_HEIGHT,
+                    paddingBottom: GRID_GAP,
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${COLUMNS}, minmax(0, 1fr))`,
+                    gap: GRID_GAP,
                   }}
                 >
-                  <Card
-                    appearance={isSelected ? 'filled-alternative' : 'subtle'}
-                    orientation='horizontal'
-                    size='small'
-                    focusMode='off'
-                    style={{
-                      height: '100%',
-                      boxSizing: 'border-box',
-                      alignItems: 'center',
-                      gap: 12,
-                      paddingInline: 12,
-                      outline: isActive ? '2px solid var(--colorStrokeFocus2)' : 'none',
-                      outlineOffset: -2,
-                    }}
-                  >
-                    <Avatar name={contact.name} idForColor={contact.id} color='colorful' size={40} />
-                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                      <Text weight='semibold' truncate>
-                        {contact.name}
-                      </Text>
-                      <Text size={200} truncate style={{ color: 'var(--colorNeutralForeground3)' }}>
-                        {contact.role} · {contact.team}
-                      </Text>
-                    </div>
-                    <Badge appearance='tint' color={statusColor(contact.status)} size='small'>
-                      {contact.status}
-                    </Badge>
-                  </Card>
+                  {row.map(product => (
+                    <Card
+                      key={product.id}
+                      appearance="outline"
+                      size="small"
+                      style={{ height: '100%', overflow: 'hidden' }}
+                    >
+                      <CardPreview>
+                        <Image
+                          src={product.imageUrl}
+                          alt={product.name}
+                          fit="cover"
+                          block
+                          style={{ height: '120px', width: '100%' }}
+                        />
+                      </CardPreview>
+                      <CardHeader
+                        header={
+                          <Text weight="semibold" truncate>
+                            {product.name}
+                          </Text>
+                        }
+                        description={<Text size={200}>{product.price}</Text>}
+                        action={
+                          <Badge appearance="tint" color="brand">
+                            {product.category}
+                          </Badge>
+                        }
+                      />
+                    </Card>
+                  ))}
                 </div>
               );
-            })}
-          </div>
+            }}
+          </VirtualizerScrollView>
         </div>
-      )}
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <Button appearance='secondary' onClick={() => scrollToIndex(0, 'start')}>
-          First
-        </Button>
-        <Button
-          appearance='secondary'
-          disabled={contacts.length === 0}
-          onClick={() => scrollToIndex(contacts.length - 1, 'start')}
-        >
-          Last
-        </Button>
-        <Divider vertical style={{ height: 24 }} />
-        <Text size={200} font='numeric'>
-          {virtualItems.length} rows in the DOM · {contacts.length.toLocaleString()} in the data set
-        </Text>
       </div>
-
-      {selected ? (
-        <MessageBar intent='success' politeness='polite'>
-          Selected {selected.name} ({selected.team})
-        </MessageBar>
-      ) : null}
-    </div>
+    </FluentProvider>
   );
 };
 ```
 
-### VirtualizedGallery (responsive grid + incremental loading)
+### Jump to a row in a 50,000-row log viewer
 
-A 2,400-card gallery that virtualizes grid rows instead of cells. The column count is derived from a ResizeObserver on the scroller, so the same row-window hook works at any width. Appending 600 rows costs one re-render; Skeleton placeholders and a Spinner cover the fetch.
+Shows how to combine Field/Input/Button controls with the virtualizer scroll ref to programmatically jump to any index by setting scrollTop, which is the only reliable way to reach an unmounted row.
 
 ```tsx
-// VirtualizedGallery.tsx
 import * as React from 'react';
-import { Avatar, Badge, Button, Card, Divider, Skeleton, Spinner, Text } from '@fluentui/react-components';
+import {
+  Button,
+  Divider,
+  Field,
+  FluentProvider,
+  Input,
+  Text,
+} from '@fluentui/react-components';
+import {
+  VirtualizerScrollView,
+  useStaticVirtualizerMeasure,
+} from '@fluentui/react-components/unstable';
 
-type ProjectStatus = 'on track' | 'at risk' | 'blocked';
+const ROW_HEIGHT = 40;
+const ITEM_COUNT = 50000;
 
-interface Project {
-  id: string;
-  name: string;
-  owner: string;
-  status: ProjectStatus;
-  updated: string;
+function formatRow(index: number): string {
+  const day = String((index % 28) + 1).padStart(2, '0');
+  const level = index % 5 === 0 ? 'warn' : 'info';
+  return `[2024-05-${day}] event #${index} - level=${level} - virtualization keeps this list cheap`;
 }
 
-const OWNERS = [
-  'Ada Lovelace',
-  'Grace Hopper',
-  'Alan Turing',
-  'Katherine Johnson',
-  'Barbara Liskov',
-  'Ken Thompson',
-];
-const AREAS = ['Checkout', 'Search', 'Billing', 'Onboarding', 'Notifications', 'Reporting', 'Identity', 'Editor'];
-const STATUSES: ProjectStatus[] = ['on track', 'at risk', 'blocked'];
+export const VirtualizedJumpList: React.FC = () => {
+  const { virtualizerLength, bufferItems, bufferSize, scrollRef, containerSizeRef } =
+    useStaticVirtualizerMeasure({ defaultItemSize: ROW_HEIGHT });
 
-function buildProjects(count: number, offset = 0): Project[] {
-  const projects: Project[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const ordinal = offset + index;
-    projects.push({
-      id: `project-${ordinal}`,
-      name: `${AREAS[ordinal % AREAS.length]} revamp ${Math.floor(ordinal / AREAS.length) + 1}`,
-      owner: OWNERS[ordinal % OWNERS.length],
-      status: STATUSES[ordinal % 9 === 0 ? 2 : ordinal % 4 === 0 ? 1 : 0],
-      updated: `${1 + (ordinal % 27)} days ago`,
-    });
-  }
-  return projects;
-}
+  const [target, setTarget] = React.useState<string>('25000');
 
-const statusColor = (status: ProjectStatus): 'success' | 'warning' | 'danger' =>
-  status === 'on track' ? 'success' : status === 'at risk' ? 'warning' : 'danger';
+  // Offscreen rows are not mounted, so scrollIntoView() cannot work.
+  // With uniform rows the scroll offset is simply index * ROW_HEIGHT.
+  const scrollToIndex = React.useCallback(
+    (index: number) => {
+      const container = scrollRef.current;
+      if (!container) {
+        return;
+      }
+      const clamped = Math.min(Math.max(index, 0), ITEM_COUNT - 1);
+      container.scrollTop = clamped * ROW_HEIGHT;
+    },
+    [scrollRef],
+  );
 
-/** Window a set of fixed-height grid rows. */
-function useVirtualRows({
-  rowCount,
-  rowHeight,
-  scrollRef,
-  overscan = 3,
-}: {
-  rowCount: number;
-  rowHeight: number;
-  scrollRef: React.RefObject<HTMLDivElement | null>;
-  overscan?: number;
-}) {
-  const [scrollTop, setScrollTop] = React.useState(0);
-  const [viewportHeight, setViewportHeight] = React.useState(0);
-  const frameRef = React.useRef<number | null>(null);
-
-  React.useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-
-    const onScroll = () => {
-      if (frameRef.current !== null) return;
-      frameRef.current = requestAnimationFrame(() => {
-        frameRef.current = null;
-        setScrollTop(node.scrollTop);
-      });
-    };
-
-    setScrollTop(node.scrollTop);
-    setViewportHeight(node.clientHeight);
-    node.addEventListener('scroll', onScroll, { passive: true });
-
-    const observer = new ResizeObserver(() => setViewportHeight(node.clientHeight));
-    observer.observe(node);
-
-    return () => {
-      node.removeEventListener('scroll', onScroll);
-      observer.disconnect();
-      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
-    };
-  }, [scrollRef]);
-
-  const totalHeight = rowCount * rowHeight;
-  const firstVisibleRow = Math.floor(scrollTop / rowHeight);
-  const visibleRows = Math.max(1, Math.ceil(viewportHeight / rowHeight));
-  const startRow = Math.max(0, firstVisibleRow - overscan);
-  const endRow = Math.min(rowCount, firstVisibleRow + visibleRows + overscan);
-
-  const rows = React.useMemo(() => {
-    const next: number[] = [];
-    for (let row = startRow; row < endRow; row += 1) next.push(row);
-    return next;
-  }, [startRow, endRow]);
-
-  return { rows, totalHeight, renderedRows: rows.length };
-}
-
-const MIN_CARD_WIDTH = 220;
-const CARD_HEIGHT = 168;
-const GAP = 12;
-const ROW_HEIGHT = CARD_HEIGHT + GAP;
-
-export const VirtualizedGallery: React.FC = () => {
-  const scrollRef = React.useRef<HTMLDivElement | null>(null);
-  const [projects, setProjects] = React.useState<Project[]>(() => buildProjects(2400));
-  const [columns, setColumns] = React.useState(3);
-  const [isLoading, setIsLoading] = React.useState(false);
-
-  // The column count follows the container, so the same row window works at
-  // any width.
-  React.useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    const measure = () => {
-      const next = Math.max(1, Math.floor((node.clientWidth - GAP) / (MIN_CARD_WIDTH + GAP)));
-      setColumns(previous => (previous === next ? previous : next));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-
-  const rowCount = Math.ceil(projects.length / columns);
-  const { rows, totalHeight, renderedRows } = useVirtualRows({
-    rowCount,
-    rowHeight: ROW_HEIGHT,
-    scrollRef,
-  });
-
-  const loadMore = () => {
-    setIsLoading(true);
-    window.setTimeout(() => {
-      setProjects(previous => [...previous, ...buildProjects(600, previous.length)]);
-      setIsLoading(false);
-    }, 700);
+  const handleJump = () => {
+    const index = Number.parseInt(target, 10);
+    scrollToIndex(Number.isNaN(index) ? 0 : index);
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Text weight='semibold' size={400}>
-          Projects
-        </Text>
-        <Badge appearance='tint' color='informative' size='small'>
-          {projects.length.toLocaleString()}
-        </Badge>
-        {isLoading ? (
-          <Spinner size='extra-small' label='Loading more projects' labelPosition='after' />
-        ) : null}
-      </div>
-
-      <div
-        ref={scrollRef}
-        role='region'
-        aria-label='Projects'
-        aria-busy={isLoading}
-        tabIndex={0}
-        style={{
-          position: 'relative',
-          height: 520,
-          overflowY: 'auto',
-          contain: 'strict',
-          border: '1px solid var(--colorNeutralStroke1)',
-          borderRadius: 'var(--borderRadiusMedium)',
-        }}
-      >
-        <div style={{ position: 'relative', height: totalHeight }}>
-          {rows.map(row => {
-            const rowProjects = projects.slice(row * columns, row * columns + columns);
-            return (
-              <div
-                key={row}
-                style={{
-                  position: 'absolute',
-                  top: row * ROW_HEIGHT,
-                  left: 0,
-                  right: 0,
-                  height: ROW_HEIGHT,
-                  boxSizing: 'border-box',
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-                  gap: GAP,
-                  paddingInline: GAP,
-                  paddingTop: GAP,
-                }}
-              >
-                {rowProjects.map(project => (
-                  <Card
-                    key={project.id}
-                    appearance='outline'
-                    size='small'
-                    focusMode='off'
-                    style={{
-                      height: CARD_HEIGHT,
-                      boxSizing: 'border-box',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 8,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                      <Avatar name={project.owner} idForColor={project.id} color='colorful' size={32} />
-                      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                        <Text size={200} truncate>
-                          {project.owner}
-                        </Text>
-                        <Text size={100} truncate style={{ color: 'var(--colorNeutralForeground3)' }}>
-                          Updated {project.updated}
-                        </Text>
-                      </div>
-                    </div>
-                    <Text weight='semibold' truncate>
-                      {project.name}
-                    </Text>
-                    <Badge appearance='tint' color={statusColor(project.status)} size='small'>
-                      {project.status}
-                    </Badge>
-                  </Card>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Placeholders live after the spacer, so they read as 'more below'. */}
-        {isLoading ? (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-              gap: GAP,
-              padding: GAP,
-            }}
-          >
-            {Array.from({ length: columns }, (_value, index) => (
-              <Skeleton
-                key={index}
-                shape='rectangle'
-                animation='wave'
-                style={{ height: CARD_HEIGHT, width: '100%' }}
+    <FluentProvider>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '720px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
+          <Field label="Jump to row" hint={`0 - ${ITEM_COUNT - 1}`}>
+            <div style={{ width: '160px' }}>
+              <Input
+                type="number"
+                value={target}
+                onChange={(ev, data) => setTarget(data.value)}
               />
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <Button appearance='primary' onClick={loadMore} disabled={isLoading}>
-          Load 600 more
-        </Button>
-        <Divider vertical style={{ height: 24 }} />
-        <Text size={200} font='numeric'>
-          {renderedRows} of {rowCount.toLocaleString()} grid rows mounted
-        </Text>
-      </div>
-    </div>
-  );
-};
-```
-
-### VirtualizedActivityFeed (measured, variable row heights)
-
-A 5,000-entry activity feed where every row is a different height. Heights are measured with getBoundingClientRect from cached ref callbacks, prefix offsets are recomputed only when a measurement changes by more than a fractional pixel, and a binary search finds the first visible row. Measurements are discarded when the container width changes so reflowed text stays accurate.
-
-```tsx
-// VirtualizedActivityFeed.tsx
-import * as React from 'react';
-import { Avatar, Badge, Button, Card, Divider, Text } from '@fluentui/react-components';
-
-interface Activity {
-  id: string;
-  author: string;
-  kind: 'comment' | 'review' | 'deploy';
-  message: string;
-}
-
-const AUTHORS = ['Ada Lovelace', 'Grace Hopper', 'Alan Turing', 'Katherine Johnson', 'Barbara Liskov'];
-
-const SENTENCES = [
-  'Looks good to me.',
-  'Can we split this into two pull requests so the review stays small?',
-  'Deployed to the staging ring and watched the dashboards for ten minutes; error rate and p95 latency both stayed flat, so I am comfortable promoting this to the canary ring next.',
-  'Nice catch - I missed that branch entirely.',
-  'I left a few comments about naming, nothing blocking.',
-  'The migration ran for eleven minutes on a four-million-row table, which is slower than we budgeted, so I moved it to the weekend window.',
-  'Reverted for now; I will reopen once the flaky test is fixed.',
-];
-
-function buildActivities(count: number): Activity[] {
-  const activities: Activity[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const sentenceCount = 1 + (index % 3);
-    const message = Array.from(
-      { length: sentenceCount },
-      (_value, offset) => SENTENCES[(index + offset) % SENTENCES.length],
-    ).join(' ');
-    activities.push({
-      id: `activity-${index}`,
-      author: AUTHORS[index % AUTHORS.length],
-      kind: index % 5 === 0 ? 'deploy' : index % 3 === 0 ? 'review' : 'comment',
-      message,
-    });
-  }
-  return activities;
-}
-
-const GAP = 8;
-const ESTIMATED_ROW_HEIGHT = 88;
-
-/** Binary search for the last row whose top offset is <= target. */
-function findRowAt(offsets: number[], target: number): number {
-  let low = 0;
-  let high = offsets.length - 1;
-  while (low < high) {
-    const mid = (low + high + 1) >> 1;
-    if (offsets[mid] <= target) low = mid;
-    else high = mid - 1;
-  }
-  return Math.min(low, offsets.length - 2);
-}
-
-interface UseVariableVirtualWindowOptions {
-  itemCount: number;
-  /** Height used for rows that have not been measured yet. */
-  estimateHeight: number;
-  scrollRef: React.RefObject<HTMLDivElement | null>;
-  overscan?: number;
-}
-
-interface VariableVirtualWindow {
-  virtualItems: { index: number; offsetTop: number }[];
-  totalHeight: number;
-  measureRow: (index: number) => (node: HTMLDivElement | null) => void;
-}
-
-export function useVariableVirtualWindow({
-  itemCount,
-  estimateHeight,
-  scrollRef,
-  overscan = 4,
-}: UseVariableVirtualWindowOptions): VariableVirtualWindow {
-  const [scrollTop, setScrollTop] = React.useState(0);
-  const [viewportHeight, setViewportHeight] = React.useState(0);
-  const [measureVersion, bumpMeasureVersion] = React.useReducer((version: number) => version + 1, 0);
-
-  const heightsRef = React.useRef<number[]>([]);
-  const callbacksRef = React.useRef(new Map<number, (node: HTMLDivElement | null) => void>());
-  const scrollFrameRef = React.useRef<number | null>(null);
-  const measureFrameRef = React.useRef<number | null>(null);
-  const estimateRef = React.useRef(estimateHeight);
-  estimateRef.current = estimateHeight;
-
-  React.useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-
-    const onScroll = () => {
-      if (scrollFrameRef.current !== null) return;
-      scrollFrameRef.current = requestAnimationFrame(() => {
-        scrollFrameRef.current = null;
-        setScrollTop(node.scrollTop);
-      });
-    };
-
-    setScrollTop(node.scrollTop);
-    setViewportHeight(node.clientHeight);
-    node.addEventListener('scroll', onScroll, { passive: true });
-
-    const observer = new ResizeObserver(() => setViewportHeight(node.clientHeight));
-    observer.observe(node);
-
-    return () => {
-      node.removeEventListener('scroll', onScroll);
-      observer.disconnect();
-      if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
-      if (measureFrameRef.current !== null) cancelAnimationFrame(measureFrameRef.current);
-    };
-  }, [scrollRef]);
-
-  // Wrapped text reflows on resize, so measured heights are no longer valid.
-  React.useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    let width = node.clientWidth;
-    const observer = new ResizeObserver(() => {
-      if (node.clientWidth === width) return;
-      width = node.clientWidth;
-      heightsRef.current = [];
-      callbacksRef.current.clear();
-      bumpMeasureVersion();
-    });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [scrollRef]);
-
-  // Prefix sums: top of row i is offsets[i], total height is offsets[itemCount].
-  const offsets = React.useMemo(() => {
-    const next = new Array<number>(itemCount + 1);
-    next[0] = 0;
-    for (let index = 0; index < itemCount; index += 1) {
-      next[index + 1] = next[index] + (heightsRef.current[index] ?? estimateHeight);
-    }
-    return next;
-    // measureVersion is the signal that heightsRef changed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemCount, estimateHeight, measureVersion]);
-
-  const startIndex = Math.max(0, findRowAt(offsets, scrollTop) - overscan);
-  const endIndex = Math.min(itemCount, findRowAt(offsets, scrollTop + viewportHeight) + overscan + 1);
-
-  const virtualItems = React.useMemo(() => {
-    const items: { index: number; offsetTop: number }[] = [];
-    for (let index = startIndex; index < endIndex; index += 1) {
-      items.push({ index, offsetTop: offsets[index] });
-    }
-    return items;
-  }, [startIndex, endIndex, offsets]);
-
-  // Cache one callback per index so React does not detach/reattach refs on
-  // every render.
-  const measureRow = React.useCallback((index: number) => {
-    const cache = callbacksRef.current;
-    const cached = cache.get(index);
-    if (cached) return cached;
-
-    const callback = (node: HTMLDivElement | null) => {
-      if (!node) return;
-      const measured = node.getBoundingClientRect().height;
-      const previous = heightsRef.current[index] ?? estimateRef.current;
-      if (Math.abs(measured - previous) < 0.5) return;
-      heightsRef.current[index] = measured;
-      if (measureFrameRef.current !== null) return;
-      measureFrameRef.current = requestAnimationFrame(() => {
-        measureFrameRef.current = null;
-        bumpMeasureVersion();
-      });
-    };
-
-    cache.set(index, callback);
-    return callback;
-  }, []);
-
-  return { virtualItems, totalHeight: offsets[itemCount] ?? 0, measureRow };
-}
-
-const kindColor = (kind: Activity['kind']): 'brand' | 'informative' | 'important' =>
-  kind === 'deploy' ? 'important' : kind === 'review' ? 'informative' : 'brand';
-
-export const VirtualizedActivityFeed: React.FC = () => {
-  const [activities] = React.useState(() => buildActivities(5000));
-  const scrollRef = React.useRef<HTMLDivElement | null>(null);
-
-  const { virtualItems, totalHeight, measureRow } = useVariableVirtualWindow({
-    itemCount: activities.length,
-    estimateHeight: ESTIMATED_ROW_HEIGHT,
-    scrollRef,
-  });
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 720 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Text weight='semibold' size={400}>
-          Activity
-        </Text>
-        <Badge appearance='tint' color='informative' size='small'>
-          {activities.length.toLocaleString()}
-        </Badge>
-      </div>
-
-      <div
-        ref={scrollRef}
-        role='region'
-        aria-label='Activity feed'
-        tabIndex={0}
-        style={{
-          position: 'relative',
-          height: 480,
-          overflowY: 'auto',
-          contain: 'strict',
-          border: '1px solid var(--colorNeutralStroke1)',
-          borderRadius: 'var(--borderRadiusMedium)',
-        }}
-      >
-        <div role='list' style={{ position: 'relative', height: totalHeight }}>
-          {virtualItems.map(({ index, offsetTop }) => {
-            const activity = activities[index];
-            return (
-              <div
-                key={activity.id}
-                ref={measureRow(index)}
-                role='listitem'
-                aria-posinset={index + 1}
-                aria-setsize={activities.length}
-                style={{
-                  position: 'absolute',
-                  top: offsetTop,
-                  left: 0,
-                  right: 0,
-                  paddingBottom: GAP,
-                  paddingInline: GAP,
-                  boxSizing: 'border-box',
-                }}
-              >
-                <Card
-                  appearance='subtle'
-                  size='small'
-                  focusMode='off'
-                  orientation='horizontal'
-                  style={{ alignItems: 'flex-start', gap: 12, padding: 12, boxSizing: 'border-box' }}
-                >
-                  <Avatar name={activity.author} idForColor={activity.id} color='colorful' size={32} />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Text weight='semibold' size={200}>
-                        {activity.author}
-                      </Text>
-                      <Badge appearance='ghost' color={kindColor(activity.kind)} size='small'>
-                        {activity.kind}
-                      </Badge>
-                    </div>
-                    <Text size={300} wrap>
-                      {activity.message}
-                    </Text>
-                  </div>
-                </Card>
-              </div>
-            );
-          })}
+            </div>
+          </Field>
+          <Button appearance="primary" onClick={handleJump}>
+            Scroll to row
+          </Button>
+          <Button appearance="secondary" onClick={() => scrollToIndex(0)}>
+            Back to top
+          </Button>
         </div>
-      </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <Button
-          appearance='secondary'
-          onClick={() => {
-            const node = scrollRef.current;
-            if (node) node.scrollTo({ top: node.scrollHeight });
+        <Divider />
+
+        <div
+          ref={scrollRef}
+          tabIndex={0}
+          role="group"
+          aria-label="Event log"
+          style={{
+            height: '360px',
+            overflowY: 'auto',
+            border: '1px solid #d1d1d1',
+            borderRadius: '4px',
+            backgroundColor: '#ffffff',
           }}
         >
-          Jump to latest
-        </Button>
-        <Divider vertical style={{ height: 24 }} />
-        <Text size={200}>
-          {virtualItems.length} of {activities.length.toLocaleString()} entries mounted · heights are
-          measured, not assumed
-        </Text>
+          <VirtualizerScrollView
+            numItems={ITEM_COUNT}
+            itemSize={ROW_HEIGHT}
+            virtualizerLength={virtualizerLength}
+            bufferItems={bufferItems}
+            bufferSize={bufferSize}
+            scrollViewRef={scrollRef}
+            containerSizeRef={containerSizeRef}
+            role="list"
+          >
+            {(index: number) => (
+              <div
+                key={index}
+                role="listitem"
+                aria-setsize={ITEM_COUNT}
+                aria-posinset={index + 1}
+                style={{
+                  boxSizing: 'border-box',
+                  height: ROW_HEIGHT,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0 12px',
+                  borderBottom: '1px solid #f5f5f5',
+                }}
+              >
+                <Text font="monospace" size={300} truncate>
+                  {formatRow(index)}
+                </Text>
+              </div>
+            )}
+          </VirtualizerScrollView>
+        </div>
       </div>
-    </div>
+    </FluentProvider>
   );
 };
 ```
 
 ## Pitfalls
 
-- Rendering the whole data set and calling it virtualized. The point is a bounded DOM: mount only the rows between startIndex and endIndex plus overscan. Verify by counting rendered row elements, not by counting data length.
-- Setting state on every scroll event. Raw scroll handlers fire far faster than the display refreshes; coalesce to one state update per animation frame with requestAnimationFrame, use { passive: true }, and keep the scroll offset out of any context or store that re-renders the wider app.
-- Putting tabbable controls or focusable Cards inside virtual rows. When the row unmounts the browser drops focus to <body>. Keep focus on the scroll container and use aria-activedescendant, or move focus deliberately before a row leaves the window.
-- Never resetting scrollTop when the data set changes. After filtering 10,000 rows down to 12, the old offset leaves the viewport past the end of the content and the list looks empty - reset to 0 and clamp the active index on every filter/sort/data change.
-- Measuring window.innerHeight instead of the scroll container. Inside a Dialog, Drawer, Tab panel, or split pane the container is a fraction of the viewport, so the window math is wrong and you either render everything or nothing.
-- Letting the spacer height drift from the data. The spacer must be itemCount * rowHeight (or the measured total); deriving it from the currently rendered rows makes the scrollbar shrink as you scroll and causes scroll thrash.
-- Positioning rows with transform: translateY() while a position: sticky element lives inside the same wrapper. A transform creates a containing block and breaks sticky - use position: absolute with a computed top offset for rows.
-- Comparing measured heights exactly. Sub-pixel differences between renders cause update loops; store a measurement only when it differs by more than about 0.5px and batch the resulting state update in a requestAnimationFrame.
-- Setting overscan to 0 or 1. Flick scrolling and smooth scrollToIndex animations leave visible blank gaps; 4-10 extra rows is cheap insurance against empty frames.
-- Leaving listeners and observers attached. When the list lives inside a Dialog or Drawer, remove the scroll listener, disconnect the ResizeObserver, and cancel pending animation frames in the effect cleanup, otherwise detached nodes keep receiving events.
+- Scroll container without a bounded height. If the wrapper is `height: auto` — or a flex child without `min-height: 0` — the measured container size is 0 and the virtualizer renders zero or one item. Always give the scrolling element a definite height (`height: 480px`) or `flex: 1 1 auto; min-height: 0` combined with `overflow-y: auto`.
+- Rendered row height does not equal `itemSize`. Vertical margins, `box-sizing: content-box`, wrapping text, or a border added outside the height make rows taller than the virtualizer thinks, producing jumps, blank gaps and a scrollbar that does not match the content. Use `boxSizing: 'border-box'`, `height: itemSize`, spacing in `padding` (never `margin`), and `<Text truncate>` / `whiteSpace: 'nowrap'` for single-line content.
+- `scrollRef` attached to the wrong element. The ref from `useStaticVirtualizerMeasure` must be on the element that actually scrolls (`overflow-y: auto`) and the same ref must be passed as `scrollViewRef`. Putting it on an outer page wrapper, or on the `VirtualizerScrollView` itself while an ancestor scrolls, means the window never updates and rows beyond the first screen never render.
+- Using the array index as the React key while supporting insert, remove or sort. Rows get recycled and keep stale content/DOM state; key rows by the item's stable id (`key={contact.id}`) so reconciliation matches data, not position.
+- Expecting `element.scrollIntoView()` or `querySelector` to reach an offscreen row. Unmounted rows have no DOM node; compute the offset instead (`container.scrollTop = index * itemSize`) or advance the data window.
+- Holding component state inside virtualized rows (open Menu, Popover, Tooltip, uncontrolled Input, expanded detail). The row is unmounted when scrolled out of the window plus buffer, losing that state. Lift row-level state into the parent keyed by item id, and prefer lightweight inline content over per-row overlays.
+- Virtualizing inside another virtualizer, or nesting an extra `overflow: auto` wrapper in the row. Nested scrollers break measurement and produce two competing scroll positions; keep exactly one scrolling element per virtualized list and never place a virtualized list inside a virtual row.
+- Leaving `itemSize` stale after a design change. If the row height changes (density switch, theme, responsive tweak) you must update the constant passed to `useStaticVirtualizerMeasure` and to `itemSize`; otherwise positions drift. If heights genuinely vary per row, switch to the dynamic measuring variant instead of faking it with a max height.
 
 ## Accessibility
 
-Windowed rows still have to behave like the whole list:
+Virtualization removes offscreen items from the DOM, so assistive technology only sees the rendered window. Compensate explicitly:
 
-- **Roles must match behavior.** A selectable list is `role='listbox'` with `role='option'` children carrying `aria-selected`; read-only content is `role='list'` + `role='listitem'`. Do not put decorative chrome such as headers, toolbars, or sticky banners inside a `listbox` - only `option` (or `group`) children are valid - keep that chrome outside the scroller.
-- **The accessible count comes from ARIA, not the DOM.** Add `aria-setsize` and `aria-posinset` (and `aria-rowcount` / `aria-rowindex` for grids) so a screen reader announces '4,812 of 10,000' while only ~40 rows exist in the DOM.
-- **Keep focus on the container.** `tabIndex={0}` plus `aria-activedescendant` pointing at the active row's stable id (a `React.useId()` prefix plus the index) means focus never unmounts when a row leaves the window. The referenced element must be mounted, so always `scrollToIndex` the active row before relying on its id.
-- **Implement the full keyboard contract:** ArrowUp / ArrowDown, Home / End, PageUp / PageDown, Enter / Space to select (and Escape if selection can be cleared). Call `preventDefault()` for the keys you handle so the container does not also scroll.
-- **Keep a visible focus indicator** on the active row (an outline, or a `Card` appearance change) because the container - not the row - owns focus.
-- **Respect `prefers-reduced-motion`** before passing `behavior: 'smooth'` to `scrollTo`, and never auto-scroll while the user is reading.
-- **Do not announce on scroll.** Use `MessageBar` with `politeness='polite'` only for meaningful events such as a filter change or a selection.
-- **Text scaling and hit targets.** Fixed row heights can clip text at 200% zoom - size rows for the tallest expected content or use the measured-height variant - and keep interactive rows at least 44px tall for touch.
-- **Reading order stays correct** because absolutely positioned rows are emitted in ascending index order; never sort the mounted slice differently from the data.
+- Tell AT the true collection size. Put `role="list"` on the virtualizer root (HTML props are forwarded to the element that is the direct parent of your rows) and give every row `role="listitem"` plus `aria-setsize={totalItems}` and `aria-posinset={index + 1}`. For a table/grid role use `aria-rowcount` / `aria-rowindex` instead. The list examples above pair `aria-setsize` with `aria-posinset` so a screen reader announces "row 250 of 50,000" even though only ~15 rows exist.
+- Make the scroll region keyboard reachable. A scrollable `div` must be focusable; add `tabIndex={0}` to the scrolling element so keyboard-only users can scroll with arrow keys/Page Down, and give the region an accessible name (`role="group"` plus `aria-label`, or a labelled landmark) so it is announced when focused.
+- Preserve focus. Rows are unmounted when they leave the rendered window plus buffer, so any element that can hold DOM focus (Button, Link, Input) inside a row will lose focus once scrolled far away. Prefer keeping per-row interaction out of the virtualized row (use a persistent toolbar operating on the active item), or drive interaction from a single focusable container using a roving active index so the focused index always stays inside the rendered window.
+- Do not put sticky group headers inside virtual rows; `position: sticky` does not survive absolute positioning. Render column/section headers outside the scroller and keep them visible, and announce group changes in text.
+- Announce loading, not scrolling. When appending pages (infinite scroll or "Load more"), change the button/label text (`Loaded 300 of 10,000`) rather than relying on scroll position, so non-visual users know more content exists.
+- Respect reduced motion and animation expectations: virtualization is instant repositioning, so avoid entrance animations per row that could look like content jumping when the buffer re-renders.
 
 ## Components used
 
@@ -1102,12 +509,13 @@ Windowed rows still have to behave like the whole list:
 - [Badge](../../components/badge.md)
 - [Button](../../components/button.md)
 - [Card](../../components/card.md)
+- [CardHeader](../../components/card-header.md)
+- [CardPreview](../../components/card-preview.md)
 - [Divider](../../components/divider.md)
 - [Field](../../components/field.md)
+- [FluentProvider](../../components/fluent-provider.md)
+- [Image](../../components/image.md)
 - [Input](../../components/input.md)
-- [MessageBar](../../components/message-bar.md)
-- [Skeleton](../../components/skeleton.md)
-- [Spinner](../../components/spinner.md)
 - [Text](../../components/text.md)
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

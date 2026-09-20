@@ -7,9 +7,9 @@
 
 ## Overview
 
-Persona is a data-display component that presents a person or entity as a compact identity block: an avatar, an optional presence badge, and up to four lines of text. It composes the Avatar and PresenceBadge components through its avatar and presence slots and exposes the text lines through the primaryText, secondaryText, tertiaryText, and quaternaryText slots, with primaryText defaulting to the name prop. The size prop scales the whole block (avatar, badge, and text) from extra-small through huge, while textPosition (after, before, below) and textAlignment (start, center) control how the text sits relative to the avatar and badge. With presenceOnly the avatar is replaced by the presence badge so the component can act as a pure status indicator. Persona is purely presentational: it adds no roles, tab stops, or keyboard behavior of its own, so interactivity comes from whatever control wraps it, such as a Button or Link.
+Persona is a data-display component that presents a person or entity as a compact, repeatable identity block combining an avatar, an optional presence indicator, and up to four lines of stacked text. It orchestrates the Avatar and PresenceBadge components so that size, spacing, and typography stay visually consistent across all six supported sizes (extra-small, small, medium, large, extra-large, and huge, with medium as the default). The name prop doubles as the default primary label, so a minimal Persona needs only a name, while richer instances layer secondaryText, tertiaryText, and quaternaryText for role, organization, or status details. Layout is controlled declaratively through textPosition (after, before, or below the avatar) and textAlignment (start or center), and the whole avatar can be swapped for a bare presence badge with presenceOnly. Persona renders no interactive elements of its own: it is purely presentational content meant to be embedded in rows, cards, menus, or lists.
 
-**When to use**: Use Persona wherever a person or entity must be identified with more context than a picture alone: contact and profile cards, people pickers and mention lists, org charts, table and list rows, and message or comment headers. Use textPosition after for inline rows, below for larger profile-style layouts, and before when the identity block must sit at the trailing edge of a row. Use presenceOnly when the availability indicator alone carries the meaning, use Avatar by itself when only the picture matters, and use PresenceBadge directly when a status dot is needed outside any identity context. Because Persona renders real text nodes for every identity line, prefer it over manually assembling an Avatar plus separate text elements whenever the multi-line identity pattern applies.
+**When to use**: Use Persona when you need to show a person's identity with more than just a picture — typically an avatar plus a name and one to three supporting lines (job title, email, availability). Use Avatar alone when space is extremely tight or the name is already rendered elsewhere in the surrounding layout, and use PresenceBadge alone (or Persona with presenceOnly) when only the availability status matters. Persona is the right choice for people pickers, contact cards, activity feeds, mention lists, and assignee rows where repeated instances must align to a common grid. Avoid Persona when you need a self-contained clickable control; wrap it in Button, MenuItem, or another interactive parent instead, because Persona exposes no click or keyboard handling of its own.
 
 ## Props Reference
 
@@ -23,17 +23,17 @@ Persona is a data-display component that presents a person or entity as a compac
 
 ### Prop Guidance
 
-- **name**: The identity of the person or entity and the default value for primaryText. Always set it even when you also set primaryText, because the avatar and presence derived from the identity still describe the same person. Keep it to the display form of the name rather than an identifier such as an email address. `Kevin Sturgis`
-- **size**: Scales the avatar, presence badge, and text together. Defaults to medium. Use extra-small and small inside dense lists, tables, and pickers; medium for standard rows; large, extra-large, and huge for profile headers and detail views where the identity is the focus. `medium`
-- **textPosition**: Places the text relative to the avatar and badge. after is the default and best for rows and inline layouts, below stacks text under the avatar for card-style layouts that have vertical room, and before mirrors after for right-aligned or trailing layout needs. `after`
-- **textAlignment**: Controls vertical alignment of the text against the avatar and badge. start is the default and keeps lines anchored to the top edge; center aligns the block vertically and is most useful with single-line text or when textPosition is below and the block should look balanced. `start`
-- **presenceOnly**: Replaces the avatar with the presence badge so only the status indicator is shown. Use it for compact status columns, roster views, or inline availability marks where the identity text is already displayed elsewhere. Defaults to false. `true`
-- **avatar**: Supplies the Avatar to display, including image source, color, and other avatar options. When both avatar and presence are provided, the avatar renders the presence badge as its own presence indicator, so configure the badge through the presence slot and the picture through this slot. `avatar with an image source and a colorful color option`
-- **presence**: Supplies the PresenceBadge to display, with a status value and optional out of office flag, icon override, and className override. Omitting it removes the status indicator; supplying it together with an avatar attaches the badge to the avatar. `status available`
-- **primaryText**: The first and largest text line. It defaults to name, so only set it when the text shown must differ from the identity, for example a display handle instead of a legal name. It accepts text content or slot props for styling. `Kevin S.`
-- **secondaryText**: The second line, typically used for availability, job title, or a short qualifier such as Available or Away - OOF. This is the recommended place to spell out presence status so it is not conveyed by color alone. `Available`
-- **tertiaryText**: The third line, suited to role or department information in profile-style layouts where textPosition is after or below. Avoid it in compact sizes where the extra line adds clutter. `Software Engineer`
-- **quaternaryText**: The fourth and final line, typically the organization or location. Use it only in the largest layouts such as profile cards and account headers, and trim it in dense lists. `Microsoft`
+- **name**: The person or entity name and the single most important prop: it acts as the default primaryText, so supply it even when you also provide other text lines. Keep it as the canonical display name so it stays consistent with any primaryText you set. `Kevin Sturgis`
+- **size**: Controls the scale of the avatar, the presence badge, and all text lines together. Defaults to medium. Use extra-small or small in dense lists and rows, medium as the general-purpose default, and large, extra-large, or huge for profile headers and hero areas. Note that the presence badge renders one step smaller than the Persona size. `medium`
+- **textPosition**: Places the text block relative to the avatar/presence: after (default) for standard horizontal rows, before for right-aligned or trailing-avatar layouts, and below for centered card or tile layouts. Choose it to match the surrounding alignment instead of wrapping Persona in custom flex CSS. `below`
+- **textAlignment**: Controls vertical alignment of the text relative to the avatar/presence. Use start (default) for top-aligned text typical of multi-line rows, and center when a short primary line should sit visually centered against the avatar, which is common with textPosition set to before or below. `center`
+- **presenceOnly**: When true, the avatar is suppressed and the presence badge is shown in its place. Use it for compact availability rosters where identity is already established by an adjacent label; always supply a presence badge alongside it so the Persona renders something visible. `true`
+- **avatar (slot)**: The Avatar to display. Accepts Avatar props such as color, image (with src), and className, so you can render a photo, initials, or a solid color. When a presence badge is also supplied, the badge is rendered inside the avatar as its presence rather than as a separate element. `avatar={{ color: 'colorful' }}`
+- **presence (slot)**: The PresenceBadge to display, configured with presence status and out-of-office state. With an avatar present it decorates the avatar's corner; with presenceOnly it becomes the whole visual. Override its icon and className only when reproducing older presence visuals. `{ status: 'available' }`
+- **primaryText (slot)**: The first and largest text line. It defaults to name, so only set it when the displayed label must differ from the person's name; keeping it omitted is the recommended pattern. `Kevin Sturgis`
+- **secondaryText (slot)**: The second line, typically availability, email, or job title. Keep it short and pair it with a presence status so availability is not communicated by color alone. `Available`
+- **tertiaryText (slot)**: The third line, useful for role or department detail. Reserve it for medium and larger sizes where there is room for a third line without crowding. `Software Engineer`
+- **quaternaryText (slot)**: The fourth and smallest line, typically organization or location. Add it only in spacious layouts such as profile headers or cards, since table cells and sidebars rarely have room. `Microsoft`
 
 ### Slots
 
@@ -199,89 +199,99 @@ PresencePreviousBehavior.parameters = {
 
 ### Do's
 
-- Set name as the single source of identity and let primaryText inherit from it, adding primaryText only when the displayed heading must differ from the identity used by the avatar and presence badge.
-- Pair every presence status with a matching secondaryText such as Available or Away - OOF so status is readable as text and not conveyed by the badge color alone.
-- Choose size deliberately: extra-small and small for dense lists and compact rows, medium as the default, and large, extra-large, or huge for profile headers and detail panes.
-- Use textPosition below only in layouts with enough vertical room, such as profile cards, and keep textPosition after for table rows, list items, and toolbars.
-- Replace the avatar slot content explicitly when you need an image, a specific color, or sizing control, and provide the avatar image source rather than relying on default initials for people users should recognize.
-- Use the presence slot object to override the badge icon or className, as demonstrated by the previous-behavior story, when you must reproduce a legacy presence look.
-- Keep each Persona limited to the lines you actually display (primaryText plus at most secondaryText, tertiaryText, and quaternaryText) so the block does not carry hidden text payload.
+- Always supply name, since it becomes the default primaryText and gives the block a meaningful label without extra configuration.
+- Pass a presence object with status (and outOfOffice when relevant) when availability matters, so the avatar renders an accurate presence indicator.
+- Choose one of the six size values (extra-small through huge) to scale avatar, presence badge, and text together, rather than overriding typography manually.
+- Use textPosition and textAlignment to adapt Persona to a row layout instead of writing custom flex or grid CSS around it.
+- Provide the avatar slot with an image src for real people, and fall back to initials plus an avatar color when no photo is available.
+- Set presenceOnly when the list is about status rather than identity, for example a compact availability roster.
+- Keep secondaryText, tertiaryText, and quaternaryText short and ordered from most to least important, since they render as progressively smaller lines.
+- Only set primaryText explicitly when the label you want to display differs from name, and keep the two consistent when both are present.
 
 ### Don'ts
 
-- Do not attach click handlers to Persona's root to make it act like a button; it renders no interactive semantics, so wrap it in a Button or Link instead.
-- Do not set name and primaryText to the same string; that duplicates the identity line and makes the intent of primaryText ambiguous.
-- Do not use quaternaryText or long names in extra-small and small sizes, where the narrow column will crowd or truncate the text.
-- Do not assume the presence slot renders as a separate element beside the avatar; when an avatar and a presence badge are both provided, the badge becomes the avatar's presence indicator.
-- Do not treat presenceOnly as a general hide-the-avatar switch while still expecting the full multi-line layout; its purpose is to display only the presence indicator.
-- Do not rely on the presence badge color as the only signal of availability, and do not leave avatar images without an accessible description.
-- Do not use Persona to display non-identity content such as document metadata or file properties; use Card, Text, or Table cells for that.
+- Don't attach click handlers or treat Persona as a button; wrap it in Button, MenuItem, or another interactive component that supplies focus and activation behavior.
+- Don't set a primaryText that contradicts the name prop, because the mismatch produces confusing screen reader output and inconsistent visible labels.
+- Don't use presenceOnly without providing a presence badge, since the avatar is suppressed and nothing meaningful remains in the layout.
+- Don't re-implement sizing by hard-coding font sizes and avatar dimensions on the root; the size prop already coordinates all sub-parts.
+- Don't request a tiny size — Persona does not support it, and its presence badge maps to one step smaller than the Persona size.
+- Don't render all four text lines in narrow containers such as sidebars or table cells without a truncation strategy.
+- Don't rely on presence color alone to communicate availability; pair it with secondaryText such as "Available" or "Away".
+- Don't hand-compose an Avatar next to loose Text elements when Persona already handles the arrangement, spacing, and size mapping.
 
 ## Anti-Patterns
 
-### Persona used as a clickable row
+### Treating Persona as a clickable control
 
-❌ Persona renders as a non-interactive presentational container with no role, no tab stop, and no keyboard activation, so attaching a click handler to the root produces a target that mouse users can reach and keyboard and screen reader users cannot.
+❌ Persona is a presentational component with no built-in interaction, focus handling, or activation semantics, so adding click behavior to it produces an inaccessible, non-keyboard-operable target.
 
-✅ Wrap the Persona in a Button or Link, or place it inside a Menu item or list option, so focus, Enter, and Space activation, and an accessible name come from the surrounding control.
+✅ Wrap Persona inside Button, MenuItem, or another focusable component that provides roles, focus styling, and Enter/Space activation.
 
-### Duplicating identity in name and primaryText
+### Duplicating or contradicting the name with primaryText
 
-❌ Setting primaryText to the same string as name adds redundant configuration and blurs the distinction between the identity that drives the avatar and presence badge and the text that is displayed.
+❌ primaryText already defaults to name, so setting both to the same string is redundant, and setting them to different strings creates a visible label that disagrees with the announced name, confusing screen reader users and any code that keys off name.
 
-✅ Set name alone for the common case; use primaryText only when the visible heading must differ from the identity, such as a nickname or short display name.
+✅ Provide name only, and set primaryText exclusively for cases where the rendered label genuinely differs from the person's name — keeping the two values semantically aligned.
 
-### Status communicated by badge color only
+### presenceOnly without a presence badge
 
-❌ The presence badge expresses state primarily through color and icon, so color-blind and low-vision users, as well as screen reader users, may miss the status entirely; this fails WCAG 1.4.1 Use of Color.
+❌ presenceOnly suppresses the avatar and renders the presence badge in its place; if no presence badge is supplied, the Persona collapses to a text block with no visual anchor and loses the status it was meant to communicate.
 
-✅ Always pair the presence badge with a matching secondaryText such as Available, Away - OOF, or Offline, and provide an accessible description for the badge or the containing interactive control.
+✅ Always pass a presence object with a status when presenceOnly is true, and pair the badge with secondaryText so availability is conveyed by more than color.
 
-### Expecting a separate badge next to the avatar
+### Re-implementing Persona layout with custom CSS
 
-❌ When an avatar and a presence badge are both provided, the badge is rendered as the avatar's presence indicator rather than as an independent element in the layout, so spacing or alignment rules written for a separate badge break.
+❌ Hand-building an avatar plus stacked text out of Avatar and Text duplicates Persona's size mapping, spacing, and text alignment logic, and the result drifts from the design system as themes change.
 
-✅ Design for the badge sitting on the avatar corner when both slots are used, and reserve the stand-alone badge layout for presenceOnly or for usage without an avatar.
+✅ Use Persona with the size, textPosition, and textAlignment props, and limit customization to token-based styling on individual slots.
+
+### Packing all four text lines into dense rows
+
+❌ Tertiary and quaternary lines render very small and are easily clipped or made unreadable in narrow containers such as sidebars, table cells, and menu rows, which also harms contrast compliance.
+
+✅ Match the number of text lines to the available space — one or two lines in dense rows, three or four only in roomier surfaces like cards or profile headers.
 
 ## Accessibility
 
-**Requirements**: Persona itself is a non-interactive container, so accessibility hinges on how it is used and what surrounds it. The identity must exist as real text through name or primaryText rather than only inside an image, and avatar images must carry an accessible description. Status must not be communicated by color alone (WCAG 1.4.1 Use of Color), because the presence badge relies on its color and icon; supply supporting text through secondaryText or an explicit badge label. Text rendered by Persona must meet WCAG 1.4.3 contrast for the active theme, which the default colorNeutralForeground tokens satisfy. When a Persona is placed inside an interactive control, that control must expose a meaningful accessible name, since the Persona contributes no name of its own.
+**Requirements**: Persona itself has no interactive semantics, so the surrounding container must carry any interaction semantics and accessible name. WCAG 1.4.3 (contrast) applies to all four text lines, which should keep the neutral foreground colors provided by the Fluent theme; WCAG 1.4.4 (resize text) means text lines must remain readable when zoomed, so avoid fixed-height containers that clip them. WCAG 1.4.1 (use of color) requires that presence status not be conveyed by color alone — combine the presence indicator with secondaryText like "Available" or "Away". WCAG 1.1.1 applies to the avatar: when the avatar image conveys identity, it needs alternative text; when the adjacent text already names the person, the image can reasonably be treated as decorative. If Persona sits inside an interactive wrapper, that wrapper must meet 2.5.8 target-size guidance.
 
 | Key | Action |
 | --- | --- |
-| `Tab` | Persona adds no tab stop; focus moves past it to the next focusable element, or into the interactive control that wraps it. |
-| `Enter` | No effect on Persona itself; when Persona is wrapped in a Button or Link, the wrapping control activates. |
-| `Space` | No effect on Persona itself; when Persona is wrapped in a Button, the wrapping control activates. |
+| `Tab` | Persona is not focusable itself; focus moves to the interactive parent (Button, MenuItem, link) that wraps it. |
+| `Enter` | Activates the wrapping interactive element, not Persona, since Persona defines no keyboard handlers. |
+| `Space` | Activates a wrapping button-like control; Persona does not respond to Space on its own. |
+| `Escape` | Dismisses an enclosing Menu or Popover surface when Persona is used as a menu row's content. |
+| `Arrow keys (Up/Down)` | Move between rows in a parent menu or listbox implementation; navigation is owned by that parent, never by Persona. |
 
-**ARIA**: aria-label, aria-labelledby, aria-describedby, aria-hidden
+**ARIA**: aria-label on the presence badge to announce the status text to assistive technology, alt on the avatar image to describe the depicted person when the image carries meaning, aria-hidden on decorative Persona instances whose information is repeated elsewhere in the same row, aria-label on the interactive wrapper element when the visible Persona text is not sufficient as an accessible name, aria-describedby on the wrapper when secondaryText, tertiaryText, or quaternaryText should be announced as supporting description
 
-**Screen Reader**: Screen readers encounter Persona as a plain sequence of elements in DOM order: the avatar, then the text lines, with the badge adjacent to the avatar when both slots are used. Nothing in Persona announces itself as a group or live region, so a persona row is read as the identity text plus whatever label the avatar image or badge contributes. Because the badge conveys status by color and icon, without accompanying text or an explicit accessible name a screen reader user may hear only a generic image or nothing at all; pairing status with secondaryText is the reliable way to have the state announced.
+**Screen Reader**: Persona does not introduce a composite widget role, so assistive technology reads its parts in document order: the avatar (or presence badge when presenceOnly is set), then primaryText, secondaryText, tertiaryText, and quaternaryText as separate pieces of inline content. Because primaryText defaults to name, the first thing announced is normally the person's name, followed by the smaller supporting lines. When both an avatar and a presence badge are supplied, the badge is rendered inside the avatar rather than beside it, so its status is announced as part of the avatar and the avatar image should not duplicate that information. Without a wrapping group or label, long Persona instances can be read as a run-on string of text, so pair them with a labelled row or list item when several appear together.
 
 ## Styling
 
-Style Persona through its slots using makeStyles and Griffel tokens rather than overriding internals. Pass a className to the root for layout concerns such as grid placement or width, and use the slot object form for avatar, presence, primaryText, secondaryText, tertiaryText, and quaternaryText to apply per-slot classes; the presence slot accepts both className and icon overrides, which is the supported way to restyle or re-color a badge (for example a styles.statusAway class applied to the presence slot). Text colors come from tokens.colorNeutralForeground1 for primaryText and tokens.colorNeutralForeground2 or tokens.colorNeutralForeground3 for the supporting lines, with tokens.fontSizeBase300 and tokens.fontSizeBase200 for typical body and caption sizes and tokens.lineHeightBase300 or tokens.lineHeightBase200 for matching line heights. Emphasize a name with tokens.fontWeightSemibold, separate lines with spacing tokens such as tokens.spacingVerticalXS or tokens.spacingVerticalS, and space the avatar from the text with tokens.spacingHorizontalS or tokens.spacingHorizontalM. Rounded avatar shapes come from the Avatar slot itself, so change shape or color through avatar props rather than CSS on the Persona root.
+Style Persona through its slots with makeStyles rather than restructuring the DOM: pass className to the avatar and presence slot objects, and use the root slot for outer spacing. Prefer the size, textPosition, and textAlignment props for structure, then fine-tune with Griffel tokens such as tokens.spacingHorizontalS or tokens.spacingHorizontalM between avatar and text, tokens.spacingVerticalXXS between stacked text lines, and tokens.borderRadiusCircular when overriding the avatar shape. Typography overrides usually target the text lines: tokens.fontSizeBase500 for a prominent primary line, tokens.fontSizeBase300 or tokens.fontSizeBase200 for secondary and quaternary lines, with tokens.lineHeightBase300 to keep tight rows readable. Text colors map naturally to the neutral foreground ramp — tokens.colorNeutralForeground1 for the primary line and tokens.colorNeutralForeground2, tokens.colorNeutralForeground3, or tokens.colorNeutralForeground4 for the supporting lines — and tokens.colorNeutralBackground1 or tokens.colorNeutralBackground1Hover when a Persona row sits on a custom surface. For status recoloring, override the presence slot's className with your own presence color tokens rather than changing the Avatar. When truncating, apply overflow with text-overflow and a max-width on the text slot's className, since Persona sizes the text but does not clip it.
 
 ## Performance
 
-Persona is a lightweight presentational component: it renders no portals, popups, observers, or layout effects, and its cost is essentially the DOM nodes of the avatar, badge, and text lines. The main cost driver is the avatar image, which triggers a network request and decode per distinct source, so in long lists prefer extra-small or small sizes, reuse the same image URL, and consider rendering presence only when a picture is not needed. Passing stable avatar and presence object references (hoisted out of the render loop) avoids re-diffing the underlying Avatar and PresenceBadge on every render, and omitting unused text slots removes nodes from large virtualized lists. Because text lines are plain nodes with no truncation measurement, extremely long names should be shortened at the data layer instead of relying on the component to clamp them.
+Persona is a lightweight, purely presentational component, so rendering cost is dominated by its children: an avatar image and a presence badge. Beware of inline object literals for the avatar and presence slots in long or virtualized lists, because a fresh object on every render defeats memoization and forces the slot components to re-render; hoist those objects to module scope or memoize them. Style sheets should be created once with makeStyles at module scope rather than inside the render path. Avatar image loading is the main runtime cost — supply appropriately sized images so large photos are not downscaled for extra-small Personas, and avoid mounting thousands of Persona instances in a non-virtualized list. When text lines change frequently (for example live presence updates), keep the presence object stable by status value so unchanged rows skip work.
 
 ## Theming & Tokens
 
-Persona is fully theme-driven and adapts automatically to light, dark, and high-contrast themes applied through the Provider. Its text uses the neutral foreground ramp, with tokens.colorNeutralForeground1 for the primary identity line and tokens.colorNeutralForeground2 and tokens.colorNeutralForeground3 for the supporting lines, plus typography tokens such as tokens.fontSizeBase300, tokens.fontSizeBase200, tokens.lineHeightBase300, and tokens.lineHeightBase200 that step down with smaller sizes, and tokens.fontWeightSemibold for emphasis. Spacing between the avatar and text comes from tokens.spacingHorizontalS and tokens.spacingHorizontalM, with tokens.spacingVerticalXS and tokens.spacingVerticalS used between stacked lines. The presence badge takes its status colors from palette tokens such as tokens.colorPaletteGreenForeground1 and its out of office treatment from the same palette family, while the avatar draws on the theme's brand and neutral background tokens; overriding presence visuals with className or icon in the presence slot will opt that piece out of the automatic theme response.
+Persona participates in the Fluent theme through the Persona's typography and neutral color tokens, and it inherits from FluentProvider so it switches automatically between light, dark, and high-contrast themes. The text lines draw on the neutral foreground ramp — typically tokens.colorNeutralForeground1 for primaryText, with the smaller lines stepping through tokens.colorNeutralForeground2, tokens.colorNeutralForeground3, and tokens.colorNeutralForeground4 — and the size prop drives token-based font scales such as tokens.fontSizeBase500 and tokens.fontSizeBase400 down to tokens.fontSizeBase200, along with matching tokens.lineHeightBase values. Spacing between the avatar and text derives from the spacing scale (tokens.spacingHorizontalS, tokens.spacingHorizontalM, tokens.spacingVerticalXXS). Avatar colors and presence colors come from the Avatar and PresenceBadge theming (brand and palette color tokens used by the avatar, and presence status color tokens for available, away, busy, offline, and out-of-office), so recoloring should be done through those components' own theming rather than by overriding Persona's internals.
 
 ## Migration Notes
 
-Fluent UI v8 personas used a flat set of string and color props; in v9 the picture and its styling move into the avatar slot, and the identity lines are discrete slots (primaryText, secondaryText, tertiaryText, quaternaryText) that accept text or slot props. primaryText now defaults to name, so the heading no longer has to be repeated explicitly. Sizes map one step smaller than the corresponding presence badge sizes, for example huge maps to large and medium maps to small, and Persona does not support the tiny size. The presence badge follows the v8 presence mapping by default; to reproduce a previous icon and color behavior you override the icon and className inside the presence slot object, as the previous-behavior story demonstrates.
+Persona in v9 replaces the Fabric and v8 Persona components with a slots-based API: instead of separate imageUrl, imageAlt, primaryText, and showSecondaryText style props, you pass objects to the avatar and presence slots and use child slots for each text line. The name prop now serves as the default for primaryText, so most v8 usages that set primaryText equal to the person's name can drop primaryText entirely. Presence mapping also changed: a PresenceBadge passed to the avatar slot renders inside the avatar as its presence, whereas presenceOnly replaces the avatar with the badge. Sizes map one step smaller than in v8 — for example huge maps to large and medium maps to small — and Persona does not support tiny at all. If the previous v8 presence rendering is required, the presence badge's icon and className can be overridden to reproduce the older visuals.
 
 ## Edge Cases
 
-- When presenceOnly is set, the avatar is replaced by the presence badge, so avatar slot props such as an image source have no visible effect in that configuration.
-- primaryText defaults to name, so providing both is only meaningful when the displayed heading differs from the identity; otherwise the second value is redundant configuration.
-- Because a presence badge given alongside an avatar becomes the avatar's presence indicator, it does not appear as a separate element and will not respond to layout rules written for a sibling badge.
-- The size scale is one step smaller than the corresponding presence badge sizes and omits tiny, so a design that assumed a huge badge maps to the large Persona and the smallest supported persona size remains extra-small.
-- To reproduce the previous icon and color behavior of a presence status, you must override both icon and className inside the presence slot object; the default mapping follows the v8 behavior rather than the custom icon.
-- A Persona with textPosition below and all four text lines occupies significant vertical space, so it can misalign rows inside grids, tables, and toolbars that assume uniform height.
-- Persona contributes no accessible name of its own, so when placed inside a Button or Link the surrounding control must be given its own label or be described by the rendered identity text.
+- When both an avatar and a presence badge are provided, the badge renders as the avatar's presence rather than as a sibling element, so the visual footprint does not grow — but if presenceOnly is also set, the avatar disappears and the badge takes its place.
+- Presence badge sizing maps one step smaller than the Persona size: a huge Persona shows a large badge and a medium Persona shows a small badge. Persona has no tiny size, so very small presence rendering is not available.
+- If name is omitted and primaryText is not supplied, the first text line is empty even though secondaryText and lower lines still render, producing a visually unbalanced block.
+- The text lines are not truncated by Persona itself; long names or job titles will overflow or wrap depending on the parent container unless you apply your own overflow and max-width styles to the text slots.
+- presenceOnly without a presence object leaves only the text lines rendering, silently removing the visual anchor the layout may have been sized around.
+- textPosition set to before reverses the visual order so the text precedes the avatar; in left-to-right reading contexts this changes the order in which the name and image are perceived, so verify it against the intended alignment.
+- Older v8 presence visuals are not reproduced automatically — the presence badge's icon and className must be overridden if the previous rendering is required.
 
 ## See Also
 

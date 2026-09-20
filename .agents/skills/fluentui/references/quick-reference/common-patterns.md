@@ -2,529 +2,742 @@
 
 > **Category**: quick-reference
 
-Everything imports from `@fluentui/react-components` unless noted (compat/preview packages in §11).
+**One import for everything:** `import { Button, Field, Input } from '@fluentui/react-components';`
+**Every callback is `(event, data)`** — read new state from `data`, never from `event.target`.
 
-## 1. Universal state pattern: `default*` ↔ controlled
+## The 6 patterns you reuse everywhere
 
-`default*` = uncontrolled (component owns state). Bare prop + `on*` callback = controlled (you own state). **Never pass both.**
+| # | Pattern | Canonical shape |
+|---|---------|-----------------|
+| 1 | **Provider at the root** | `<FluentProvider theme={…} dir="ltr">` |
+| 2 | **Compound components** | `Parent > Trigger/Item/Surface > Content` (Dialog, Menu, Card, Table, Tree, Nav, Toast…) |
+| 3 | **Controlled XOR uncontrolled** | `value` + `onChange` **or** `defaultValue` — never both |
+| 4 | **Field wraps any control** | `<Field label hint validationMessage>{control}</Field>` |
+| 5 | **Overlays portal out of the tree** | Trigger + Surface; theme follows with `applyStylesToPortals` |
+| 6 | **Slots for sub-parts** | `icon`, `contentBefore`, `header`, `action`, `root` |
 
-| Component | Uncontrolled | Controlled | Callback | New value in `data` |
-| --- | --- | --- | --- | --- |
-| Accordion | `defaultOpenItems` | `openItems` | `onToggle` | `data.openItems` |
-| Card | `defaultSelected` | `selected` | `onSelectionChange` | `data.selected` |
-| Carousel | `defaultActiveIndex` | `activeIndex` | `onActiveIndexChange` | `any` — validate yourself |
-| Checkbox | `defaultChecked` | `checked` (`boolean \| 'mixed'`) | `onChange` | `data.checked` |
-| DatepickerCompat | `defaultOpen` | `open`, `value` | `onOpenChange`, `onSelectDate` | `data.open` / `date` |
-| Dialog | `defaultOpen` | `open` | `onOpenChange` | `data.open` |
-| Input | `defaultValue` | `value` | `onChange` | `data.value` |
-| List | `defaultSelectedItems` | `selectedItems` | `onSelectionChange` | `data.selectedItems` |
-| Menu | `defaultOpen` | `open` | `onOpenChange` | `data.open` |
-| Nav | `defaultSelectedValue`, `defaultSelectedCategoryValue`, `defaultOpenCategories` | `selectedValue`, `selectedCategoryValue`, `openCategories` | `onNavItemSelect`, `onNavCategoryItemToggle` | — |
-| Popover | `defaultOpen` | `open` | `onOpenChange` | `data.open` |
-| Radio | — | `value` | `onChange` | `data.value` |
-| Rating | `defaultValue` | `value` | `onChange` | `data.value` |
-| Select | — (uncontrolled only) | — | `onChange` | `data.value` |
-| Slider | `defaultValue` | `value` | `onChange` | `data.value` |
-| SpinButton | `defaultValue` | `value` / `displayValue` | `onChange` | `data.value` / `data.displayValue` |
-| SwatchPicker | `defaultSelectedValue` | `selectedValue` | `onSelectionChange` | `data.selectedValue` |
-| Switch | `defaultChecked` | `checked` | `onChange` | `data.checked` |
-| Tabs | `defaultSelectedValue` | `selectedValue` | `onTabSelect` | `data.value` |
-| Textarea | `defaultValue` | `value` | `onChange` | `data.value` |
-| TimepickerCompat | `defaultSelectedTime` | `selectedTime` | `onTimeChange` | `data.selectedTime` |
-| Toolbar | `defaultCheckedValues` | `checkedValues` | `onCheckedValueChange` | `data.name` + `data.checkedItems` |
-| Tree | `defaultOpenItems` | `openItems`, `checkedItems` | — | — |
+---
 
-**Handler shape:** every v9 callback is `(event, data) => void`. Read the new value from `data` — never `event.target.value`.
+## 1. Provider & theming
 
-## 2. Field = label + control + validation + hint
+| `FluentProvider` prop | Use |
+|---|---|
+| `theme` | Light/dark/partial theme object (e.g. `webLightTheme`, `webDarkTheme`) |
+| `dir` | `'ltr' \| 'rtl'` — flips every logical style |
+| `targetDocument` | Render into another `Document` (iframes, popups) |
+| `applyStylesToPortals` | Portalled Dialog/Menu/Popover/Tooltip/Toaster inherit theme + dir (default `true`) |
+| `overrides_unstable` | Nested-provider overrides |
+| `customStyleHooks_unstable` | Per-component style hooks (`useButtonStyles_unstable`, `useDialogSurfaceStyles_unstable`, …) |
 
-| Field prop | Values |
-| --- | --- |
-| `label` | Rendered via the `label` slot |
-| `orientation` | `'vertical' \| 'horizontal'` |
-| `validationState` | `'error' \| 'warning' \| 'success' \| 'none'` |
-| `validationMessage` | String/ReactNode shown under the control (`validationMessageIcon` slot) |
-| `hint` | Helper text (`hint` slot) |
-| `required` | Adds the required marker |
-| `size` | `'small' \| 'medium' \| 'large'` |
-| slots | `root`, `label`, `validationMessage`, `validationMessageIcon`, `hint` |
+Related utilities: `Portal` (manual portal, `mountNode`), `AriaLiveAnnouncer` (screen-reader messages).
 
-- Put the input **as a child of `Field`** — do not add a second `Label`.
-- Standalone `Label`: `disabled`, `required`, `size`, `weight` (`'regular' \| 'semibold'`).
-- `validationState` alone shows nothing: always supply `validationMessage`.
+---
 
-## 3. Overlay patterns
+## 2. Controlled vs uncontrolled — the universal triads
 
-| Component | Pattern props | Notes |
-| --- | --- | --- |
-| Tooltip | `relationship` **(required: `'label' \| 'description' \| 'inaccessible'`)**, `content`, `appearance` (`normal`/`inverted`), `withArrow`, `showDelay`, `hideDelay`, `visible`, `onVisibleChange`, `positioning` | `relationship='label'` for icon-only triggers; `'description'` for extra detail |
-| Popover | `open`/`defaultOpen`/`onOpenChange`, `openOnHover`, `openOnContext`, `mouseLeaveDelay`, `withArrow`, `inline`, `appearance`, `size`, `trapFocus`, `legacyTrapFocus`, `inertTrapFocus`, `unstable_disableAutoFocus`, `closeOnScroll`, `closeOnIframeFocus`, `positioning` | `inline` renders in place (skips the portal); prefer `inertTrapFocus` |
-| Menu | `open`/`defaultOpen`/`onOpenChange`, `openOnHover`, `openOnContext`, `hoverDelay`, `persistOnItemClick`, `inline`, `closeOnScroll`, `positioning` | `persistOnItemClick` keeps the menu open (multi-select) |
-| Dialog | `open`/`defaultOpen`/`onOpenChange`, `modalType`, `inertTrapFocus`, `unmountOnClose` | `unmountOnClose` resets inner state (e.g. forms) |
-| Drawer | `type` (`'inline' \| 'overlay'`) | Pair with your own open/close state |
-| TeachingPopover | coaching steps: `footerLayout`, page-count / nav-button render props, `mediaLength` | Onboarding/tour pattern |
+### 2a. Open / visibility state
 
-## 4. Selection & collection state
+| Component | Controlled | Uncontrolled | Callback |
+|---|---|---|---|
+| `Dialog`, `Drawer`, `Popover`, `Menu`, `Dropdown`, `TagPicker`, `TreeItem` | `open` | `defaultOpen` | `onOpenChange` |
+| `Accordion` | `openItems` | `defaultOpenItems` | `onToggle` (data: `openItems`) |
+| `Tree` | `openItems` | `defaultOpenItems` | `TreeItem` `onOpenChange` |
+| `Nav` | `openCategories` | `defaultOpenCategories` | `onNavCategoryItemToggle` |
+| `Carousel` | `activeIndex` | `defaultActiveIndex` | `onActiveIndexChange` |
+| `Tooltip` | `visible` | — | `onVisibleChange` |
 
-| Component | State props | Notes |
-| --- | --- | --- |
-| Card | `selected`, `defaultSelected`, `onSelectionChange`, `focusMode` (`'off' \| 'no-tab' \| 'tab-exit' \| 'tab-only'`), `disabled`, `shouldRestrictTriggerAction`, `appearance`, `orientation`, `size` | slots `root`, `floatingAction`, `checkbox` |
-| List | `selectionMode`, `selectedItems`, `defaultSelectedItems`, `onSelectionChange`, `navigationMode` | — |
-| SwatchPicker | `selectedValue`, `defaultSelectedValue`, `onSelectionChange`, `layout` (`row`/`grid`), `focusMode` (`arrow`/`tab`), `size`, `shape`, `spacing` | — |
-| Tree | `openItems`, `defaultOpenItems`, `selectionMode`, `checkedItems`, `navigationMode`, `appearance` (`subtle`/`subtle-alpha`/`transparent`), `size` | — |
-| Tabs | `selectedValue`, `defaultSelectedValue`, `onTabSelect`, `selectTabOnFocus`, `reserveSelectedTabSpace`, `appearance` (`transparent`/`subtle`/`subtle-circular`/`filled-circular`), `size`, `vertical`, `disabled` | `reserveSelectedTabSpace` prevents layout shift |
-| Toolbar | `checkedValues`, `defaultCheckedValues`, `onCheckedValueChange`, `vertical`, `size` | values keyed by group name |
-| Table | `selectionMode`, `onSelectionChange`, `focusMode`, `sortable`/`sortDirection`/`onSortChange`, `columnSizingOptions`, `autoFitColumns`, `containerWidthOffset`, `visible`, `truncate`, `subtle` | — |
-| Nav | selected value + open categories (see §1), `density`, `multiple` | — |
+### 2b. Value / selection state
 
-## 5. Theming, direction, portals
+| Component | Controlled | Uncontrolled | Callback | `data` field |
+|---|---|---|---|---|
+| `Input`, `Textarea`, `Select`, `SearchBox` | `value` | `defaultValue` | `onChange` | `data.value` |
+| `Dropdown`, `Combobox` | `value` | `defaultValue` | `onOpenChange` | `data.open` |
+| `Checkbox`, `Switch` | `checked` | `defaultChecked` | `onChange` | `data.checked` |
+| `RadioGroup`, `Radio` | `value` | `defaultValue` | `onChange` | `data.value` |
+| `Slider`, `SpinButton` | `value` | `defaultValue` | `onChange` | `data.value` / `data.displayValue` |
+| `Rating` | `value` | `defaultValue` | `onChange` | `data.value` |
+| `TabList` | `selectedValue` | `defaultSelectedValue` | `onTabSelect` | `data.value` |
+| `List` | `selectedItems` | `defaultSelectedItems` | `onSelectionChange` | `data.selectedItems` |
+| `Card` | `selected` | `defaultSelected` | `onSelectionChange` | `data.selected` |
+| `Nav` | `selectedValue` | `defaultSelectedValue` | `onNavItemSelect` | `data.value` |
+| `TagGroup` | `selectedValues` | `defaultSelectedValues` | `onTagSelect` | `data.value` |
+| `SwatchPicker` | `selectedValue` | `defaultSelectedValue` | `onSelectionChange` | `data.value` |
+| `MenuList`, `Toolbar` | `checkedValues` | `defaultCheckedValues` | `onCheckedValueChange` | `data.name` + `data.checkedItems` |
+| `ColorPicker` | `color` | — | `onColorChange` | `data.color` |
+| `ColorArea`, `ColorSlider` | `color` | `defaultColor` | `onChange` | `data.color` |
 
-| Component | Props | Notes |
-| --- | --- | --- |
-| FluentProvider | `theme` (PartialTheme), `dir` (`'ltr' \| 'rtl'`), `targetDocument`, `applyStylesToPortals`, `customStyleHooks_unstable`, `overrides_unstable` | Root of the app. Portals need `applyStylesToPortals` (or a mount node inside the FluentProvider) to inherit theme + direction |
-| Portal | `children`, `mountNode` (`HTMLElement \| { element?, className? } \| null`) | Renders outside the DOM tree while keeping React context |
-| Positioning / Tabster / Utilities / ContextSelector / Aria | No props documented except `Aria.children` | `Aria` = a11y-only wrapper for custom slot rendering |
+---
 
-## 6. Forms & data entry
+## 3. Slots & shorthand props
 
-| Component | Key props |
-| --- | --- |
-| Input | `value`/`defaultValue`, `onChange`, `size`, `appearance` (`outline`/`underline`/`filled-darker`/`filled-lighter`/`filled-darker-shadow`/`filled-lighter-shadow`), `type` (`number`/`text`/`email`/`password`/`search`/`tel`/`url`/`date`/`datetime-local`/`month`/`time`/`week`), slots `contentBefore`/`contentAfter` |
-| Textarea | `value`/`defaultValue`, `onChange`, `resize` (`none`/`horizontal`/`vertical`/`both`), `appearance`, `size` |
-| Select | `onChange`, `appearance`, `size` |
-| Combobox | `freeform`, `children`, slots `expandIcon`/`clearIcon`/`input`/`listbox` |
-| Search | `onChange` (`SearchBoxChangeEvent`, `InputOnChangeData`) |
-| Checkbox | `checked`/`defaultChecked` (`'mixed'`), `onChange`, `labelPosition` (`before`/`after`), `shape` (`square`/`circular`), `size` (`medium`/`large`) |
-| Radio | `value`, `onChange`, `labelPosition` (`after`/`below`), `disabled` |
-| Switch | `checked`/`defaultChecked`, `onChange`, `labelPosition` (`above`/`after`/`before`), `size`, `disabledFocusable` |
-| Slider | `value`/`defaultValue`, `onChange`, `min`/`max`/`step`, `vertical`, `size`, `disabled` |
-| SpinButton | `value`/`defaultValue`/`displayValue`, `onChange`, `min`/`max`, `step`/`stepPage`, `precision`, `appearance`, `size` |
-| Rating | `value`/`defaultValue`, `onChange`, `max`, `step` (0.5/1), `size`, `color`, `itemLabel`, `name`, `iconFilled`/`iconOutline` |
-| ColorPicker | `color` (HsvColor), `onColorChange`, `shape` (`rounded`/`square`) |
-| TagPicker | `noPopover`, `inline`, `onOptionSelect`, `onOpenChange` |
-| InfoLabel | `size`, `inline`, `info`, `popover` |
-| DatepickerCompat | `value`, `onSelectDate`, `open`/`defaultOpen`/`onOpenChange`, `allowTextInput`, `formatDate`/`parseDateFromString`, `onValidationResult`, `minDate`/`maxDate`, `firstDayOfWeek`, `firstWeekOfYear`, `showWeekNumbers`, `showGoToToday`, `inlinePopup`, `positioning`, `required`, `borderless`, `underlined`, `placeholder`, `today`, `initialPickerDate`, `isMonthPickerVisible`, `showMonthPickerAsOverlay`, `disableAutoFocus`, `openOnClick`, `showCloseButton`, `strings`, `dateTimeFormatter`, `allFocusable`, `highlightCurrentMonth`, `highlightSelectedMonth` |
-| TimepickerCompat | `selectedTime`/`defaultSelectedTime`, `onTimeChange`, `startHour`/`endHour`, `increment`, `dateAnchor`, `formatDateToTimeString`, `parseTimeStringToDate` |
-| CalendarCompat | Fully controlled: `navigatedDate`, `selectedDate`, `navigationIcons`, `strings` **(all required)** + `onNavigateDate` (required); plus `onSelectDate`, `dateRangeType`, `minDate`/`maxDate`, `showWeekNumbers`, `lightenDaysOutsideNavigatedMonth`, year-picker props |
-
-## 7. Feedback, loading & progress
-
-| Component | Props |
-| --- | --- |
-| Spinner | `size` (extra-tiny → huge), `appearance` (`primary`/`inverted`), `labelPosition` (`above`/`below`/`before`/`after`), `delay` (avoids flash on fast loads); slots `root`/`spinner`/`spinnerTail`/`label` |
-| Skeleton | `animation` (`wave`/`pulse`), `appearance` (`opaque`/`translucent`), `shape` (`circle`/`square`/`rectangle`), `size`, `width` |
-| ProgressBar | `value`, `max`, `thickness` (`medium`/`large`), `color` (`brand`/`success`/`warning`/`error`), `shape` (`rounded`/`square`) |
-| MessageBar | `intent`, `politeness` (`assertive`/`polite`), `shape` (`square`/`rounded`); slots `root`/`icon`/`bottomReflowSpacer` |
-| Toast | `appearance` |
-
-## 8. Layout, responsiveness & density
-
-| Component | Cheat props |
-| --- | --- |
-| Card | `appearance` (`filled`/`filled-alternative`/`outline`/`subtle`), `orientation`, `size` |
-| Divider | `alignContent` (`start`/`center`/`end`), `appearance` (`brand`/`default`/`strong`/`subtle`), `inset`, `vertical` |
-| Image | `block`, `bordered`, `fit` (`none`/`center`/`contain`/`cover`/`default`), `shadow`, `shape` (`square`/`circular`/`rounded`) |
-| Overflow | `id` **(required)**, `groupId`, `children` (ReactElement), `onOverflowChange` → `OverflowState` |
-| Carousel | `activeIndex`/`defaultActiveIndex`, `onActiveIndexChange`, `groupSize` (number or `'auto'`), `align` (`start`/`center`/`end`), `draggable`, `whitespace`, `circular`, `appearance`, `motion`, `autoplayInterval`, `announcement` |
-| Text | `size` 100–1000, `weight`, `font`, `align`, `block`, `truncate`, `wrap`, `italic`, `underline`, `strikethrough` |
-| Breadcrumb | `size`, `focusMode` (`arrow`/`tab`); slots `root`/`list` |
-| Avatar | `name`, `size`, `shape`, `color` (`neutral`/`brand`/`colorful`/named), `active`, `activeAppearance` (`ring`/`shadow`/`ring-shadow`), `idForColor` |
-| Persona | `name`, `size`, `textPosition` (`after`/`before`/`below`), `textAlignment`, `presenceOnly`; slots up to `quaternaryText` |
-| Badge | `appearance`, `color`, `size`, `shape`, `iconPosition` |
-| Accordion | `collapsible`, `multiple`, `navigation` (`linear`/`circular`) |
-| Image/Link/Text | `Link`: `appearance`, `inline`, `disabled`, `disabledFocusable` |
-
-## 9. Accessibility & motion
-
-- `Tooltip.relationship` is **required** — model the a11y relationship, not just visuals.
-- `Dialog` / `Popover`: `inertTrapFocus` for modern focus trapping; `Popover` also has `legacyTrapFocus` and `trapFocus`.
-- `MessageBar.politeness` (`'polite'` vs `'assertive'`) controls screen-reader urgency.
-- `Aria` (`children`) wraps custom markup so Fluent slots stay a11y-correct.
-- `Motion`: `children` (required), `appear`, `visible`, `direction` (remote/presence variants), `unmountOnExit`, `replayKey`, `imperativeRef`, `onMotionStart` / `onMotionFinish` / `onMotionCancel`.
-- `MotionComponentsPreview` (`visible`, `itemDelay`/`itemDuration`, `delayMode`, `hideMode`, `reversed`, `onMotionFinish`) for staggered lists.
-- `MenuGridPreview`: `visuallyHidden`, `root`, `icon`/`content`/`subText`/`firstSubAction`/`secondSubAction` slots, `circular`.
-
-## 10. Slots map — customize with a prop named after the slot
+Every component exposes a **`root` slot** (change element via the root slot's `as`, e.g. `Slot<'div', 'li'>`); named slots are set either by **prop shorthand** or by **JSX children**.
 
 | Component | Slots |
-| --- | --- |
-| Accordion, Nav, Table, Rating, Text, Tags | `root` |
-| Button | `root`, `icon` |
-| Badge | `root`, `icon` |
-| Avatar | `root`, `image`, `initials`, `icon`, `badge` |
-| Breadcrumb | `root`, `list` |
-| Card | `root`, `floatingAction`, `checkbox` |
-| Checkbox / Radio | `root`, `label`, `input`, `indicator` |
-| Combobox | `root`, `expandIcon`, `clearIcon`, `input`, `listbox` |
-| Divider | `root`, `wrapper` |
-| Field | `root`, `label`, `validationMessage`, `validationMessageIcon`, `hint` |
-| Input | `root`, `input`, `contentBefore`, `contentAfter` |
-| Textarea | `root`, `textarea` |
-| Select | `root`, `select`, `icon` |
-| Slider | `root`, `rail`, `thumb`, `input` |
-| Spinner | `root`, `spinner`, `spinnerTail`, `label` |
-| Switch | `root`, `indicator`, `input`, `label` |
-| MessageBar | `root`, `icon`, `bottomReflowSpacer` |
-| Dialog / Menu / Popover | `surfaceMotion` |
-| Tooltip | `content` |
-| Tree | `root`, `collapseMotion` |
-| Persona | `root`, `avatar`, `presence`, `primaryText`, `secondaryText`, `tertiaryText`, `quaternaryText` |
+|---|---|
+| `Button` / `MenuButton` / `SplitButton` | `root`, `icon` (`menuButton`, `primaryActionButton` for split) |
+| `Input` | `root`, `input`, `contentBefore`, `contentAfter` |
+| `Textarea` | `root`, `textarea` |
+| `Select` | `root`, `select`, `icon` |
+| `Field` | `root`, `label`, `validationMessage`, `validationMessageIcon`, `hint` |
+| `InfoLabel` | `root`, `label`, `infoButton` |
+| `CardHeader` | `root`, `image`, `header`, `description`, `action` |
+| `CardPreview` | `root`, `logo` |
+| `CardFooter` | `root`, `action` |
+| `DialogTitle` | `root`, `action` |
+| `DialogSurface` | `root`, `backdrop`, `backdropMotion` |
+| `Tag` | `root`, `media`, `icon`, `primaryText`, `secondaryText`, `dismissIcon` |
+| `TreeItemLayout` | `root`, `main`, `iconBefore`, `iconAfter`, `expandIcon`, `aside`, `actions`, `selector` |
+| `AvatarGroupPopover` | `root`, `triggerButton`, `content`, `popoverSurface`, `tooltip` |
+| `TableCellLayout` | `root`, `media`, `main`, `description`, `content` |
+| `DrawerHeaderTitle` | `root`, `heading`, `action` |
 
-## 11. Import map
+```tsx
+<Input contentBefore={<Text>$</Text>} contentAfter={<Button appearance="subtle">Go</Button>} />
+<CardHeader header={<Text weight="semibold">Title</Text>} action={<Button icon="…" />} />
+```
 
-| Package | Exports |
-| --- | --- |
-| `@fluentui/react-components` | Everything in this sheet not listed below |
-| `@fluentui/react-calendar-compat` | `CalendarCompat` |
-| `@fluentui/react-datepicker-compat` | `DatepickerCompat` |
-| `@fluentui/react-timepicker-compat` | `TimepickerCompat` |
-| `@fluentui/react-context-selector` | `ContextSelector` |
-| `@fluentui/react-headless-components-preview` | `HeadlessComponentsPreview` |
-| `@fluentui/react-menu-grid-preview` | `MenuGridPreview` |
-| `@fluentui/react-motion-components-preview` | `MotionComponentsPreview` |
+---
+
+## 4. Forms: `Field` + control (the standard pattern)
+
+| `Field` prop | Values |
+|---|---|
+| `orientation` | `vertical` (default) \| `horizontal` |
+| `validationState` | `none` \| `error` \| `warning` \| `success` |
+| `required` | `boolean` (adds indicator) |
+| `size` | `small` \| `medium` \| `large` |
+| `children` | `ReactNode` **or** `(FieldControlProps) => ReactNode` (render-function gets generated `id`, `name`, `required`, `aria-describedby`) |
+
+**Field is presentation-only** — it never owns the value; the control does. Group radios with `RadioGroup` (`layout`: `vertical` \| `horizontal` \| `horizontal-stacked`).
+
+---
+
+## 5. Overlay matrix
+
+| Overlay | Trigger | Surface / structure | Control | Portal | Notable props |
+|---|---|---|---|---|---|
+| **Dialog** | `DialogTrigger` (or your own button) | `DialogSurface` → `DialogBody` → `DialogTitle` + `DialogContent` + `DialogActions` | `open`/`defaultOpen`/`onOpenChange` | ✅ | `modalType`, `unmountOnClose`, `inertTrapFocus`, `DialogActions position="start"\|"center"\|"end"`, `Trigger action="open"\|"close"` |
+| **Drawer** | your own `Button` | `OverlayDrawer` (backdrop + portal) / `InlineDrawer` (in-flow) → `DrawerHeader` (`DrawerHeaderTitle`, `DrawerHeaderNavigation`), `DrawerBody`, `DrawerFooter` | `open`/`defaultOpen`/`onOpenChange` | Overlay only | `separator`, `type="inline" \| "overlay"` |
+| **Menu** | `MenuTrigger` (+ `disableButtonEnhancement`) | `MenuPopover` → `MenuList` | `open`/`defaultOpen`/`onOpenChange` | ✅ | `openOnHover`, `openOnContext`, `hoverDelay`, `persistOnItemClick`, `closeOnScroll`, `positioning`, `inline` |
+| **Popover** | `PopoverTrigger` | `PopoverSurface` | `open`/`defaultOpen`/`onOpenChange` | ✅ | `openOnHover`, `mouseLeaveDelay`, `withArrow`, `positioning`, `trapFocus`/`inertTrapFocus`, `closeOnScroll`, `size`, `appearance` |
+| **Tooltip** | wraps its child (no trigger component) | — | `visible` / `onVisibleChange` | ✅ | **`relationship` is required** (`label` \| `description` \| `inaccessible`), `withArrow`, `showDelay`, `hideDelay` |
+| **Toast** | `ToastTrigger` (inside a `Toast` slot) | `Toaster` → `Toast` → `ToastTitle` / `ToastBody` / `ToastFooter` | conditional render | ✅ | `announce`, `politeness`, `intent`, `inline` |
+
+**Trigger defaults:** `DialogTrigger` auto-detects context — `action="open"` outside the surface, `close` inside. `PopoverTrigger`/`MenuTrigger` render their child as the trigger and forward refs.
+
+---
+
+## 6. Compound component map
+
+| Family | Composition |
+|---|---|
+| **Accordion** | `Accordion` → `AccordionItem value` → `AccordionHeader` + `AccordionPanel` |
+| **Card** | `Card` → `CardHeader` / `CardPreview` / `CardFooter` |
+| **Dialog** | see §5 |
+| **Drawer** | see §5 |
+| **Menu** | `MenuTrigger` + `MenuPopover` → `MenuList` → `MenuItem`, `MenuItemCheckbox`, `MenuItemRadio`, `MenuItemLink`, `MenuItemSwitch`, `MenuDivider`, `MenuGroup` + `MenuGroupHeader`, `MenuSplitGroup` |
+| **Nav** | `Nav` → `NavItem`, `NavCategory` → `NavCategoryItem` + `NavSubItemGroup` → `NavSubItem`; also `NavSectionHeader`, `NavDivider`, `SplitNavItem`; drawer form: `NavDrawer` → `NavDrawerHeader`/`NavDrawerBody`/`NavDrawerFooter`; app-level: `AppItem`, `AppItemStatic`, `Hamburger` |
+| **Popover** | `Popover` + `PopoverTrigger` + `PopoverSurface` |
+| **Table** | `Table` → `TableHeader` → `TableRow` → `TableHeaderCell` (`sortable`, `sortDirection`); `TableBody` → `TableRow` → `TableCell` → `TableCellLayout`, `TableCellActions`; plus `TableSelectionCell`, `TableResizeHandle` |
+| **DataGrid** | data-driven `Table`: `DataGrid` + `DataGridHeader`/`DataGridHeaderCell` + `DataGridBody`/`DataGridRow`/`DataGridCell`/`DataGridSelectionCell` with render-function children `{({ item }) => …}` |
+| **Tree** | `Tree` → `TreeItem itemType` → `TreeItemLayout` (or `TreeItemPersonaLayout`) + nested `Tree`; virtualized: `FlatTree` + `FlatTreeItem` |
+| **Tag / TagPicker** | `Tag`, `InteractionTag` → `InteractionTagPrimary` + `InteractionTagSecondary`, `TagGroup`; `TagPicker` → `TagPickerControl` → `TagPickerGroup` + `TagPickerInput` / `TagPickerButton`, `TagPickerList` → `TagPickerOption` / `TagPickerOptionGroup` |
+| **Toolbar** | `Toolbar` → `ToolbarGroup`, `ToolbarDivider`, `ToolbarButton`, `ToolbarToggleButton`, `ToolbarRadioButton` (+ `ToolbarRadioGroup`) |
+| **MessageBar** | `MessageBar` → `MessageBarBody` (`MessageBarTitle`, actions slot) + `MessageBarActions`; stacking: `MessageBarGroup` |
+| **Avatar group** | `AvatarGroup` → `AvatarGroupItem` + `AvatarGroupPopover` (overflow) |
+| **SwatchPicker** | `SwatchPicker` → `SwatchPickerRow` + `ColorSwatch` / `ImageSwatch` / `EmptySwatch` |
+| **Color** | `ColorPicker`, `ColorArea`, `ColorSlider`, `AlphaSlider`, `ColorSwatch` |
+| **Carousel** | `Carousel` → `CarouselViewport` → `CarouselSlider` → `CarouselCard`; nav: `CarouselNavContainer` (`next`/`prev`/`autoplay` slots) → `CarouselNav` (`index => <CarouselNavButton />`) + `CarouselButton navType` + `CarouselAutoplayButton` |
+| **TeachingPopover** | `TeachingPopoverTrigger` + `TeachingPopoverSurface` → `TeachingPopoverHeader`/`Title`/`Body`/`Footer` (+ `TeachingPopoverCarousel*`) |
+
+---
+
+## 7. Collections & selection
+
+| Concept | Values | Where |
+|---|---|---|
+| `selectionMode` | `none` \| `single` \| `multiselect` | `List`, `Tree`, `FlatTree`, `DataGrid`, `Table` |
+| `focusMode` | `off` \| `no-tab` \| `tab-exit` \| `tab-only` (Card) · `arrow` \| `tab` (Breadcrumb, SwatchPicker) | navigation inside a composite |
+| `navigationMode` | `tree` \| `treegrid` (Tree/FlatTree) · list navigation mode on `List` | keyboard model |
+| Menu/Toolbar checkable state | `checkedValues: Record<string, string[]>` + `name`/`value` on each item | `MenuList`, `Toolbar` |
+| `List` | `selectionMode` + `selectedItems`/`onSelectionChange` + `ListItem value` (`disabledSelection`) | listbox-style pickers |
+
+---
+
+## 8. Data display quick reference
+
+| Component | Key props |
+|---|---|
+| `Table` / `DataGrid` | `sortable` + `sortDirection` on `TableHeaderCell`; selection via `TableSelectionCell` (`type="checkbox" \| "radio"`, `checked` accepts `'mixed'`); DataGrid adds `onSortChange`, `onSelectionChange`, `selectionMode`, `columnSizingOptions`, `onColumnResize`, `containerWidthOffset`, `resizableColumnsOptions` |
+| `Tree` / `FlatTree` | `appearance`, `size`, `openItems`/`defaultOpenItems`, `selectionMode`, `checkedItems`; `FlatTreeItem` needs `value` + `aria-level`/`aria-setsize`/`aria-posinset` |
+| `Persona` | `name`, `size`, `textPosition`, `textAlignment`, `presenceOnly` |
+| `Avatar` / `AvatarGroup` | `name`, `size`, `shape`, `color`, `active`, `activeAppearance`, `idForColor`; group `layout`: `spread` \| `stack` \| `pie` |
+| `Badge` / `CounterBadge` / `PresenceBadge` | Badge `appearance`/`color`/`shape`/`size`/`iconPosition`; CounterBadge `count`, `overflowCount`, `dot`, `showZero`; PresenceBadge `status`, `outOfOffice` |
+| `Text` | `size` (100–1000), `weight`, `font`, `truncate`, `block`, `italic`, `underline`, `strikethrough`, `align`, `wrap` |
+| `Image` | `fit`, `shape`, `bordered`, `block`, `shadow` |
+| `Divider` | `vertical`, `appearance`, `inset`, `alignContent` |
+| `Skeleton` / `SkeletonItem` | `animation` (`wave` \| `pulse`), `appearance`, `width`, `size`, `shape` |
+
+---
+
+## 9. Feedback & loading
+
+| Component | Pattern |
+|---|---|
+| `Spinner` | `size`, `appearance`, `labelPosition`, `delay` (avoid flicker on fast loads) |
+| `ProgressBar` | controlled `value` + `max`, `color`, `shape`, `thickness`; omit `value` for indeterminate |
+| `MessageBar` | `intent` (info/error/…), `politeness` (`polite` \| `assertive`), `shape`; `MessageBarBody` + `MessageBarTitle` + `MessageBarActions`; stack with `MessageBarGroup` (`animate="exit-only" \| "both"`) |
+| `Toast` | `Toaster` at the app root + a `Toast` per message; slot in `ToastTrigger` for undo/action buttons |
+| `AriaLiveAnnouncer` | announce dynamic text changes to screen readers |
+
+---
+
+## 10. Prop vocabulary (same name → same meaning everywhere)
+
+| Prop | Values | Seen on |
+|---|---|---|
+| `appearance` | `filled` \| `filled-alternative` \| `outline` \| `subtle` (Card/Tag/Tree) · `filled` \| `ghost` \| `outline` \| `tint` (Badge) · `secondary` \| `primary` \| `outline` \| `subtle` \| `transparent` (Button) · `outline` \| `underline` \| `filled-darker` \| `filled-lighter` (Input/Select/Dropdown) | surfaces & emphasis |
+| `size` | `small` \| `medium` \| `large` (most) · `extra-small`→`extra-large` (Badge, Avatar, Spinner, Tag) | density |
+| `shape` | `rounded` \| `circular` \| `square` | Button, Badge, Avatar, Tag, SwatchPicker |
+| `color` | `brand` \| `danger` \| `important` \| `informative` \| `severe` \| `subtle` \| `success` \| `warning` (Badge) · `brand` \| `marigold` \| `neutral` (Rating) | semantics |
+| `disabled` vs `disabledFocusable` | `disabled` removes from tab order; `disabledFocusable` stays focusable (keeps a `Tooltip` reachable) | Button, MenuItem, Link |
+| `positioning` | `PositioningShorthand` e.g. `"below-start"`, `"above-end"` | Popover, Menu, Tooltip, Dropdown |
+| `position` | `start` \| `center` \| `end` | DialogActions, Breadcrumb, CardHeader |
+
+---
+
+## 11. Accessibility one-liners
+
+- `Tooltip` requires `relationship`: use `label` when the tooltip *is* the label (icon-only buttons), `description` otherwise.
+- Icon-only buttons need `aria-label`; `DialogSurface` traps focus — keep `DialogTitle` for the accessible name.
+- `Table`/`Tree`/`Nav`/`List` accept `aria-label`; rows use `aria-selected` for selection state.
+- RTL comes free from `FluentProvider dir="rtl"`; use `targetDocument` for portals in iframes.
+
+---
+
+## 12. Top mistakes at a glance
+
+| ❌ Don't | ✅ Do |
+|---|---|
+| Pass `value` **and** `defaultValue` | Pick one; controlled means you own updates in `onChange` |
+| Read `event.target.value` | Use `data.value` / `data.checked` / `data.selectedItems` |
+| Forget `onOpenChange` on controlled overlays | `open={x} onOpenChange={(_, d) => setOpen(d.open)}` |
+| Use `disabled` on a button that must show a tooltip | `disabledFocusable` |
+| Put `PopoverSurface`/`MenuPopover` outside their parent | Triggers + surfaces are context-linked siblings |
+| Wrap an input in a `Field` and also render your own `Label` | Let `Field` render label/hint/validation |
 
 ## Key Takeaways
 
-- Every stateful component follows the same two-mode API: default* prop = uncontrolled, bare prop + on* callback = controlled. Never pass both at once.
-- v9 callbacks are (event, data) => void — read the new value from `data` (e.g. data.value, data.checked, data.open, data.openItems), not from the DOM event.
-- Field is the single wrapper for label + validationMessage + validationMessageIcon + hint; do not nest a separate Label inside it, and always pair validationState with a message.
-- Slots are customized with a prop named after the slot (icon, contentBefore, contentAfter, floatingAction, checkbox, surfaceMotion…); the root slot uses className directly.
-- Wrap the app in Provider (theme, dir, applyStylesToPortals); portals and overlays only inherit theme/RTL when applyStylesToPortals is enabled or the mount node sits inside the provider.
-- Tooltip requires `relationship` ('label' | 'description' | 'inaccessible') — it is an accessibility contract, not decoration.
-- Collections (Accordion, Tabs, Tree, List, Toolbar, Nav) hand you complete state arrays/objects from the handler; replace state wholesale instead of manually pushing/popping.
-- CalendarCompat is fully controlled (navigatedDate, selectedDate, navigationIcons, strings, onNavigateDate all required) — prefer DatepickerCompat for the batteries-included experience.
-- Compat and preview components live in separate packages (@fluentui/react-calendar-compat, react-datepicker-compat, react-timepicker-compat, react-context-selector, react-headless-components-preview, react-menu-grid-preview, react-motion-components-preview).
+- Wrap the app once in FluentProvider (theme, dir, targetDocument, applyStylesToPortals) — portalled overlays inherit styling from it.
+- Every stateful component follows the same triad: value + onChange (controlled) OR defaultValue (uncontrolled); open state is open/defaultOpen/onOpenChange.
+- All callbacks are (event, data) — read data.value, data.checked, data.open, data.selectedItems, data.checkedItems instead of touching the DOM event.
+- Complex UI is always compound: Dialog (Trigger/Surface/Body/Title/Content/Actions), Menu (Trigger/Popover/List/Items), Card (Header/Preview/Footer), Table, Tree, Nav, Toast (Toaster/Toast/Title/Body/Footer/Trigger).
+- Field is presentation-only and wraps any control to supply label, hint and validationState/validationMessage — it never owns the input value.
+- Named slots (icon, contentBefore, contentAfter, header, description, action, media, primaryText…) can be passed as shorthand props, and every component has an overridable root slot.
+- Selection is normalized across families: selectionMode 'none' | 'single' | 'multiselect' for List/Tree/DataGrid/Table, checkedValues: Record<string, string[]> for Menu/Toolbar checkable items.
+- Tooltip.relationship ('label' | 'description' | 'inaccessible') is required and determines the accessible name vs description of the trigger.
 
 ## Examples
 
-### Controlled vs uncontrolled values
+### App shell: FluentProvider, theme and dir
 
-The core pattern: swap a default* prop for a value prop + onChange and read the new value from `data`.
+Wrap the whole app once; every component below inherits theme, direction, and portal styling.
 
 ```tsx
 import * as React from 'react';
-import { Checkbox, Input, Slider, Switch, Textarea } from '@fluentui/react-components';
+import { FluentProvider, webLightTheme, webDarkTheme } from '@fluentui/react-components';
 
-export const SettingsForm = () => {
-  const [name, setName] = React.useState('');
-  const [enabled, setEnabled] = React.useState(false);
-  const [terms, setTerms] = React.useState<boolean | 'mixed'>(false);
-  const [volume, setVolume] = React.useState(50);
-  const [notes, setNotes] = React.useState('');
+export const App = () => {
+  const [dark, setDark] = React.useState(false);
 
   return (
-    <>
-      {/* controlled: value + onChange, new value in data.value */}
-      <Input value={name} onChange={(_, data) => setName(data.value)} placeholder="Name" />
-
-      {/* uncontrolled: only the default* prop */}
-      <Input defaultValue="Untouched initial value" appearance="outline" size="medium" />
-
-      <Switch checked={enabled} onChange={(_, data) => setEnabled(data.checked)} label="Enable sync" />
-      <Checkbox checked={terms} onChange={(_, data) => setTerms(data.checked)} label="Accept terms" />
-      <Slider value={volume} min={0} max={100} onChange={(_, data) => setVolume(data.value)} />
-      <Textarea value={notes} onChange={(_, data) => setNotes(data.value)} resize="vertical" />
-    </>
+    <FluentProvider
+      theme={dark ? webDarkTheme : webLightTheme}
+      dir="ltr"
+      applyStylesToPortals
+    >
+      <Shell onToggleTheme={() => setDark(d => !d)} />
+    </FluentProvider>
   );
 };
 ```
 
-### Field wrapper: label + validation + hint
+### Form pattern: Field + controlled / uncontrolled controls
 
-One Field wraps the label, control, validation message and hint — no extra Label component.
+Field owns label, hint and validation; the input owns the value. The render-function child gets generated a11y ids.
 
 ```tsx
 import * as React from 'react';
-import { Field, Input, Select } from '@fluentui/react-components';
+import { Button, Field, Input, Select } from '@fluentui/react-components';
 
-export const AccountFields = () => {
-  const [email, setEmail] = React.useState('');
-  const invalid = email.length > 0 && !email.includes('@');
+export const ProfileForm = () => {
+  const [name, setName] = React.useState('');
+  const invalid = name.length > 0 && name.length < 3;
 
   return (
-    <>
+    <form onSubmit={e => e.preventDefault()}>
+      {/* controlled */}
       <Field
-        label="Email"
+        label="Name"
         required
-        orientation="vertical"
-        size="medium"
+        hint="At least 3 characters"
         validationState={invalid ? 'error' : 'none'}
-        validationMessage={invalid ? 'Enter a valid email address.' : undefined}
-        hint="Used for release notifications only."
+        validationMessage={invalid ? 'Name is too short' : undefined}
       >
-        <Input type="email" value={email} onChange={(_, data) => setEmail(data.value)} />
+        <Input value={name} onChange={(_, data) => setName(data.value)} />
       </Field>
 
-      <Field
-        label="Role"
-        orientation="horizontal"
-        validationState="success"
-        validationMessage="Looks good."
-      >
-        <Select onChange={(_, data) => console.log(data.value)}>
-          <option value="admin">Admin</option>
-          <option value="viewer">Viewer</option>
+      {/* render-function child: FieldControlProps wires id / aria-describedby */}
+      <Field label="Email" orientation="horizontal">
+        {fieldProps => <Input {...fieldProps} type="email" />}
+      </Field>
+
+      {/* uncontrolled */}
+      <Field label="Role" required>
+        <Select defaultValue="dev">
+          <option value="dev">Developer</option>
+          <option value="pm">Product manager</option>
         </Select>
       </Field>
-    </>
+
+      <Button type="submit" appearance="primary">Save</Button>
+    </form>
   );
 };
 ```
 
-### Overlays: Dialog (controlled), Popover (hover), Menu (context), Tooltip (required relationship)
+### Dialog: controlled open state + trigger actions
 
-Overlay state is plain React state; Tooltip always needs a `relationship` value.
+DialogBody groups DialogTitle / DialogContent / DialogActions. DialogTrigger auto-selects open/close by context.
 
 ```tsx
 import * as React from 'react';
-import { Button, Dialog, Menu, Popover, Tooltip } from '@fluentui/react-components';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+} from '@fluentui/react-components';
 
-export const OverlayPatterns = () => {
-  const [dialogOpen, setDialogOpen] = React.useState(false);
+export const ConfirmDialog = () => {
+  const [open, setOpen] = React.useState(false);
 
   return (
     <>
+      <DialogTrigger disableButtonEnhancement action="open">
+        <Button appearance="primary">Delete</Button>
+      </DialogTrigger>
+
       <Dialog
-        open={dialogOpen}
-        onOpenChange={(_, data) => setDialogOpen(data.open)}
+        open={open}
+        onOpenChange={(_, data) => setOpen(data.open)}
         modalType="modal"
-        inertTrapFocus
         unmountOnClose
       >
-        <Button appearance="primary" onClick={() => setDialogOpen(true)}>
-          Open dialog
-        </Button>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Delete this file?</DialogTitle>
+            <DialogContent>This action cannot be undone.</DialogContent>
+            <DialogActions position="end">
+              <DialogTrigger disableButtonEnhancement action="close">
+                <Button appearance="secondary">Cancel</Button>
+              </DialogTrigger>
+              <Button appearance="primary" onClick={() => setOpen(false)}>Delete</Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
       </Dialog>
-
-      <Popover openOnHover withArrow mouseLeaveDelay={500} appearance="brand" positioning={{ position: 'above' }}>
-        <Button appearance="outline">Hover target</Button>
-      </Popover>
-
-      <Menu openOnContext closeOnScroll hoverDelay={200} onOpenChange={(_, data) => console.log(data.open)}>
-        <Button appearance="subtle">Right-click me</Button>
-      </Menu>
-
-      <Tooltip content="Save your work" relationship="description" withArrow showDelay={200} hideDelay={100}>
-        <Button appearance="primary">Save</Button>
-      </Tooltip>
     </>
   );
 };
 ```
 
-### Provider + Portal: theme, RTL and portal styling
+### Menu with checkable items (checkedValues)
 
-Wrap the app once; keep overlays themed and RTL-aware via applyStylesToPortals or a themed mount node.
-
-```tsx
-import * as React from 'react';
-import { Button, Portal, FluentProvider } from '@fluentui/react-components';
-
-export const AppShell = ({ children }: { children: React.ReactNode }) => (
-  <FluentProvider
-    dir="rtl"
-    applyStylesToPortals
-    targetDocument={document}
-    theme={{ fontFamilyBase: "'Segoe UI', sans-serif" }}
-  >
-    {children}
-
-    {/* Renders outside the DOM tree but keeps React context + theme */}
-    <Portal mountNode={{ className: 'app-portal-root' }}>
-      <Button appearance="primary">Portal-rendered action</Button>
-    </Portal>
-  </FluentProvider>
-);
-```
-
-### Collections: controlled Accordion + TabList, uncontrolled Carousel
-
-Accordion and Tabs take the full state from the handler data; Carousel can run uncontrolled with defaults.
+MenuList stays controlled via checkedValues; each MenuItemCheckbox declares name + value and reports through onCheckedValueChange.
 
 ```tsx
 import * as React from 'react';
-import { Accordion, Carousel, TabList } from '@fluentui/react-components';
+import {
+  Button,
+  Menu,
+  MenuItem,
+  MenuItemCheckbox,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+} from '@fluentui/react-components';
 
-export const Collections = ({
-  accordionItems,
-  tabContent,
-  slides,
-}: {
-  accordionItems: React.ReactNode;
-  tabContent: React.ReactNode;
-  slides: React.ReactNode;
-}) => {
-  const [openItems, setOpenItems] = React.useState<(string | number)[]>(['item-1']);
-  const [tab, setTab] = React.useState<string | number>('overview');
+export const ViewMenu = () => {
+  const [checkedValues, setCheckedValues] = React.useState<Record<string, string[]>>({ view: ['grid'] });
 
   return (
-    <>
-      <Accordion
-        multiple
-        collapsible
-        navigation="circular"
-        openItems={openItems}
-        onToggle={(_, data) => setOpenItems(data.openItems)}
-      >
-        {accordionItems}
-      </Accordion>
-
-      <TabList
-        selectedValue={tab}
-        onTabSelect={(_, data) => setTab(data.value)}
-        appearance="subtle"
-        size="medium"
-        reserveSelectedTabSpace
-      >
-        {tabContent}
-      </TabList>
-
-      <Carousel
-        defaultActiveIndex={0}
-        groupSize="auto"
-        align="start"
-        circular
-        draggable
-        whitespace
-        autoplayInterval={5000}
-      >
-        {slides}
-      </Carousel>
-    </>
+    <Menu>
+      <MenuTrigger disableButtonEnhancement>
+        <Button>View</Button>
+      </MenuTrigger>
+      <MenuPopover>
+        <MenuList
+          hasCheckmarks
+          checkedValues={checkedValues}
+          onCheckedValueChange={(_, data) =>
+            setCheckedValues(prev => ({ ...prev, [data.name]: data.checkedItems }))
+          }
+        >
+          <MenuItemCheckbox name="view" value="grid">Grid</MenuItemCheckbox>
+          <MenuItemCheckbox name="view" value="list">List</MenuItemCheckbox>
+          <MenuItem>Reset</MenuItem>
+        </MenuList>
+      </MenuPopover>
+    </Menu>
   );
 };
 ```
 
-### Selection: Card, List, SwatchPicker
+### Popover (hover) + Tooltip (relationship)
 
-Same selected/defaultSelected + on*Change pattern across selectable surfaces.
-
-```tsx
-import * as React from 'react';
-import { Card, List, SwatchPicker, Text } from '@fluentui/react-components';
-
-export const Selectable = ({ rows }: { rows: React.ReactNode }) => {
-  const [selected, setSelected] = React.useState(false);
-  const [items, setItems] = React.useState<(string | number)[]>([]);
-  const [swatch, setSwatch] = React.useState<string | undefined>(undefined);
-
-  return (
-    <>
-      <Card
-        appearance="outline"
-        orientation="vertical"
-        size="medium"
-        focusMode="tab-only"
-        selected={selected}
-        onSelectionChange={(_, data) => setSelected(data.selected)}
-        floatingAction={<Text size={200}>New</Text>}
-      >
-        <Text weight="semibold" truncate>
-          Q3 report
-        </Text>
-      </Card>
-
-      <List
-        selectionMode="multiselect"
-        selectedItems={items}
-        onSelectionChange={(_, data) => setItems(data.selectedItems)}
-      >
-        {rows}
-      </List>
-
-      <SwatchPicker
-        layout="grid"
-        size="medium"
-        shape="circular"
-        spacing="small"
-        selectedValue={swatch}
-        onSelectionChange={(_, data) => setSwatch(data.selectedValue)}
-      />
-    </>
-  );
-};
-```
-
-### Loading & feedback states
-
-Spinner delay avoids flashing; Skeleton mirrors the final layout; MessageBar politeness controls urgency.
+Popover for rich content, Tooltip for short text. Tooltip’s relationship prop is required and drives the accessible name/description.
 
 ```tsx
-import * as React from 'react';
-import { MessageBar, ProgressBar, Skeleton, Spinner } from '@fluentui/react-components';
+import {
+  Button,
+  Popover,
+  PopoverSurface,
+  PopoverTrigger,
+  Text,
+  Tooltip,
+} from '@fluentui/react-components';
 
-export const LoadingStates = () => (
+export const HoverDetails = () => (
   <>
-    <Spinner size="tiny" appearance="primary" labelPosition="after" label="Loading results…" delay={300} />
+    {/* icon-only button: tooltip IS the label */}
+    <Tooltip content="Copies the link" relationship="label" withArrow showDelay={200}>
+      <Button aria-label="Copy link" />
+    </Tooltip>
 
-    <Skeleton animation="wave" appearance="translucent" shape="rectangle" width="240px" size={16} />
-    <Skeleton animation="pulse" appearance="opaque" shape="circle" width={40} />
-
-    <ProgressBar value={40} max={100} thickness="large" color="brand" shape="rounded" />
-
-    <MessageBar shape="rounded" politeness="polite">
-      Changes are saved automatically.
-    </MessageBar>
+    <Popover openOnHover mouseLeaveDelay={300} withArrow positioning="below-start">
+      <PopoverTrigger disableButtonEnhancement>
+        <Button>Details</Button>
+      </PopoverTrigger>
+      <PopoverSurface>
+        <Text>Hover content — keep it non-interactive.</Text>
+      </PopoverSurface>
+    </Popover>
   </>
 );
 ```
 
-### Slot props: contentBefore/contentAfter, icon, floatingAction
+### Toast with an undo action (declarative)
 
-Every slot listed in §10 is addressable by a prop of the same name; className targets the root.
+Render Toaster once at app root; a ToastTrigger placed inside a Toast slot auto-wires to that toast’s dismiss action.
 
 ```tsx
 import * as React from 'react';
-import { Button, Card, Input, Text } from '@fluentui/react-components';
+import { Button, Toast, ToastBody, ToastTitle, Toaster, ToastTrigger } from '@fluentui/react-components';
 
-export const SlotComposition = () => (
-  <>
-    <Input
-      className="my-field"
-      appearance="filled-darker"
-      size="medium"
-      contentBefore={<Text size={200}>@</Text>}
-      contentAfter={<Text size={200}>.com</Text>}
-    />
+export const SaveWithUndo = () => {
+  const [visible, setVisible] = React.useState(false);
 
-    <Button
-      appearance="subtle"
-      shape="circular"
-      icon={<Text aria-hidden>★</Text>}
-      iconPosition="after"
-    />
+  return (
+    <>
+      <Button appearance="primary" onClick={() => setVisible(true)}>Save</Button>
 
+      <Toaster>
+        {visible && (
+          <Toast>
+            <ToastTitle
+              action={
+                <ToastTrigger>
+                  <Button appearance="transparent">Undo</Button>
+                </ToastTrigger>
+              }
+            >
+              Changes saved
+            </ToastTitle>
+            <ToastBody subtitle="Autosave">Your document was saved just now.</ToastBody>
+          </Toast>
+        )}
+      </Toaster>
+    </>
+  );
+};
+```
+
+### Table: sortable header + row selection
+
+Table is the markup-first data pattern: TableHeaderCell handles sorting, TableSelectionCell accepts true | false | 'mixed'.
+
+```tsx
+import * as React from 'react';
+import {
+  Table, TableBody, TableCell, TableCellLayout, TableHeader, TableHeaderCell,
+  TableRow, TableSelectionCell,
+} from '@fluentui/react-components';
+
+const rows = [{ id: '1', name: 'report.pdf' }, { id: '2', name: 'budget.xlsx' }];
+
+export const FileTable = () => {
+  const [sort, setSort] = React.useState<'ascending' | 'descending'>('ascending');
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+
+  const toggle = (id: string) =>
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const allChecked = selected.size === 0 ? false : selected.size === rows.length ? true : 'mixed';
+
+  return (
+    <Table aria-label="Files">
+      <TableHeader>
+        <TableRow>
+          <TableSelectionCell
+            type="checkbox"
+            checked={allChecked}
+            onClick={() => setSelected(selected.size ? new Set() : new Set(rows.map(r => r.id)))}
+          />
+          <TableHeaderCell
+            sortable
+            sortDirection={sort}
+            onClick={() => setSort(s => (s === 'ascending' ? 'descending' : 'ascending'))}
+          >
+            Name
+          </TableHeaderCell>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map(row => (
+          <TableRow key={row.id} aria-selected={selected.has(row.id)} onClick={() => toggle(row.id)}>
+            <TableSelectionCell type="checkbox" checked={selected.has(row.id)} />
+            <TableCell>
+              <TableCellLayout>{row.name}</TableCellLayout>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+};
+```
+
+### Selectable Card with restricted triggers
+
+focusMode controls how the card participates in tab order; shouldRestrictTriggerAction keeps inner buttons from toggling selection.
+
+```tsx
+import * as React from 'react';
+import {
+  Button, Card, CardFooter, CardHeader, CardPreview, Text,
+} from '@fluentui/react-components';
+
+export const SelectableCard = () => {
+  const [selected, setSelected] = React.useState(false);
+
+  return (
     <Card
-      appearance="outline"
-      orientation="vertical"
-      size="small"
-      floatingAction={
-        <Button appearance="primary" size="small">
-          Open
-        </Button>
+      appearance="filled-alternative"
+      focusMode="tab-exit"
+      selected={selected}
+      onSelectionChange={(_, data) => setSelected(data.selected)}
+      shouldRestrictTriggerAction={event =>
+        event.target instanceof HTMLElement && Boolean(event.target.closest('button'))
       }
     >
-      <Text truncate>Long title that fades out…</Text>
+      <CardHeader
+        header={<Text weight="semibold">Quarterly report</Text>}
+        description={<Text size={200}>Updated 2 days ago</Text>}
+        action={<Button appearance="subtle">Open</Button>}
+      />
+      <CardPreview />
+      <CardFooter action={<Button appearance="primary">Download</Button>}>
+        <Text size={200}>PDF · 2.4 MB</Text>
+      </CardFooter>
     </Card>
+  );
+};
+```
+
+### Adaptive navigation: Nav inline + NavDrawer in an OverlayDrawer
+
+Share one items fragment between the desktop Nav and the mobile NavDrawer; selection state lives on Nav.
+
+```tsx
+import * as React from 'react';
+import {
+  Button, DrawerBody, DrawerHeader, DrawerHeaderTitle, Nav, NavCategory,
+  NavCategoryItem, NavDrawer, NavDrawerBody, NavItem, NavSubItem, NavSubItemGroup,
+  OverlayDrawer,
+} from '@fluentui/react-components';
+
+const items = (
+  <>
+    <NavItem value="home">Home</NavItem>
+    <NavCategory value="settings">
+      <NavCategoryItem>Settings</NavCategoryItem>
+      <NavSubItemGroup>
+        <NavSubItem value="profile">Profile</NavSubItem>
+        <NavSubItem value="billing">Billing</NavSubItem>
+      </NavSubItemGroup>
+    </NavCategory>
   </>
+);
+
+export const AppShellNav = () => {
+  const [page, setPage] = React.useState('home');
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <>
+      {/* desktop */}
+      <Nav
+        selectedValue={page}
+        onNavItemSelect={(_, data) => setPage(data.value)}
+        defaultOpenCategories={['settings']}
+      >
+        {items}
+      </Nav>
+
+      {/* mobile */}
+      <OverlayDrawer open={open} onOpenChange={(_, data) => setOpen(data.open)}>
+        <DrawerHeader>
+          <DrawerHeaderTitle action={<Button appearance="subtle" onClick={() => setOpen(false)}>Close</Button>}>
+            Navigation
+          </DrawerHeaderTitle>
+        </DrawerHeader>
+        <DrawerBody>
+          <NavDrawer>
+            <NavDrawerBody>{items}</NavDrawerBody>
+          </NavDrawer>
+        </DrawerBody>
+      </OverlayDrawer>
+    </>
+  );
+};
+```
+
+### Accordion: multiple + collapsible
+
+Accordion is controlled by openItems/defaultOpenItems; each AccordionItem needs a unique value.
+
+```tsx
+import { Accordion, AccordionHeader, AccordionItem, AccordionPanel } from '@fluentui/react-components';
+
+<Accordion
+  multiple
+  collapsible
+  defaultOpenItems={['shipping']}
+  onToggle={(_, data) => console.log(data.openItems)}
+>
+  <AccordionItem value="shipping">
+    <AccordionHeader size="medium" expandIconPosition="end">Shipping</AccordionHeader>
+    <AccordionPanel>Free over $50.</AccordionPanel>
+  </AccordionItem>
+  <AccordionItem value="billing" disabled>
+    <AccordionHeader inline>Billing</AccordionHeader>
+    <AccordionPanel>Coming soon.</AccordionPanel>
+  </AccordionItem>
+</Accordion>
+```
+
+### Tree: nested items with selection
+
+TreeItem.itemType is required ('branch' | 'leaf'); nested Tree renders children. TreeItemLayout can host a selector checkbox automatically.
+
+```tsx
+import { Tree, TreeItem, TreeItemLayout } from '@fluentui/react-components';
+
+<Tree
+  aria-label="File tree"
+  appearance="subtle"
+  defaultOpenItems={['src']}
+  selectionMode="multiselect"
+>
+  <TreeItem itemType="branch" value="src">
+    <TreeItemLayout>src</TreeItemLayout>
+    <Tree>
+      <TreeItem itemType="leaf" value="src/index.ts">
+        <TreeItemLayout>index.ts</TreeItemLayout>
+      </TreeItem>
+      <TreeItem itemType="leaf" value="src/theme.ts">
+        <TreeItemLayout>theme.ts</TreeItemLayout>
+      </TreeItem>
+    </Tree>
+  </TreeItem>
+</Tree>
+```
+
+### TagPicker multi-select (+ dismissible TagGroup)
+
+TagPicker tracks selection through onOptionSelect; TagGroup handles dismissal through onDismiss.
+
+```tsx
+import * as React from 'react';
+import {
+  Tag, TagGroup, TagPicker, TagPickerControl, TagPickerGroup, TagPickerInput,
+  TagPickerList, TagPickerOption,
+} from '@fluentui/react-components';
+
+const options = ['Design', 'Engineering', 'Marketing'];
+
+export const TeamPicker = () => {
+  const [selected, setSelected] = React.useState<string[]>([]);
+  const [query, setQuery] = React.useState('');
+
+  return (
+    <TagPicker
+      onOptionSelect={(_, data) =>
+        setSelected(prev => (prev.includes(data.value) ? prev : [...prev, data.value]))
+      }
+    >
+      <TagPickerControl>
+        <TagPickerGroup aria-label="Selected teams">
+          {selected.map(tag => (
+            <Tag key={tag} value={tag}>{tag}</Tag>
+          ))}
+        </TagPickerGroup>
+        <TagPickerInput
+          aria-label="Add a team"
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+        />
+      </TagPickerControl>
+      <TagPickerList>
+        {options.map(option => (
+          <TagPickerOption key={option} value={option}>{option}</TagPickerOption>
+        ))}
+      </TagPickerList>
+    </TagPicker>
+  );
+};
+
+// Dismissible display-only tags
+export const Tags = ({ tags, remove }: { tags: string[]; remove: (v: string) => void }) => (
+  <TagGroup dismissible onDismiss={(_, data) => remove(data.value as string)}>
+    {tags.map(tag => (
+      <Tag key={tag} value={tag} dismissible>{tag}</Tag>
+    ))}
+  </TagGroup>
 );
 ```
 
 ## Pitfalls
 
-- Passing both `value` and `defaultValue` (or `open` and `defaultOpen`): the default is ignored once controlled and React logs a controlled/uncontrolled switch warning on the next render.
-- Controlled input without onChange — the value never changes and typing appears frozen; add the handler or drop the value prop.
-- Reading `event.target.value` instead of `data.value`: TS may even complain since the handler's first arg is typed for the component, not the DOM node.
-- Rendering overlays outside a Provider's style scope: without `applyStylesToPortals` (or a mount node inside the provider) portal content loses theme tokens, RTL direction and stacking order.
-- Omitting `Tooltip.relationship` — it is a required prop; the component will not behave accessibly without it.
-- Expecting Dialog content to reset itself: children stay mounted by default. Add `unmountOnClose` to clear form state between openings.
-- Setting `validationState='error'` without `validationMessage` shows nothing visible; supply the message (and optionally validationMessageIcon).
-- Recomputing Accordion/Tree open state manually (e.g. toggling from event.target) instead of using `data.openItems` — you can create duplicate or unordered entries.
-- Changing `Overflow.id` between renders: the registered child items reset because the id keys the overflow group.
-- Treating `Carousel.onActiveIndexChange` as typed: its payload type is `any`, so validate/normalize the index (e.g. `Number(...)`) before storing it.
-- Nesting a Label inside Field, or wrapping inputs in both Field and a manual label, produces duplicate labels and broken aria associations.
-- Assuming Table's sorting/cell focus props work without the data-grid wrapper props — column sizing and selection are configured through `columnSizingOptions`, `selectionMode` and `focusMode`, not per-cell.
+- Mixing controlled and uncontrolled APIs (e.g. passing both value and defaultValue) — React will warn and state will desync; pick one model per component.
+- Forgetting onOpenChange on a controlled overlay: open={x} without onOpenChange makes a Dialog/Drawer/Menu/Popover impossible to dismiss.
+- Reading event.target.value instead of the second callback argument (data.value / data.checked / data.open) — Fluent UI normalizes the change data for you.
+- Using disabled on a trigger that must display a Tooltip: disabled elements are not focusable, so hover/focus never fires — use disabledFocusable instead.
+- Nesting overlay surfaces in the wrong place — PopoverSurface/MenuPopover/DialogSurface must be a sibling of the trigger in the same parent component so context is shared.
+- Reimplementing a label/hint yourself next to a Field (double labels, broken aria-describedby) instead of using Field's label/hint/validationMessage slots.
+- Forgetting required enum props such as TreeItem.itemType, AccordionItem.value, NavItem.value, NavCategory.value, Field-less ColorSwatch.value, or DrawerHeaderTitle usage without a heading.
+- Assuming MenuItemCheckbox/MenuItemRadio manage their own state — you must own checkedValues and update it in onCheckedValueChange (data.name + data.checkedItems).
+- Overriding library styles with raw CSS class names instead of theme/tokens or customStyleHooks_unstable on FluentProvider, which breaks theming and RTL.
 
-**Referenced components**: Provider, Portal, Aria, Accordion, Avatar, Badge, Breadcrumb, Button, CalendarCompat, Card, Carousel, Checkbox, ColorPicker, Combobox, ContextSelector, DatepickerCompat, Dialog, Divider, Drawer, Field, HeadlessComponentsPreview, Image, Infolabel, Input, Label, Link, List, Menu, MenuGridPreview, MessageBar, Motion, MotionComponentsPreview, Nav, Overflow, Persona, Popover, Positioning, Progress, Radio, Rating, Search, Select, Skeleton, Slider, Spinbutton, Spinner, SwatchPicker, Switch, Tabster, Table, Tabs, TagPicker, Tags, TeachingPopover, Text, Textarea, TimepickerCompat, Toast, Toolbar, Tooltip, Tree, Utilities
+**Referenced components**: FluentProvider, Portal, AriaLiveAnnouncer, Button, CompoundButton, MenuButton, SplitButton, ToggleButton, Input, Textarea, Select, Option, Dropdown, Combobox, Listbox, Field, Label, InfoLabel, InfoButton, Checkbox, Radio, RadioGroup, Switch, Slider, SpinButton, SearchBox, Dialog, DialogTrigger, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, Drawer, OverlayDrawer, InlineDrawer, DrawerHeader, DrawerHeaderTitle, DrawerHeaderNavigation, DrawerBody, DrawerFooter, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem, MenuItemCheckbox, MenuItemRadio, MenuItemLink, MenuItemSwitch, MenuDivider, MenuGroup, MenuGroupHeader, MenuSplitGroup, Popover, PopoverTrigger, PopoverSurface, Tooltip, Toast, Toaster, ToastTitle, ToastBody, ToastFooter, ToastTrigger, MessageBar, MessageBarBody, MessageBarTitle, MessageBarActions, MessageBarGroup, Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell, TableCellLayout, TableCellActions, TableSelectionCell, TableResizeHandle, DataGrid, DataGridHeader, DataGridHeaderCell, DataGridBody, DataGridRow, DataGridCell, DataGridSelectionCell, Tree, TreeItem, TreeItemLayout, TreeItemPersonaLayout, FlatTree, FlatTreeItem, List, ListItem, TabList, Tab, Avatar, AvatarGroup, AvatarGroupItem, AvatarGroupPopover, Persona, Badge, CounterBadge, PresenceBadge, Tag, TagGroup, InteractionTag, InteractionTagPrimary, InteractionTagSecondary, Card, CardHeader, CardPreview, CardFooter, Accordion, AccordionItem, AccordionHeader, AccordionPanel, Breadcrumb, BreadcrumbItem, BreadcrumbButton, BreadcrumbDivider, Nav, NavItem, NavCategory, NavCategoryItem, NavSubItem, NavSubItemGroup, NavSectionHeader, NavDivider, NavDrawer, NavDrawerHeader, NavDrawerBody, NavDrawerFooter, AppItem, AppItemStatic, SplitNavItem, Hamburger, Divider, Image, Text, Link, Skeleton, SkeletonItem, Spinner, ProgressBar, Toolbar, ToolbarGroup, ToolbarDivider, ToolbarButton, ToolbarToggleButton, ToolbarRadioButton, ToolbarRadioGroup, Carousel, CarouselViewport, CarouselSlider, CarouselCard, CarouselNav, CarouselNavButton, CarouselNavImageButton, CarouselNavContainer, CarouselButton, CarouselAutoplayButton, TagPicker, TagPickerControl, TagPickerGroup, TagPickerInput, TagPickerButton, TagPickerList, TagPickerOption, TagPickerOptionGroup, SwatchPicker, SwatchPickerRow, ColorSwatch, ImageSwatch, EmptySwatch, ColorPicker, ColorArea, ColorSlider, AlphaSlider, Rating, RatingDisplay, RatingItem, TeachingPopover, TeachingPopoverTrigger, TeachingPopoverSurface, TeachingPopoverHeader, TeachingPopoverTitle, TeachingPopoverBody, TeachingPopoverFooter
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

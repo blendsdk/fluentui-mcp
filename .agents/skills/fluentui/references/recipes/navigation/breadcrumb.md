@@ -4,155 +4,155 @@
 
 ## Goal
 
-Build an accessible, responsive breadcrumb trail with Fluent UI React v9 that shows the user's position in a hierarchy and lets them jump back to any ancestor, covering sizing, focus management, current-page semantics, router integration, and a collapse-to-ellipsis strategy for long trails.
+Build an accessible, keyboard-navigable breadcrumb trail with Fluent UI React v9: a data-driven crumb list that marks the current page, respects Breadcrumb size and focusMode, supports custom dividers, and collapses long paths into an overflow Menu.
 
 ## When to Use
 
-Use a breadcrumb when the user is deep inside a hierarchy (typically 3+ levels) and needs both orientation ('where am I?') and a one-click path to ancestor pages: e-commerce category > product pages, file/folder browsers, settings sub-pages, report/detail views, or any drill-down UI rendered above a page title. It is also the right control when the same page must be reachable from multiple parents and you want to show which path the user took.
+Use this recipe when the user needs to see where they are inside a hierarchy (site section, folder/file path, nested resource, drill-down detail page) and jump back to any ancestor level. It is the right choice when you want the built-in Fluent breadcrumb semantics: a `nav` landmark containing an ordered list, roving-focus keyboard behavior, a `current` crumb that is not actionable, and token-based styling.
 
 ## When Not to Use
 
-Avoid breadcrumbs when the hierarchy is one level deep (a page title plus Back is enough), when the destinations are flat siblings of equal weight (use Tabs or a vertical Nav), when the user must switch between many parallel areas (use Nav or Menu), or when the trail is meant to be the primary navigation of the app. Do not use breadcrumbs for linear processes/steps (use a wizard/stepper) and do not rely on them as a substitute for working browser history in SPAs where URLs change without navigation.
+Do not use a breadcrumb for primary application navigation (use Nav/NavDrawer, TabList, or a Menu-based nav), for ordered multi-step flows where users must complete steps in sequence (use a stepper/wizard pattern), or as a 'back to previous page' history affordance (use a back Button). Avoid it when the hierarchy is only one level deep or when a page title plus back button communicates location more clearly. If you only need a single inline navigation link, use Link instead.
 
-## What this recipe builds
+A breadcrumb answers two questions: *where am I?* and *how do I get back up?* In v9 a breadcrumb is composed from four components - never from hand-written `<nav>`/`<ol>` markup, which would lose the roving focus and list semantics.
 
-A Fluent UI v9 breadcrumb trail composed from `Breadcrumb`, `BreadcrumbItem`, `BreadcrumbButton`, and `BreadcrumbDivider`, covering four production concerns:
+| Part | Component | Renders |
+| --- | --- | --- |
+| Landmark + list | `Breadcrumb` | `root` slot (`nav`) + `list` slot (`ol`) |
+| Segment | `BreadcrumbItem` | `root` slot (`li`) |
+| Crumb | `BreadcrumbButton` | the interactive crumb |
+| Separator | `BreadcrumbDivider` | `root` slot (`li`), a chevron by default |
 
-1. A correct, semantic trail with interactive ancestors and a non-interactive current page.
-2. Long trails that collapse into an ellipsis control instead of overflowing the header.
-3. Configuration of `size` and `focusMode` for different chrome densities.
-4. Router integration (callback navigation and real anchors).
-
-## Anatomy and DOM semantics
+## 1. Structure: dividers are siblings, not children
 
 ```tsx
-<Breadcrumb aria-label="Breadcrumb" size="medium" focusMode="tab">
-  <BreadcrumbItem>{/* <li> */}
-    <BreadcrumbButton>{/* Button */}</BreadcrumbButton>
-  </BreadcrumbItem>
-  <BreadcrumbDivider />        {/* decorative <li role="separator" aria-hidden="true" /> */}
+<Breadcrumb aria-label='Breadcrumb'>
   <BreadcrumbItem>
-    <span aria-current="page">Current page</span>
+    <BreadcrumbButton>Home</BreadcrumbButton>
+  </BreadcrumbItem>
+  <BreadcrumbDivider />
+  <BreadcrumbItem>
+    <BreadcrumbButton>Projects</BreadcrumbButton>
+  </BreadcrumbItem>
+  <BreadcrumbDivider />
+  <BreadcrumbItem>
+    <BreadcrumbButton current>Contoso</BreadcrumbButton>
   </BreadcrumbItem>
 </Breadcrumb>
 ```
 
-- `Breadcrumb` renders a `<nav>` landmark wrapping an ordered list.
-- `BreadcrumbItem` is the list item (`<li>`) that holds exactly one crumb: a `BreadcrumbButton`, a `Link`/anchor, or plain text.
-- `BreadcrumbDivider` is a **separate list item**, not a child of the crumb. It is decorative by default, so a trail with `N` crumbs has `2N - 1` direct children.
-- `BreadcrumbButton` is a `Button` styled for breadcrumbs, so it accepts Button props such as `icon`, `iconPosition`, `appearance`, and `size`.
+* `BreadcrumbItem` and `BreadcrumbDivider` are the only valid children of `Breadcrumb`.
+* There is no divider before the first crumb or after the last crumb.
+* The last crumb is rendered with `current` and is not a navigation target.
 
-## Sizing
+## 2. Set size and focus behavior once, on the root
 
-`size` accepts `"small" | "medium" | "large"` and controls the type/height rhythm of the whole trail. Use `small` inside dense page headers or side panels, `medium` in body content, and `large` only for prominent hero areas. If you inject custom controls into the trail (like the ellipsis `Button` in the collapse example), match their `size` to the breadcrumb `size`, otherwise the row looks uneven.
-
-## Focus mode
-
-- `focusMode="tab"` makes every crumb an individual tab stop. More discoverable, but noisy when the trail is long.
-- `focusMode="arrow"` makes the whole trail a single tab stop; Left/Right arrows move focus between crumbs (roving tabindex managed by Tabster). This is the better default for global chrome and dense headers.
-
-Only choose `arrow` when every visible crumb is focusable. A trail that mixes focusable buttons with plain text ancestors in `arrow` mode gives keyboard users arrows that land on nothing meaningful.
-
-## Marking the current page
-
-Render the final crumb as non-interactive text carrying `aria-current="page"`:
+* `size` - `'small' | 'medium' | 'large'`. Set it on `Breadcrumb` so items and dividers stay consistent; do not set it per crumb.
+* `focusMode` - `'arrow'` (roving tabindex: the whole trail is one tab stop and the arrow keys move between crumbs) or `'tab'` (every crumb is its own tab stop). Keep `'arrow'` unless you have a specific reason; `'tab'` gets noisy on long paths.
 
 ```tsx
-<BreadcrumbItem>
-  <span aria-current="page">Widget 42</span>
-</BreadcrumbItem>
+<Breadcrumb aria-label='File path' size='small' focusMode='arrow'>
+  {/* BreadcrumbItem / BreadcrumbDivider children */}
+</Breadcrumb>
 ```
 
-Making the current page a link or button produces a redundant navigation target: keyboard users tab onto a link that reloads the page they are on, and screen reader users hear it announced as a destination equal to the others.
+## 3. Render the trail from data
 
-## Long trails
+Model a crumb once (`{ id, label, href }`) and map it. Three rules keep data-driven breadcrumbs correct:
 
-A breadcrumb list grows horizontally and does **not** truncate itself, so a deep path either wraps into ugly multi-line rows or pushes your header layout. Collapse the middle when the trail exceeds a threshold: keep the first crumb (usually Home), replace the middle with a `Button` labelled with an ellipsis, and always keep the last 1-2 crumbs visible so the user's immediate context is intact. The ellipsis must be a real button with an accessible name (`aria-label`) that actually reveals the hidden crumbs — never a hover-only popover or a purely decorative "...".
+1. Key each `React.Fragment` with a stable crumb id - never the array index, because the path changes on every navigation.
+2. Compute the current crumb from its position: `index === crumbs.length - 1`.
+3. Do the routing inside the crumb's `onClick` (`onClick={() => router.push(crumb.href)}`) so the same component works with React Router, Next, or a simple state machine. See `BreadcrumbFromData`.
 
-When the route changes, reset the expanded state (see the `useEffect` on the route key in the collapse example), otherwise a trail stays permanently expanded after the user expands it once.
+## 4. Collapse long paths into a Menu
 
-## Router integration
+When the path has more segments than fit, keep the first crumb, hide the middle segments behind an overflow `Menu`, and keep the last two crumbs visible. Wrap a `BreadcrumbButton` in `MenuTrigger` so the trigger keeps breadcrumb styling. Give the overflow crumb an `aria-label`, because a lone `'…'` is not a useful accessible name. See `BreadcrumbWithOverflowMenu`.
 
-The two practical shapes are:
+## 5. Custom dividers
 
-1. **Callback navigation** (client-side router): `<BreadcrumbButton onClick={() => navigate(crumb.path)}>`. Simple and works with any router.
-2. **Real anchors**: render `Link href="..."` inside `BreadcrumbItem` when your router produces real, shareable URLs. Anchors preserve middle-click, Ctrl+click, 'open in new tab', and crawlability — prefer this whenever the route maps to a URL you would paste into a browser.
+`BreadcrumbDivider` renders a chevron by default; pass children to use your own separator (a slash, an arrow, an icon). Keep the replacement non-interactive and non-focusable.
 
-In both cases the data source should be the same list of `{ path, label }` segments you already derive from the router; never hardcode the trail inside the page component.
+```tsx
+<BreadcrumbDivider>
+  <Text aria-hidden size={200}>/</Text>
+</BreadcrumbDivider>
+```
 
-## RTL and theming
+## 6. Tooltips for long labels
 
-Breadcrumb spacing and the default divider direction are logical, so wrap the app (or the subtree) in `<FluentProvider dir="rtl">` and the trail mirrors correctly without component-level changes.
+Long segment names should be truncated visually, not cut in the string. Wrap the crumb in a `Tooltip` with `relationship='description'` and repeat the full label in `content` - the crumb keeps its full accessible name while the bar stays compact. See `BreadcrumbSizesAndDividers`.
 
-## Accessibility checklist
+## 7. Styling hooks
 
-- `aria-label` on the `Breadcrumb` (and unique labels when a page has multiple `nav` landmarks).
-- `aria-current="page"` on the last, non-interactive crumb.
-- Decorative dividers only — no meaningful text inside them.
-- Overflow control with an explicit accessible name and a matching `Tooltip` (`relationship="label"`).
-- Interactive items are full buttons/anchors inside `BreadcrumbItem`, so Enter/Space and Tab/Arrow behave as users expect.
+`Breadcrumb` exposes a `root` slot (the `nav`) and a `list` slot (the `ol`), and every part accepts the standard `className`/`style` props, so you can restyle with your preferred approach (for example `makeStyles` and `tokens` from `@fluentui/react-components`). Prefer styling the root/list once over styling each crumb, so gaps and truncation stay consistent.
+
+## 8. Verify before shipping
+
+1. Tab into the trail: exactly one tab stop with `focusMode='arrow'`, then arrow keys move between crumbs; Enter/Space activates a crumb.
+2. The current crumb is announced as the current page and does nothing when activated.
+3. `Breadcrumb` has an `aria-label` describing the trail ('Breadcrumb', 'File path', ...).
+4. The trail is an ordered list and every crumb sits inside a list item.
+5. If a Menu lives inside the trail, keyboard users can open it and arrow through its items.
 
 ## Examples
 
-### Basic breadcrumb with icon and current page
+### BreadcrumbFromData
 
-A semantic 4-level trail rendered from data: a home icon on the first crumb, interactive BreadcrumbButtons for ancestors, decorative dividers, and a non-interactive current page marked with aria-current.
+A typed, data-driven breadcrumb trail that renders crumbs from an array, marks the last crumb with `current`, truncates the path when the user navigates, and shows where a router call goes.
 
 ```tsx
 import * as React from 'react';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbButton, BreadcrumbDivider } from '@fluentui/react-components';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbButton,
+  BreadcrumbDivider,
+} from '@fluentui/react-components';
 
-type Crumb = {
-  /** Route path; also used as a stable React key. */
-  path: string;
+/** One segment of the path shown in the breadcrumb. */
+export interface Crumb {
+  /** Stable id - used as the React key. */
+  id: string;
+  /** Text shown to the user. */
   label: string;
-};
+  /** Route the crumb points at. */
+  href: string;
+}
 
-const CRUMBS: Crumb[] = [
-  { path: '/', label: 'Home' },
-  { path: '/products', label: 'Products' },
-  { path: '/products/widgets', label: 'Widgets' },
-  { path: '/products/widgets/widget-42', label: 'Widget 42' },
+export const workspaceCrumbs: Crumb[] = [
+  { id: 'home', label: 'Home', href: '/' },
+  { id: 'projects', label: 'Projects', href: '/projects' },
+  { id: 'contoso', label: 'Contoso', href: '/projects/contoso' },
+  { id: 'files', label: 'Files', href: '/projects/contoso/files' },
+  { id: 'report', label: 'Q3-report.docx', href: '/projects/contoso/files/q3-report' },
 ];
 
-const HomeIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-    <path fill="currentColor" d="M10 2.5 3 8.6V17h4.5v-4.5h5V17H17V8.6L10 2.5Z" />
-  </svg>
-);
+export const BreadcrumbFromData: React.FC = () => {
+  const [crumbs, setCrumbs] = React.useState<Crumb[]>(workspaceCrumbs);
 
-export const BasicBreadcrumb = ({
-  onNavigate,
-}: {
-  onNavigate?: (path: string) => void;
-}) => {
-  const currentIndex = CRUMBS.length - 1;
+  // Swap the body of this function for your router call,
+  // e.g. navigate(crumb.href) or router.push(crumb.href).
+  const navigate = (crumb: Crumb) => {
+    const index = crumbs.findIndex(item => item.id === crumb.id);
+    setCrumbs(crumbs.slice(0, index + 1));
+  };
 
   return (
-    // focusMode="tab" makes every crumb a tab stop; use "arrow" for a single
-    // tab stop with Left/Right arrow traversal in dense page chrome.
-    <Breadcrumb aria-label="Breadcrumb" size="medium" focusMode="tab">
-      {CRUMBS.map((crumb, index) => {
-        const isCurrent = index === currentIndex;
+    <Breadcrumb aria-label='Page path' size='medium' focusMode='arrow'>
+      {crumbs.map((crumb, index) => {
+        const isCurrent = index === crumbs.length - 1;
 
         return (
-          <React.Fragment key={crumb.path}>
+          <React.Fragment key={crumb.id}>
             <BreadcrumbItem>
-              {isCurrent ? (
-                // The current page is plain text: it is not a link and must not be focusable.
-                <span aria-current="page" style={{ paddingInline: 8 }}>
-                  {crumb.label}
-                </span>
-              ) : (
-                <BreadcrumbButton
-                  icon={index === 0 ? <HomeIcon /> : undefined}
-                  onClick={() => onNavigate?.(crumb.path)}
-                >
-                  {crumb.label}
-                </BreadcrumbButton>
-              )}
+              <BreadcrumbButton
+                current={isCurrent}
+                onClick={isCurrent ? undefined : () => navigate(crumb)}
+              >
+                {crumb.label}
+              </BreadcrumbButton>
             </BreadcrumbItem>
-            {!isCurrent && <BreadcrumbDivider />}
+            {!isCurrent ? <BreadcrumbDivider /> : null}
           </React.Fragment>
         );
       })}
@@ -161,232 +161,185 @@ export const BasicBreadcrumb = ({
 };
 ```
 
-### Collapsible breadcrumb for long trails
+### BreadcrumbWithOverflowMenu
 
-A route-driven trail that collapses its middle crumbs into an accessible ellipsis button when the path exceeds a threshold, reveals them on activation, and resets when the route changes.
+A long file path that keeps the first crumb, puts the middle segments behind an overflow Menu triggered by an ellipsis BreadcrumbButton, and keeps the last two crumbs visible.
 
 ```tsx
 import * as React from 'react';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbButton, BreadcrumbDivider, Button, Tooltip } from '@fluentui/react-components';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbButton,
+  BreadcrumbDivider,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
+} from '@fluentui/react-components';
 
-export type Crumb = { path: string; label: string };
+interface Crumb {
+  id: string;
+  label: string;
+}
 
-type Entry =
-  | { kind: 'crumb'; crumb: Crumb; isCurrent: boolean }
-  | { kind: 'overflow'; hiddenCount: number };
+const FILE_PATH: Crumb[] = [
+  { id: 'root', label: 'All files' },
+  { id: 'engineering', label: 'Engineering' },
+  { id: 'design', label: 'Design' },
+  { id: 'specs', label: 'Specs' },
+  { id: 'fluent', label: 'Fluent' },
+  { id: 'v9', label: 'v9' },
+  { id: 'breadcrumb', label: 'Breadcrumb spec.pdf' },
+];
 
-/** Collapse the middle only when the trail is long enough to wrap. */
-const COLLAPSE_THRESHOLD = 5;
-/** How many trailing crumbs always stay visible. */
-const TAIL_COUNT = 2;
+export const BreadcrumbWithOverflowMenu: React.FC = () => {
+  const [currentId, setCurrentId] = React.useState(FILE_PATH[FILE_PATH.length - 1].id);
 
-export const CollapsibleBreadcrumb = ({
-  crumbs,
-  onNavigate,
-}: {
-  crumbs: Crumb[];
-  onNavigate?: (path: string) => void;
-}) => {
-  const [expanded, setExpanded] = React.useState(false);
-  const isCollapsed = !expanded && crumbs.length > COLLAPSE_THRESHOLD;
-
-  // Reset the overflow state whenever the route changes.
-  const routeKey = crumbs.map((crumb) => crumb.path).join(' > ');
-  React.useEffect(() => setExpanded(false), [routeKey]);
-
-  const entries = React.useMemo<Entry[]>(() => {
-    if (!isCollapsed) {
-      return crumbs.map((crumb, index) => ({
-        kind: 'crumb' as const,
-        crumb,
-        isCurrent: index === crumbs.length - 1,
-      }));
-    }
-
-    const tail = crumbs.slice(crumbs.length - TAIL_COUNT);
-
-    return [
-      { kind: 'crumb' as const, crumb: crumbs[0], isCurrent: false },
-      { kind: 'overflow' as const, hiddenCount: crumbs.length - 1 - TAIL_COUNT },
-      ...tail.map((crumb, index) => ({
-        kind: 'crumb' as const,
-        crumb,
-        isCurrent: index === tail.length - 1,
-      })),
-    ];
-  }, [crumbs, isCollapsed]);
+  const first = FILE_PATH[0];
+  const collapsed = FILE_PATH.slice(1, -2);
+  const tail = FILE_PATH.slice(-2);
 
   return (
-    <Breadcrumb aria-label="Breadcrumb" size="medium" focusMode="tab">
-      {entries.map((entry, index) => (
-        <React.Fragment key={entry.kind === 'crumb' ? entry.crumb.path : 'overflow'}>
+    <Breadcrumb aria-label='File path' size='small' focusMode='arrow'>
+      <BreadcrumbItem>
+        <BreadcrumbButton
+          current={first.id === currentId}
+          onClick={() => setCurrentId(first.id)}
+        >
+          {first.label}
+        </BreadcrumbButton>
+      </BreadcrumbItem>
+      <BreadcrumbDivider />
+
+      {collapsed.length > 0 ? (
+        <>
           <BreadcrumbItem>
-            {entry.kind === 'overflow' ? (
-              <Tooltip
-                content={`Show ${entry.hiddenCount} hidden item${
-                  entry.hiddenCount === 1 ? '' : 's'
-                }`}
-                relationship="label"
-              >
-                <Button
-                  appearance="subtle"
-                  size="small"
-                  shape="circular"
-                  aria-label={`Show ${entry.hiddenCount} hidden breadcrumb items`}
-                  onClick={() => setExpanded(true)}
-                >
-                  …
-                </Button>
-              </Tooltip>
-            ) : entry.isCurrent ? (
-              <span aria-current="page" style={{ paddingInline: 8 }}>
-                {entry.crumb.label}
-              </span>
-            ) : (
-              <BreadcrumbButton onClick={() => onNavigate?.(entry.crumb.path)}>
-                {entry.crumb.label}
-              </BreadcrumbButton>
-            )}
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>
+                <BreadcrumbButton aria-label={`Show ${collapsed.length} hidden path segments`}>
+                  {'…'}
+                </BreadcrumbButton>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  {collapsed.map(crumb => (
+                    <MenuItem key={crumb.id} onClick={() => setCurrentId(crumb.id)}>
+                      {crumb.label}
+                    </MenuItem>
+                  ))}
+                </MenuList>
+              </MenuPopover>
+            </Menu>
           </BreadcrumbItem>
-          {index < entries.length - 1 && <BreadcrumbDivider />}
-        </React.Fragment>
-      ))}
+          <BreadcrumbDivider />
+        </>
+      ) : null}
+
+      {tail.map((crumb, index) => {
+        const isLast = index === tail.length - 1;
+
+        return (
+          <React.Fragment key={crumb.id}>
+            <BreadcrumbItem>
+              <BreadcrumbButton
+                current={crumb.id === currentId}
+                onClick={() => setCurrentId(crumb.id)}
+              >
+                {crumb.label}
+              </BreadcrumbButton>
+            </BreadcrumbItem>
+            {!isLast ? <BreadcrumbDivider /> : null}
+          </React.Fragment>
+        );
+      })}
     </Breadcrumb>
   );
 };
 ```
 
-### Size and focus mode playground
+### BreadcrumbSizesAndDividers
 
-An interactive demo wiring Field + Select to the breadcrumb's size and focusMode props so you can compare small/medium/large density and tab vs. arrow keyboard traversal on the same trail.
+All three breadcrumb sizes rendered side by side, a Tooltip wrapping a long crumb label, and a custom slash divider supplied as BreadcrumbDivider children.
 
 ```tsx
 import * as React from 'react';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbButton, BreadcrumbDivider, Field, Select } from '@fluentui/react-components';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbButton,
+  BreadcrumbDivider,
+  Text,
+  Tooltip,
+} from '@fluentui/react-components';
 
-type BreadcrumbSize = 'small' | 'medium' | 'large';
-type BreadcrumbFocusMode = 'tab' | 'arrow';
+const SIZES = ['small', 'medium', 'large'] as const;
 
-const CRUMBS = ['Home', 'Products', 'Widgets', 'Widget 42'];
+export const BreadcrumbSizesAndDividers: React.FC = () => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    {SIZES.map(size => (
+      <Breadcrumb
+        key={size}
+        aria-label={`Breadcrumb (${size})`}
+        size={size}
+        focusMode='arrow'
+      >
+        <BreadcrumbItem>
+          <BreadcrumbButton>Home</BreadcrumbButton>
+        </BreadcrumbItem>
+        <BreadcrumbDivider />
 
-export const BreadcrumbPlayground = () => {
-  const [size, setSize] = React.useState<BreadcrumbSize>('medium');
-  const [focusMode, setFocusMode] = React.useState<BreadcrumbFocusMode>('tab');
-
-  return (
-    <div style={{ display: 'grid', gap: 20, maxWidth: 720 }}>
-      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-end' }}>
-        <Field label="Size" orientation="horizontal">
-          <Select
-            value={size}
-            onChange={(_ev, data) => setSize(data.value as BreadcrumbSize)}
+        <BreadcrumbItem>
+          <Tooltip
+            relationship='description'
+            content='Quarterly financial report for the Contoso business unit'
           >
-            <option value="small">small</option>
-            <option value="medium">medium</option>
-            <option value="large">large</option>
-          </Select>
-        </Field>
+            <BreadcrumbButton>Quarterly financial report for the Contoso…</BreadcrumbButton>
+          </Tooltip>
+        </BreadcrumbItem>
 
-        <Field label="Focus mode" orientation="horizontal">
-          <Select
-            value={focusMode}
-            onChange={(_ev, data) => setFocusMode(data.value as BreadcrumbFocusMode)}
-          >
-            <option value="tab">tab - every crumb is tabbable</option>
-            <option value="arrow">arrow - one tab stop, arrow keys move</option>
-          </Select>
-        </Field>
-      </div>
+        <BreadcrumbDivider>
+          <Text aria-hidden size={200}>
+            /
+          </Text>
+        </BreadcrumbDivider>
 
-      <Breadcrumb aria-label="Breadcrumb" size={size} focusMode={focusMode}>
-        {CRUMBS.map((label, index) => {
-          const isCurrent = index === CRUMBS.length - 1;
-
-          return (
-            <React.Fragment key={label}>
-              <BreadcrumbItem>
-                {isCurrent ? (
-                  <span aria-current="page" style={{ paddingInline: 8 }}>
-                    {label}
-                  </span>
-                ) : (
-                  <BreadcrumbButton onClick={() => console.log('navigate to', label)}>
-                    {label}
-                  </BreadcrumbButton>
-                )}
-              </BreadcrumbItem>
-              {!isCurrent && <BreadcrumbDivider />}
-            </React.Fragment>
-          );
-        })}
+        <BreadcrumbItem>
+          <BreadcrumbButton current>Overview</BreadcrumbButton>
+        </BreadcrumbItem>
       </Breadcrumb>
-    </div>
-  );
-};
-```
-
-### Breadcrumb in a page header with real anchors
-
-A compact, small-sized trail used above a page title: ancestor crumbs are real Link anchors (shareable URLs, middle-click friendly) and the truncated current-page label exposes its full text via Tooltip.
-
-```tsx
-import * as React from 'react';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbDivider, Link, Text, Tooltip } from '@fluentui/react-components';
-
-export const PageTitleBreadcrumb = ({ reportName }: { reportName: string }) => (
-  // "arrow" mode keeps the header to a single tab stop for keyboard users.
-  <Breadcrumb aria-label="Breadcrumb" size="small" focusMode="arrow">
-    <BreadcrumbItem>
-      <Link href="/" appearance="subtle">
-        Home
-      </Link>
-    </BreadcrumbItem>
-    <BreadcrumbDivider />
-    <BreadcrumbItem>
-      <Link href="/reports" appearance="subtle">
-        Reports
-      </Link>
-    </BreadcrumbItem>
-    <BreadcrumbDivider />
-    <BreadcrumbItem>
-      {/* The current page is text, not a link; Tooltip surfaces the untruncated label. */}
-      <Tooltip content={reportName} relationship="description">
-        <Text
-          aria-current="page"
-          truncate
-          style={{ maxWidth: 220, display: 'inline-block' }}
-        >
-          {reportName}
-        </Text>
-      </Tooltip>
-    </BreadcrumbItem>
-  </Breadcrumb>
+    ))}
+  </div>
 );
 ```
 
 ## Pitfalls
 
-- Wrapping the current page in a BreadcrumbButton or Link. It duplicates a navigation target and makes keyboard users tab onto the page they are already on - render plain text with aria-current="page" instead.
-- Forgetting aria-label on Breadcrumb. The component is a <nav> landmark; without a label, screen reader users hear an anonymous navigation region, and multiple unnamed navs are indistinguishable.
-- Putting the divider inside BreadcrumbItem, or wrapping crumbs in a <div>. BreadcrumbDivider is its own list item and must be a sibling between items; extra wrappers break the nav > ol > li structure. Remember N crumbs produce 2N-1 children.
-- Using focusMode="arrow" while some crumbs are non-focusable text. Arrow navigation then appears broken; make every interactive ancestor a BreadcrumbButton/Link or keep the whole trail in default "tab" mode.
-- Rendering an unbounded trail. Breadcrumb does not collapse automatically, so deep paths wrap or overflow the header - implement the ellipsis collapse pattern (or cap the visible depth) before shipping deep hierarchies.
-- Making the ellipsis a hover-only or decorative element. It needs to be a focusable Button with an accessible name and it must reveal the hidden crumbs when activated.
-- Not resetting the collapse/expand state on navigation, so the trail stays expanded forever after one click - key the reset effect off the current route so a new path starts collapsed.
-- Mismatched custom control sizes. If you add a custom ellipsis Button, match its size to the breadcrumb's size prop, otherwise the small button and large crumbs produce a visibly uneven row.
-- Hardcoding crumbs in the page component instead of deriving them from the route, which drifts out of sync with the URL and makes long trails and overflow logic impossible to test.
+- Putting `BreadcrumbDivider` inside `BreadcrumbItem`. The divider is a sibling list item that sits between two `BreadcrumbItem`s; nesting it breaks the list structure and the built-in spacing.
+- Leaving `current` off the last crumb or making it a link. Assistive technology then announces the current page as just another destination. Always set `current` on the final `BreadcrumbButton` and make it non-interactive.
+- Forgetting `aria-label` on `Breadcrumb`. It renders a `nav` landmark; when more than one navigation landmark exists on a page, each needs a unique accessible name.
+- Reaching for `focusMode='tab'` on long paths, which turns every crumb into a tab stop. Keep the default `'arrow'` roving focus and collapse the middle segments into a Menu instead.
+- Rendering every segment of a deep path regardless of width. Keep the first crumb, hide the middle behind an overflow Menu, keep the last one or two crumbs, and truncate long labels visually (optionally with a Tooltip).
+- Keying mapped crumbs with the array index. The path changes on navigation, so React reuses the wrong crumb; key each `React.Fragment` with a stable crumb id.
+- Setting `size` (or spacer styling) on individual crumbs instead of the `Breadcrumb` root. Set it once on the root so items and dividers stay consistent.
+- Hand-rolling `<nav><ol><li>` markup instead of the Breadcrumb components, which loses roving keyboard focus, correct list semantics, and token-based styling.
 
 ## Accessibility
 
-Landmark: Breadcrumb renders a <nav> landmark, so always pass aria-label (e.g. "Breadcrumb") and make the label unique when the page contains more than one nav landmark (for example a sidebar nav plus the breadcrumb). Current page: the last crumb must carry aria-current="page" and must not be a link or button; a clickable current page creates a redundant navigation target, adds an unnecessary tab stop, and is announced like any other destination. Dividers: BreadcrumbDivider is decorative (role="separator", aria-hidden="true"), so never put meaningful text inside it - meaning belongs in the crumb labels. Structure: keep BreadcrumbItem as a direct child of Breadcrumb; wrapping items in extra <div> wrappers destroys the nav > ol > li list semantics that screen readers rely on to announce "list, 4 items". Overflow: the ellipsis control must be a real button with an accessible name (aria-label describing how many items are hidden) and a Tooltip with relationship="label"; it must actually reveal the hidden crumbs on activation rather than relying on hover, and the revealed state should be conveyed (for example by replacing the ellipsis with the crumbs). Keyboard: focusMode="arrow" gives a roving tabindex so the whole trail is one tab stop with Left/Right arrow traversal - verify that every crumb in that mode is focusable, and prefer focusMode="tab" when the crumb count is small or when discoverability matters more than tab economy. Truncation: visually truncated labels remain fully available to assistive technology, but sighted users need a Tooltip (or title) to read the full name; never truncate the current page down to an unrecognizable fragment on narrow viewports - collapse ancestors instead. Interaction: crumb targets should be standard buttons or anchors so Enter, Space, middle-click, and 'open in new tab' behave as users expect; the trail must remain usable at 200% zoom and on narrow screens by collapsing rather than overflowing.
+`Breadcrumb` renders a `nav` landmark, so give it an `aria-label` ('Breadcrumb', 'Page path', 'File path'). When the page has more than one navigation landmark, each must have a unique accessible name so users can tell them apart. The crumbs are rendered as an ordered list (`ol`/`li`), which conveys hierarchy and sequence to assistive technology - keep `BreadcrumbItem` and `BreadcrumbDivider` as the only direct children so that list structure stays intact. Mark exactly one crumb with `current` on `BreadcrumbButton`; that crumb represents the current page and should not be a navigation target. The default `focusMode='arrow'` implements the roving-tabindex pattern recommended by the WAI-ARIA Authoring Practices for breadcrumbs: the whole trail is a single tab stop, and the arrow keys move focus between crumbs; use `focusMode='tab'` only when something else in your layout requires every crumb to be individually tabbable. Dividers are decorative: never put interactive or focusable content inside `BreadcrumbDivider` (if you replace the chevron with custom children, keep them non-focusable and hide purely decorative glyphs). A `Menu` trigger inside the trail must stay operable from the keyboard - opening it with Enter/Space and arrowing through `MenuItem`s - and an ellipsis-only trigger needs an `aria-label` that describes what it reveals. Truncate long segment labels visually (or wrap them in a `Tooltip` with `relationship='description'`) instead of cutting the string, so the accessible name stays complete. Finally, do not indicate the current crumb by color alone; the `current` prop also changes the visual weight of the crumb.
 
 ## Components used
 
 - [Breadcrumb](../../components/breadcrumb.md)
-- [Button](../../components/button.md)
-- [Field](../../components/field.md)
-- [Link](../../components/link.md)
-- [Select](../../components/select.md)
+- [BreadcrumbItem](../../components/breadcrumb-item.md)
+- [BreadcrumbButton](../../components/breadcrumb-button.md)
+- [BreadcrumbDivider](../../components/breadcrumb-divider.md)
+- [Menu](../../components/menu.md)
+- [MenuTrigger](../../components/menu-trigger.md)
+- [MenuPopover](../../components/menu-popover.md)
+- [MenuList](../../components/menu-list.md)
+- [MenuItem](../../components/menu-item.md)
 - [Text](../../components/text.md)
 - [Tooltip](../../components/tooltip.md)
 

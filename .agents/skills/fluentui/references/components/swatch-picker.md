@@ -7,9 +7,9 @@
 
 ## Overview
 
-SwatchPicker is a form-oriented selection control that groups visually presented swatches — color chips, gradient tiles, image tiles, or placeholders — into a single-select surface. It renders as a lightweight container (its only slot is the root) whose children are swatch components such as ColorSwatch, ImageSwatch, and EmptySwatch, and it tracks the currently chosen item by a string value. Selection can be uncontrolled through defaultSelectedValue or controlled through selectedValue, with onSelectionChange reporting both the selected value and the underlying swatch payload. Presentation is tuned by size (extra-small, small, medium, large), shape (square, rounded, circular), spacing (medium or small), and layout (row or grid), while focusMode decides whether the user moves between swatches with arrow keys or with the Tab key. Typical usage includes choosing a label or category color, picking a swatch inside a Popover, and combining color and image swatches in one grid.
+SwatchPicker is a single-select color and visual swatch selection control that groups a set of swatches into one coherent choice surface. Its children are Swatch components such as ColorSwatch (solid color, gradient, icon, or initials), ImageSwatch (image-based swatches), and EmptySwatch (placeholder swatches, commonly used to reserve slots for swatches that can be added later). The picker manages selection, focus movement, size, shape, spacing, and layout so that the individual swatches stay lightweight and only describe what they render. Selection can be uncontrolled through defaultSelectedValue or controlled through selectedValue, and onSelectionChange reports the newly selected swatch value together with the corresponding color or swatch content so callers can update a preview, a theme, or persisted state. Layout can be a single row or a multi-column grid, and focus can either rove through the swatches with arrow keys or move one swatch at a time with the Tab key. Because a swatch picker is inherently visual, every picker and every swatch is expected to carry descriptive labels, and the component is commonly paired with Tooltip, Popover, and ColorPicker in real color workflows.
 
-**When to use**: Use SwatchPicker when the user must pick exactly one item from a small, visually distinct set — brand colors, category colors, theme accents, product images used as options — and the choices are best recognized by their appearance rather than described in text. It is the right control when the value is a color or image token that maps one-to-one with a child swatch, and when you want arrow-key navigation across a compact picker. Prefer ColorPicker (optionally inside a Popover) when the user needs to author an arbitrary color with sliders, a color area, or alpha control rather than pick from a fixed palette. Prefer a Radio group, Select, or Combobox when the options are textual and the visual preview adds no value, and prefer a Dropdown or Menu when the option list is long or must be filtered. Use layout grid together with renderSwatchPickerGrid when the palette is wider than one comfortable row.
+**When to use**: Use SwatchPicker when the user must choose exactly one option from a small, curated, mostly visual set: a theme accent color, a brand palette entry, a highlight color for a document, a background image thumbnail, or a color slot that can be reassigned. It is the right control when the options are already known and few in number and the choice is primarily recognized rather than described. Prefer ColorPicker (with ColorArea, ColorSlider, and AlphaSlider) when the user needs to pick an arbitrary color anywhere in the color space, and use SwatchPicker inside a Popover on top of a Button when palette selection should be tucked away behind a trigger. Prefer Select or Dropdown when options are described by text and color is incidental, and prefer RadioGroup when the choices need extensive explanatory copy rather than swatch tiles. Pair SwatchPicker with EmptySwatch when the palette is authored by the user and empty slots communicate that more swatches can be added.
 
 ## Props Reference
 
@@ -18,7 +18,7 @@ SwatchPicker is a form-oriented selection control that groups visually presented
 | `defaultSelectedValue` | `string \| undefined` | — | No | Default selected value |
 | `focusMode` | `"arrow" \| "tab" \| undefined` | `'arrow'` | No | Sets the focus behavior for the SwatchPicker.  `arrow` This behavior will cycle through all elements inside of the SwatchPicker when pressing the Arrow key.  `tab` This behavior will cycle through all elements inside of the SwatchPicker when pressing the Tab key. |
 | `layout` | `"row" \| "grid" \| undefined` | — | No | Whether SwatchPicker is row or grid |
-| `onSelectionChange` | `any` | — | No | Triggers a callback when the value has been changed |
+| `onSelectionChange` | `EventHandler<SwatchPickerOnSelectionChangeData> \| undefined` | — | No | Triggers a callback when the value has been changed |
 | `selectedValue` | `string \| undefined` | — | No | Controlled selected value |
 | `shape` | `"rounded" \| "square" \| "circular" \| undefined` | — | No | Swatch shape |
 | `size` | `"extra-small" \| "small" \| "medium" \| "large" \| undefined` | `'medium'` | No | Swatch size |
@@ -26,15 +26,14 @@ SwatchPicker is a form-oriented selection control that groups visually presented
 
 ### Prop Guidance
 
-- **selectedValue**: Controlled selection. Set it to the value of the child swatch that should appear chosen and update it from onSelectionChange; if it is not updated, the highlight never moves. `00B053 (matches the value of the corresponding ColorSwatch)`
-- **defaultSelectedValue**: Uncontrolled initial selection, applied only when the picker mounts. Use it for simple, self-managing palettes where the parent does not need to own the state; never combine it with selectedValue. `00B053`
-- **onSelectionChange**: Single callback for every selection. The event data exposes the chosen value and the chosen swatch, so it is the right place to update controlled state, refresh a preview, or close a surrounding Popover in a choose-and-dismiss flow. `Read the selected value and selected swatch from the event data and write them into state`
-- **focusMode**: Controls keyboard traversal. Arrow (the default) keeps the picker to a single tab stop and cycles focus with the arrow keys, which suits compact palettes. Tab makes every swatch its own tab stop, which is appropriate for very small sets or when a parent composite widget already claims the arrow keys. `arrow`
-- **layout**: Row (default) places swatches inline; grid arranges them into multiple rows. Pair grid with renderSwatchPickerGrid and a columnCount rather than dropping plain children in, otherwise the arrangement will not be distributed as a grid. `grid`
-- **size**: Sets swatch width and height for the whole picker — extra-small (20x20), small (24x24), medium (28x28, the default), and large (32x32). Choose larger sizes for touch, dense data displays, or accessibility-sensitive contexts. `large`
-- **shape**: Sets the border radius of every swatch: square (default) for a precise, grid-like look, rounded for a softened rectangle, and circular for a palette-dot appearance. Match the shape used elsewhere in the surface. `circular`
-- **spacing**: Sets the gap between swatches. Medium is the default and gives comfortable separation; small tightens grids so more swatches fit in the same footprint, which is useful inside Popovers. `small`
-- **aria-label**: Not a design prop, but expected on the root in every documented example. It names the whole picker for assistive technology, so describe the decision (for example the palette or context) rather than repeating a swatch color. `SwatchPicker grid layout`
+- **selectedValue**: Use for controlled selection when the selected value lives in your own state or comes from a server. Pair it with onSelectionChange so the picker can actually update, and make sure the value matches one of the children's values, otherwise nothing appears selected. `00B053`
+- **defaultSelectedValue**: Use for uncontrolled selection when the picker can own its own state, for example a simple palette with a sensible initial choice. Do not combine it with selectedValue. `FF1921`
+- **onSelectionChange**: Always provide this with a controlled selectedValue. The callback receives data describing the newly selected swatch, including its value for storing selection and its swatch content for updating an external preview, theme, or persisted preference. `handleSelect`
+- **focusMode**: Leave at the default arrow for palette-style palettes so the whole picker is one tab stop and arrows cycle through swatches. Switch to tab only when the surrounding form is expected to give each swatch its own tab stop, which is typically appropriate for very short lists. `arrow`
+- **layout**: Leave unset or set to row for a horizontal strip of swatches. Set to grid when the palette wraps into multiple columns, and render the children through renderSwatchPickerGrid with an explicit columnCount so items are distributed predictably. `grid`
+- **size**: Controls swatch width and height: extra-small for dense inline palettes, small and medium for ordinary form usage, and large when swatches are the primary interaction target. Avoid extra-small where the swatch is the main target, since the 20 pixel size is under common target size guidance. `medium`
+- **shape**: Use square for a classic palette tile look, rounded for a softer tile that still reads as a swatch, and circular for dot-style color pickers that pair well with avatars or small accent chips. `circular`
+- **spacing**: Use medium for comfortable separation between swatches and small when the palette needs to be compact, such as inside a PopoverSurface. Increasing spacing is also the most reliable way to keep small swatches usable as targets. `small`
 
 ### Slots
 
@@ -259,104 +258,108 @@ EmptySwatchExample.parameters = {
 
 ### Do's
 
-- Give the SwatchPicker itself an aria-label that describes the decision being made, such as "SwatchPicker with images" or "SwatchPicker set 2", so the group is announced with context.
-- Give every child swatch its own descriptive aria-label — a human-readable color or object name like "green" or "dark blue" — because the value prop is often a raw hex string or id that reads poorly aloud.
-- Reinforce naming with Tooltip using relationship="label" on each swatch when the color name is not visible elsewhere on screen; the tooltip content then becomes the accessible name.
-- Keep the value of each ColorSwatch, ImageSwatch, and EmptySwatch unique across the whole picker, since the value doubles as the React key and as the selection identifier.
-- Drive selection with selectedValue and onSelectionChange when the picker must do something on choose — closing a surrounding Popover, updating a preview, or committing a custom color — and set state from the event data so the highlight follows the interaction.
-- Switch to layout grid with renderSwatchPickerGrid and an explicit columnCount once the palette no longer fits comfortably in a single row, and use the spacing prop to control the gap instead of custom margins.
-- Pick size and shape deliberately: medium or large for touch and high-density surfaces, circular or rounded when the surrounding design language is soft, square when it is not.
-- Use focusMode tab only when a surrounding composite widget already consumes arrow keys, so that arrow-based focus movement does not conflict with the parent.
-- Use EmptySwatch, rendered disabled, to represent space reserved for swatches that do not exist yet in a create-your-own-palette flow, as shown in the empty swatch example.
+- Give the SwatchPicker root a descriptive aria-label that names the choice, such as the palette or theme the swatches belong to, because the root is the only labelled landmark the user hears when entering the control.
+- Give every ColorSwatch, ImageSwatch, and EmptySwatch its own aria-label that describes the swatch in human terms (a color name, the image subject, or 'empty swatch') instead of exposing a raw hex value or an image URL.
+- Choose one selection model: use selectedValue plus onSelectionChange for a controlled picker, or defaultSelectedValue alone for an uncontrolled picker, and avoid supplying both selectedValue and defaultSelectedValue at the same time.
+- Keep each swatch's value unique and stable across renders, since the value both identifies the selected item and is used as the React key when mapping over a color array.
+- Keep the default focusMode of arrow for palettes with more than a couple of swatches, because roving arrow-key focus keeps a single tab stop for the whole picker and matches how users expect a palette to behave.
+- Switch to layout grid together with renderSwatchPickerGrid and an explicit columnCount when the palette is larger than one row or when row and column structure matters visually.
+- Wrap swatches in Tooltip with relationship label when the color name may not be obvious, so pointer users get the name on hover and the same text reinforces the accessible name.
+- Use EmptySwatch placeholders, typically disabled, to hold grid positions open when new swatches can be appended, so the grid keeps its column alignment as the palette grows.
+- Render a preview of the current selection next to the picker (a larger color block, image, or label) so the user can confirm the effect of the choice at a glance.
+- Use the size, shape, and spacing props to match the picker to the surrounding layout rather than overriding swatch dimensions with custom CSS, since these props keep the selection ring and focus ring consistent.
 
 ### Don'ts
 
-- Do not ship swatches that carry only a color without any label; an aria-label is required in every documented example precisely because an unlabeled chip is announced as a nameless button.
-- Do not rely on the selected outline alone to communicate state; surface the chosen value in adjacent UI (a preview block, a text label, or a tooltip) so the selection is not communicated by color alone.
-- Do not set both selectedValue and defaultSelectedValue on the same picker — mixing controlled and uncontrolled selection makes the displayed highlight unpredictable.
-- Do not pass selectedValue without updating it inside onSelectionChange; the callback fires but the visible selection stays frozen, which looks like the picker is broken.
-- Do not cram a large palette into the default row layout; long rows overflow their container and turn arrow navigation into a very long sequence. Use layout grid or place the picker inside a Popover.
-- Do not duplicate values or key swatches by array index; custom swatches added at runtime can collide with existing values and selection will jump to the wrong chip.
-- Do not wrap the picker in your own key handler that intercepts arrow keys while focusMode is arrow, and do not add extra tab stops between swatches in arrow mode.
-- Do not choose extra-small or small for touch-first surfaces where the swatch is the primary interaction target; the reduced hit area makes selection error-prone.
+- Don't wrap swatches in extra container elements such as divs or fragments that render DOM, because the picker expects swatch children as direct items for selection tracking, grid placement, and roving focus.
+- Don't rely on color alone to communicate meaning; swatches that differ only by hue still need distinct aria-labels and, where it matters, a visible tooltip or caption.
+- Don't use SwatchPicker as a general color editor; when the value can be anything in the color space, use ColorPicker with ColorArea, ColorSlider, and AlphaSlider instead of a fixed palette.
+- Don't reuse the same value for two swatches, since duplicate values make selection ambiguous and produce unstable React keys.
+- Don't set focusMode to tab on long palettes, because every swatch becomes a separate tab stop and keyboard users must tab through the entire palette to reach what follows it.
+- Don't render the picker without any label; a bare grid of color tiles gives screen reader users no context about what is being selected.
+- Don't mix swatch styling per item (custom width, custom border radius, custom gap) with the picker-level size, shape, and spacing props, because inconsistent swatch geometry breaks the selection ring and grid rhythm.
+- Don't disable the whole SwatchPicker to represent 'nothing selected yet'; leave the selection empty or add a neutral placeholder swatch instead, so the control stays operable.
 
 ## Anti-Patterns
 
-### Unlabeled swatches
+### Wrapping swatches in extra DOM containers
 
-❌ A swatch whose only content is a color renders as a button with no accessible name. Screen reader users hear an unnamed button and cannot tell one option from another, and the value prop used internally is usually a hex string that would be meaningless if announced.
+❌ The picker walks its swatch children to build the selectable set, place grid items, and move roving focus. Inserting wrapper divs, fragments that render elements, or intervening layout components hides the swatches from that tracking, so selection, arrow navigation, and grid columns break.
 
-✅ Provide a descriptive aria-label on every swatch in addition to its value, and consider wrapping each swatch in a Tooltip with relationship="label" so the visual user and the screen reader user receive the same name.
+✅ Pass ColorSwatch, ImageSwatch, and EmptySwatch elements directly as children. For grid layouts, use renderSwatchPickerGrid with an items array and columnCount instead of hand-wrapping items in your own container.
 
-### Frozen controlled selection
+### Unlabeled swatches that only communicate color
 
-❌ Passing selectedValue without writing the callback result back into state means the picker fires onSelectionChange but the selected highlight never moves; the control appears unresponsive even though it is technically working.
+❌ A grid of unlabeled color tiles is meaningless to screen reader users and hard for anyone with low color vision, and the root picker has no visible label to fall back on. Raw hex values in aria-label are technically present but describe nothing a user can act on.
 
-✅ Keep the selection in state, read the selected value from the event data inside onSelectionChange, and feed it straight back into selectedValue, or drop selectedValue and use defaultSelectedValue for an uncontrolled palette.
+✅ Give the root an aria-label naming the choice and give every swatch an aria-label with a human-readable name such as 'light blue' or 'brand purple'. Add Tooltip with relationship label when the name should also be visible on hover.
+
+### Unbounded color selection with a fixed palette
+
+❌ Users who need a specific color cannot reach it from a handful of preset swatches, and the application ends up with inaccurate or second-choice values that are impossible to represent as a palette entry.
+
+✅ Use ColorPicker with ColorArea, ColorSlider, and AlphaSlider for free-form color entry, and offer SwatchPicker as the fast path for common colors. A common pattern is a Popover containing a SwatchPicker for presets alongside a ColorPicker for custom values.
+
+### Duplicate or unstable swatch values
+
+❌ The value identifies the selected swatch and is also used as the React key when mapping an items array. Duplicate values make the selection ambiguous, and index-based or auto-generated keys cause the selection ring to jump to the wrong tile after the palette changes.
+
+✅ Ensure every swatch value is unique and stable, especially when appending custom colors. Derive the new value from the color itself plus a unique suffix, and use that same value as the React key.
 
 ### Mixing controlled and uncontrolled selection
 
-❌ Supplying both selectedValue and defaultSelectedValue creates two competing sources of truth, so which swatch appears selected depends on internal mount behavior rather than on your intent.
+❌ Supplying selectedValue without onSelectionChange freezes the picker, while supplying both selectedValue and defaultSelectedValue mixes two sources of truth and produces inconsistent or ignored initial state.
 
-✅ Choose one model. Use selectedValue plus onSelectionChange when the parent owns the state; use defaultSelectedValue alone when the picker manages its own selection.
+✅ Pick one model: controlled with selectedValue plus onSelectionChange, or uncontrolled with defaultSelectedValue. When a value must persist across sessions, control the picker and store the reported value yourself.
 
-### Palette crammed into one row
+### Per-swatch style overrides that fight the picker props
 
-❌ The default row layout with a dozen or more swatches overflows its container and turns arrow traversal into a long, error-prone sequence, and in a constrained surface such as a Popover the swatches get clipped.
+❌ Setting custom widths, radii, or gaps on individual swatches conflicts with the picker-level size, shape, and spacing props, so the focus ring, selection ring, and grid rhythm no longer line up.
 
-✅ Switch to layout grid, render the children with renderSwatchPickerGrid using an explicit columnCount, and tighten spacing to small when vertical space is limited.
-
-### Arrow-key collision with a parent widget
-
-❌ Using the default arrow focus mode inside a composite parent that already consumes arrow keys for its own navigation causes focus to be trapped or to skip the palette entirely.
-
-✅ Set focusMode to tab for pickers embedded in arrow-key-driven parents, accepting a longer tab sequence in exchange for predictable traversal.
-
-### Duplicate swatch values
-
-❌ Values act as both the React key and the selection identifier. Duplicated or index-derived values make selection resolve to the wrong swatch and cause key collisions when swatches are added dynamically.
-
-✅ Guarantee uniqueness across ColorSwatch, ImageSwatch, and EmptySwatch children, deriving new values from the swatch content (for example the color string) plus a suffix that cannot collide with existing entries.
+✅ Drive geometry from the size, shape, and spacing props and reserve className for content-level tweaks such as constraining an ImageSwatch thumbnail, as shown in the image swatch and popover examples.
 
 ## Accessibility
 
-**Requirements**: The picker must expose an accessible name via aria-label (or a labelled container), and each swatch must have its own accessible name, typically aria-label, so users do not hear raw hex values. Selection must be conveyed by a non-color-only indicator — a token-backed outline, check, or ring — to satisfy WCAG 1.4.1 (Use of Color) and 1.4.11 (Non-text Contrast) with at least a 3:1 contrast ratio against adjacent colors. Focus must be visibly indicated for every swatch reachable by keyboard (WCAG 2.4.7), and swatches must remain fully operable from the keyboard (WCAG 2.1.1). Target size matters: medium (28x28) and large (32x32) satisfy the 24x24 minimum comfortably, while extra-small (20x20) and small (24x24) should be reserved for pointer-dense, non-touch contexts or padded with additional hit area. Disabled swatches must be identifyable both visually and programmatically and must not be selectable.
+**Requirements**: The SwatchPicker root must have an accessible name, normally via aria-label, because the control has no visible text label of its own. Every swatch must expose a meaningful accessible name through its own aria-label that conveys the option in words, not just a color code, since color perception varies and some users cannot perceive color at all. Selection must never be conveyed by color or outline alone; the selected swatch also needs a programmatic selected state and a visible check or border treatment. Focus indicators must remain visible against every swatch color, and interactive swatches must meet target size expectations: the extra-small size is 20 by 20 pixels, which is below the 24 by 24 CSS pixel WCAG 2.5.8 target size minimum, so use small or larger sizes, or rely on the spacing prop to keep generous separation, when the swatches are the primary target. Disabled swatches must remain perceivable as options and must not be reachable as selectable targets.
 
 | Key | Action |
 | --- | --- |
-| `Tab` | When focusMode is tab, moves focus from one swatch to the next inside the picker; when focusMode is arrow (the default), Tab moves focus into the picker as a single stop and then out to the next control. |
-| `Shift+Tab` | Moves focus to the previous swatch within the picker in tab focus mode, or moves focus out of the picker to the preceding control in arrow focus mode. |
-| `ArrowRight and ArrowLeft` | In arrow focus mode (the default), cycles focus through the swatches in the picker; in grid layout they move focus horizontally across the current row. |
-| `ArrowUp and ArrowDown` | In arrow focus mode within a grid layout, moves focus vertically between rows of swatches. |
-| `Enter` | Selects the currently focused swatch and fires onSelectionChange with the newly selected value and swatch. |
-| `Space` | Selects the currently focused swatch, equivalent to Enter, and fires onSelectionChange. |
+| `Arrow keys` | When focusMode is arrow (the default), pressing an arrow key cycles focus through the swatches inside the SwatchPicker without leaving the control. |
+| `Tab` | Moves focus into the picker as a single tab stop in arrow mode, or advances focus from one swatch to the next when focusMode is tab. |
+| `Shift+Tab` | Moves focus out of the picker in arrow mode, or back to the previous swatch when focusMode is tab. |
+| `Enter` | Selects the currently focused swatch and raises onSelectionChange with the new value. |
+| `Space` | Activates the focused swatch the same way as Enter, selecting it and notifying onSelectionChange. |
 
-**ARIA**: aria-label on the SwatchPicker root, describing the purpose of the picker, aria-label on each ColorSwatch, ImageSwatch, and EmptySwatch child, describing the swatch by name, Tooltip with relationship="label" applied to a swatch, which promotes the tooltip text to the swatch's accessible name, disabled on child swatches, which removes them from selection and is announced as unavailable, Native button semantics on each swatch, which is why focus and activation behave like a button
+**ARIA**: aria-label on the SwatchPicker root, naming the palette or selection being made, aria-label on each ColorSwatch, ImageSwatch, and EmptySwatch, describing the specific option
 
-**Screen Reader**: Screen reader users encounter the SwatchPicker as a single labelled control group rather than as a blank canvas. They land on one swatch (in arrow focus mode) or tab through each swatch individually (in tab focus mode), and each stop announces the swatch's accessible name together with its button role and selected or disabled state. Because a swatch's visible content is usually a color or an image, the aria-label is the only thing spoken — without it the user hears an unnamed button. When a selection changes, the newly selected swatch is announced as selected and the previous one as not selected, so adjacent UI such as a preview block should also be labelled for users who cannot perceive the color change.
+**Screen Reader**: Assistive technology encounters the SwatchPicker as a labelled group of swatch options. As the user arrows or tabs through the swatches, each swatch is announced by its own aria-label, and the selected state is announced along with the swatch that currently holds selection, which is why labels must describe the option rather than repeat a hex value. Disabled swatches are announced as disabled and cannot be selected. Because onSelectionChange is the only selection signal exposed to the application, the surrounding UI should update any preview or status text so that sighted and non-sighted users receive the same confirmation of the change.
 
 ## Styling
 
-Most visual tuning is done through the picker's own props rather than custom CSS: size maps to 20x20 (extra-small), 24x24 (small), 28x28 (medium, the default), and 32x32 (large) swatches; shape maps to square (default), rounded, and circular; spacing maps to a medium (default) or small gap between swatches. When you need to go further, style the children: ColorSwatch and ImageSwatch both accept className, which is how the image example sizes its swatches, and the icon example styles the icon inside a swatch. Use Griffel tokens rather than literal values so the picker follows the theme — tokens.spacingHorizontalS and tokens.spacingHorizontalM for gaps between columns, tokens.spacingVerticalS and tokens.spacingVerticalM for row gaps, tokens.borderRadiusSmall, tokens.borderRadiusMedium, and tokens.borderRadiusCircular for corner treatment, tokens.colorNeutralStroke1 or tokens.colorNeutralStroke2 for empty and unselected swatch borders, tokens.colorNeutralBackground1 and tokens.colorNeutralBackground2 for placeholder fills, and tokens.colorBrandStroke1 or tokens.colorStrokeFocus2 for the selected outline and focus ring. Custom color swatches themselves are data-driven (the color prop accepts solid values and gradient strings), so they are not themed; only their chrome, borders, and focus treatment are.
+Reach for the picker-level props before CSS: size sets swatch width and height (extra-small at 20px, small at 24px, medium at 28px, and large at 32px, with medium as the default), shape sets the swatch border radius (square by default, with rounded and circular available and circular corresponding to tokens.borderRadiusCircular), spacing controls the gap between swatches (medium by default, small for tighter rows), and layout switches the root between a single row and a grid. When you do need styling, target the root through className and the individual swatches through their own className, as the image swatch example does when it needs to constrain an image thumbnail. Useful Griffel tokens for custom styling include tokens.spacingHorizontalS, tokens.spacingHorizontalM, and tokens.spacingHorizontalL for gaps you manage yourself, tokens.borderRadiusSmall, tokens.borderRadiusMedium, and tokens.borderRadiusCircular for swatch geometry, tokens.colorNeutralStroke1 and tokens.colorNeutralStrokeAccessible for swatch outlines that must survive light and dark themes, tokens.colorStrokeFocus2 for focus rings drawn around a swatch, and tokens.colorNeutralForeground1 with tokens.colorNeutralBackground1 for the selected-state check overlay. Keep custom rules scoped to the picker root so that a single style block does not fight the size and shape props on every swatch.
 
 ## Performance
 
-SwatchPicker itself is a thin wrapper — the cost lives in the children, because every ColorSwatch, ImageSwatch, and EmptySwatch is an individually focusable button. Two practical consequences follow. First, keep the children list stable: build item arrays outside of render or memoize them so selection updates do not re-create every swatch and remount its DOM node. Second, prefer arrow focus mode for large palettes — it keeps the picker to a single tab stop and moves DOM focus rather than participating in the document tab order. ImageSwatch adds per-swatch network and decode cost; the image example deliberately points swatches at small thumbnails and only swaps in the full-resolution source for the currently selected item, a pattern worth repeating with sizable assets. renderSwatchPickerGrid is a plain helper that distributes a provided items array into rows, so reuse a single items array instead of regenerating it on each render.
+SwatchPicker itself is lightweight; the cost lives in the number of swatches and how the child list is produced. Memoize the mapped swatch array and keep values stable so React can reuse swatch elements instead of recreating them on every parent render, and avoid regenerating objects for each swatch inline if the palette is large or the parent re-renders often. Wrap onSelectionChange in a stable callback when the picker sits inside a frequently re-rendering surface such as a Popover or a color editing panel, since a new handler identity each render forces the picker to update. When appending user-created colors, append to a memoized items array rather than reshaping the entire palette, and let grid layouts go through renderSwatchPickerGrid so column placement is computed once from the items array. Keep the number of rendered swatches reasonable for the size chosen; a very large grid of large swatches is both a visual and a rendering burden, and a Popover presentation with grouped sets keeps the initial surface small.
 
 ## Theming & Tokens
 
-Swatch geometry and spacing follow the picker's size, shape, and spacing props, and those in turn resolve through theme values, so a themed or brand-tuned Provider adjusts the palette footprint automatically. The component's own chrome — selected outline, focus ring, empty and unselected swatch borders, placeholder fills, disabled treatment — draws from Griffel tokens such as tokens.colorNeutralStroke1, tokens.colorNeutralStroke2, tokens.colorStrokeFocus2, tokens.colorBrandStroke1, tokens.colorNeutralBackground1, tokens.colorNeutralBackground2, and tokens.colorNeutralForegroundDisabled, along with radius and spacing tokens (tokens.borderRadiusSmall, tokens.borderRadiusMedium, tokens.borderRadiusCircular, tokens.spacingHorizontalS, tokens.spacingHorizontalM, tokens.spacingVerticalS, tokens.spacingVerticalM). The colors the user picks are consumer data passed through the color prop of each ColorSwatch or the src of each ImageSwatch, so they are intentionally outside the theme system. Under high contrast or brand variations, make sure the selection indicator is driven by a token-backed border or ring rather than by a tinted background so the state stays perceivable.
+SwatchPicker inherits everything from the nearest FluentProvider theme, so its swatch borders, focus rings, and selected-state overlay restyle automatically between light, dark, and high-contrast themes. Focus and selection indicators are drawn from stroke and neutral tokens such as tokens.colorStrokeFocus2, tokens.colorNeutralStroke1, and tokens.colorNeutralStrokeAccessible, while the selected check overlay typically inverts against the swatch using tokens.colorNeutralForeground1 and tokens.colorNeutralBackground1. Spacing between swatches follows the theme spacing scale, and swatch geometry leans on radius tokens including tokens.borderRadiusSmall, tokens.borderRadiusMedium, and tokens.borderRadiusCircular for the corresponding shape values. The color values themselves are author-supplied, so they do not respond to theme changes; when the palette must stay legible in both themes, choose colors that contrast with tokens.colorNeutralBackground1 and let tokens.colorNeutralStrokeAccessible draw the outline. If a swatch must represent a brand or status concept rather than a literal color, drive it with the corresponding color tokens such as tokens.colorBrandBackground, tokens.colorPaletteRedBackground3, or tokens.colorStatusDangerBackground3 so it tracks the theme.
+
+## Migration Notes
+
+SwatchPicker is a v9-only color selection control and has no direct Fluent UI v8 equivalent, so teams coming from hand-rolled grids of colored buttons or from third-party palette widgets should map their existing item list onto ColorSwatch, ImageSwatch, and EmptySwatch children and let SwatchPicker own selection, sizing, shape, and spacing. The selection contract is value-based: each swatch carries a value that is echoed back through onSelectionChange and compared against selectedValue or defaultSelectedValue, and the callback data also exposes the selected swatch's color, which the examples use to drive an external preview. If you previously managed focus with your own roving tabindex implementation, delete it and use focusMode arrow, which is the default, or focusMode tab for the opposite behavior. If your old implementation rendered arbitrary swatch markup, move to the provided swatch components or to renderSwatchPickerGrid for grid layouts, since the picker expects swatch children rather than generic elements.
 
 ## Edge Cases
 
-- defaultSelectedValue is read only at mount; changing it later has no effect, so a picker initialized without a default shows nothing selected until the user interacts.
-- Selection identity is the swatch value, which must be unique across all children — a ColorSwatch, ImageSwatch, and EmptySwatch that share a value will collide for both keying and selection.
-- EmptySwatch is rendered disabled and is a placeholder for not-yet-available slots, not a selectable option; it still occupies a cell in row and grid layouts, so include it when calculating columnCount.
-- onSelectionChange reports both the selected value and the underlying swatch payload, but that payload differs by type: an ImageSwatch yields an image source while a ColorSwatch yields a color string or gradient, so mixed palettes need to branch on the item type before consuming the result.
-- Gradients and transparency are valid color values (the variants example uses a linear-gradient string), so adjacent preview UI must be able to render them rather than assume a solid color.
-- A single picker can host multiple color sets at once, as in the popover example where two SwatchPickers share one selectedValue; both will highlight the same swatch, which is usually desirable but must be intentional.
-- Extra-small (20x20) and small (24x24) swatches fall below the recommended 24x24 minimum target size when used as the primary hit area without padding.
-- SwatchPicker takes children rather than an items prop, so an empty children array renders an empty root with no built-in empty state — pair the picker with an EmptySwatch or its own messaging when no swatches exist.
+- If selectedValue or defaultSelectedValue does not match any child's value, no swatch renders as selected; keep the stored value synchronized with the palette, and reset it when the palette changes.
+- Extra-small swatches are only 20 by 20 pixels, which falls below common minimum target size guidance, so increase size or spacing when swatches are the primary interaction target or are used on touch devices.
+- Grid layout only looks correct when the children are produced by renderSwatchPickerGrid with an explicit columnCount; adding items directly to a grid picker without that helper places them in a single implicit flow rather than the intended columns.
+- EmptySwatch placeholders are usually rendered as disabled so they are not selectable; if you make them interactive instead, give each one a distinct aria-label so users can tell the slots apart.
+- Focus mode tab turns every swatch into its own tab stop, so a palette with many colors makes everything after the picker difficult to reach with the keyboard; this is the main reason arrow remains the default.
+- Swatch values must stay unique when users add custom colors at runtime, because the same value drives selection, React keys, and focus restoration after a new swatch is appended.
+- When the picker is placed inside a PopoverSurface, closing the popover on selection is a common pattern, but the trigger button should keep a visible indication of the current selection so users can see what they chose after the surface is dismissed.
+- Disabled swatches remain part of the visual palette and shift grid positions, so keep disabled entries in the items array rather than filtering them out if the layout is expected to stay stable.
 
 ## See Also
 

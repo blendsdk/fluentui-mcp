@@ -2,18 +2,30 @@
 
 > **Category**: foundation
 
-FluentUI v9 is Microsoft's React component library for building accessible, themeable, production-grade experiences. Almost everything you need ships from a single entry point — `@fluentui/react-components` — and every component follows the same handful of conventions: a root `FluentProvider`, a slots-based composition model, state props such as `appearance`/`size`/`shape` instead of ad-hoc styling, and `(event, data)` change callbacks.
+FluentUI v9 is Microsoft's React component library and design system, distributed as the single package `@fluentui/react-components`. This guide takes you from an empty project to a working, themed, accessible screen using only the public v9 API surface: the components, their props, their slots, and the supporting components such as `FluentProvider`.
 
-This guide takes you from a blank project to a working, accessible screen, and then walks the whole component catalog so you know which building block to reach for.
+## 1. What you are working with
 
-## 1. What FluentUI v9 gives you
+| Concern | What v9 gives you |
+| --- | --- |
+| Distribution | One package, `@fluentui/react-components`, that exports every component |
+| Styling | Component styles are generated and injected at runtime; you do not import a CSS bundle |
+| Composition | Every component is built from slots (a `root` plus named sub-elements) |
+| State | Stateful components expose a controlled API and an uncontrolled API, never both at once |
+| Accessibility | ARIA roles, keyboard behaviour and focus management are implemented for you; labelling your content is your job |
 
-- **One import path.** `import { Button, Input, Field } from '@fluentui/react-components';`
-- **Token-driven theming.** Colors, typography, radii, shadows and spacing are design tokens applied by a root `FluentProvider`.
-- **Slots.** Every component exposes named parts (`icon`, `contentBefore`, `label`, `validationMessage`…) that can be filled with a primitive, JSX, or a props object.
-- **State-driven API.** Props such as `appearance`, `size`, `shape`, `orientation`, `appearance` and `focusMode` replace the imperative `styles`/`theme` plumbing of older libraries.
-- **Accessibility built in.** Roles, ARIA wiring, focus management, roving tab stops and keyboard interaction are handled by the components.
-- **TypeScript first.** Props, slot types and change-data payloads are fully typed.
+### The component families
+
+Knowing the families is the fastest way to find the right component:
+
+- **Buttons** - `Button`, `CompoundButton`, `MenuButton`, `SplitButton`, `ToggleButton`.
+- **Forms** - `Field`, `Label`, `InfoLabel`, `InfoButton`, `Input`, `Textarea`, `Select`, `Dropdown`, `Combobox`, `Option`, `OptionGroup`, `Listbox`, `Checkbox`, `Radio`, `RadioGroup`, `Switch`, `Slider`, `SpinButton`, `SearchBox`, `Rating`, `RatingDisplay`, `ColorPicker`, `ColorArea`, `ColorSlider`, `AlphaSlider`, `ColorSwatch`, `SwatchPicker`, `TagPicker`.
+- **Data display** - `Text`, `Card`, `Avatar`, `Badge`, `CounterBadge`, `PresenceBadge`, `Image`, `List`, `Persona`, `Skeleton`, `Table`, `DataGrid`, `Tree`, `FlatTree`, `Tag`, `InteractionTag`.
+- **Feedback** - `Dialog`, `MessageBar`, `ProgressBar`, `Spinner`, `Toast`, `Toaster`.
+- **Layout** - `Card` primitives (`CardHeader`, `CardPreview`, `CardFooter`) and `Divider`.
+- **Navigation** - `Breadcrumb`, `Link`, `Menu`, `Nav`, `TabList`, `Toolbar`.
+- **Overlays** - `Drawer` (`OverlayDrawer`, `InlineDrawer`), `Popover`, `TeachingPopover`.
+- **Utilities** - `FluentProvider`, `Portal`, `Accordion`, `Carousel`, `OverflowItem`, `AriaLiveAnnouncer`.
 
 ## 2. Install
 
@@ -21,702 +33,750 @@ This guide takes you from a blank project to a working, accessible screen, and t
 npm install @fluentui/react-components
 ```
 
-A few capabilities live in dedicated packages that follow exactly the same conventions:
+React and React DOM are peer dependencies (React 16.8 or newer; React 17 and 18 are the best-tested versions). Nothing else is required: there is no stylesheet to import and no build plugin to configure. Styles are generated at runtime, and with a modern bundler the ESM build lets unused components drop out of the output.
 
-| Capability | Package | Component |
+## 3. Wrap the application once with FluentProvider
+
+The single mandatory integration step is `FluentProvider`. It supplies the theme, text direction, and portal configuration that every FluentUI component below it consumes. Place it once, as high as practical (typically around your root `<App />`).
+
+Key `FluentProvider` props:
+
+- `theme` - a `Partial<Theme>`; you only provide the values you want to change and the rest fall back to the default light theme. Define it once at module scope so the reference stays stable.
+- `dir` - `'ltr'` or `'rtl'` for the subtree.
+- `targetDocument` - the `Document` that portals should render into, for iframes or embedded hosts.
+- `applyStylesToPortals` - applies the provider styling to portal roots so overlays (menus, popovers, dialogs, tooltips, toasts) keep the look and theme of their provider.
+- `overrides_unstable` and `customStyleHooks_unstable` - escape hatches for advanced style and behaviour overrides.
+
+Overlay components render into a portal attached to the document body by default, which means they are outside of your provider's DOM subtree. `applyStylesToPortals` is what keeps them visually consistent.
+
+## 4. Render your first components
+
+Once the provider is in place, everything is ordinary React. Three ideas cover most of the API:
+
+1. **`appearance` expresses emphasis** on buttons and surfaces: `primary` is the strongest, `secondary` is the default, then `outline`, `subtle`, and `transparent` get progressively quieter. Most screens should have a small number of `primary` actions.
+2. **`size` and `shape` are consistent vocabulary** across the library (`small` / `medium` / `large`, `rounded` / `circular` / `square`), so a form built from `Input`, `Select` and `Button` stays visually aligned.
+3. **`disabled` versus `disabledFocusable`.** Use `disabled` when a control must be completely inert; use `disabledFocusable` when the control should still be reachable by keyboard and screen reader users (for example, while saving), which is also what makes tooltips work on a disabled-looking control.
+
+## 5. The composition model: slots, shorthand props, and `as`
+
+Every component is assembled from slots. A slot can be filled in three ways:
+
+- **A React element** - replaces the slot content: `<Button icon={<Spinner size='extra-tiny' />}>Save</Button>`.
+- **Plain content** - strings and numbers become the slot's children: `<Badge>New</Badge>`.
+- **A shorthand object** - `{ children, as, className, style, ...nativeProps }`: pass the props of the underlying element without writing JSX.
+
+Optional slots can be omitted by passing `null` or leaving them `undefined`, which is how you suppress parts of a composition. Required slots (for example the `root` of many components) always render.
+
+Some components are flat (`Button` has `root` and `icon`; `Input` has `root`, `input`, `contentBefore`, `contentAfter`); others use nested subcomponents instead: `Card` with `CardHeader` / `CardPreview` / `CardFooter`, `Dialog` with `DialogSurface` / `DialogTitle` / `DialogBody` / `DialogContent` / `DialogActions`, `DataGrid` with `DataGridBody` / `DataGridRow` / `DataGridCell`. The per-component slot list is the authoritative anatomy reference.
+
+Root slots also carry the `as` prop, so a component can render a different element when the semantics demand it, for example rendering a button as a link. When you change the element, supply the attributes that element requires (`href`, `type`, and so on).
+
+## 6. Controlled or uncontrolled: pick one per component
+
+Almost every stateful component ships a pair of props:
+
+| Uncontrolled | Controlled | Change callback |
 | --- | --- | --- |
-| Date picker | `@fluentui/react-datepicker-compat` | `DatepickerCompat` |
-| Time picker | `@fluentui/react-timepicker-compat` | `TimepickerCompat` |
-| Month / calendar grid | `@fluentui/react-calendar-compat` | `CalendarCompat` |
-| Rich menu grid layout | `@fluentui/react-menu-grid-preview` | `MenuGridPreview` |
-| Unstyled building blocks | `@fluentui/react-headless-components-preview` | `HeadlessComponentsPreview` |
-| Presence / stagger motion | `@fluentui/react-motion-components-preview` | `MotionComponentsPreview` |
-| Context-based selectors | `@fluentui/react-context-selector` | `ContextSelector` |
+| `defaultOpen` | `open` | `onOpenChange` |
+| `defaultChecked` | `checked` | `onChange` |
+| `defaultValue` | `value` | `onChange` / `onOptionSelect` |
+| `defaultSelectedValue` | `selectedValue` | `onTabSelect` / `onNavItemSelect` / `onSelectionChange` |
+| `defaultSelected` | `selected` | `onSelectionChange` |
+| `defaultOpenItems` | `openItems` | `onToggle` |
+| `defaultActiveIndex` | `activeIndex` | `onActiveIndexChange` |
 
-"compat" packages deliberately mirror the v8 API shape (useful when migrating); "preview" packages are unstable and can change between minor releases.
+Rules of thumb: use the uncontrolled form for state nobody else needs to read; use the controlled form when the state lives in a store, a route, or a parent component. Never mix them on the same component, and always implement the change callback when you control the value - otherwise the UI will appear frozen.
 
-## 3. Wrap your app in `FluentProvider`
+Every change callback receives two arguments: the DOM event, and a typed data object that carries the meaningful value (`data.value`, `data.checked`, `data.open`). Prefer the data object over reading the event target.
 
-`FluentProvider` is the root of every FluentUI app. It applies the theme, the text direction, and the handling of styles inside portals.
+## 7. Forms: Field is the centre of gravity
 
-Key props:
+A FluentUI form is built from form controls plus `Field`. `Field` owns the label, the required indicator, the hint and the validation message, and it wires them to the control inside it so assistive technology reads them together.
 
-| Prop | Purpose |
-| --- | --- |
-| `theme` | A `PartialTheme` object (light/dark/brand themes) that overrides design tokens for the subtree. |
-| `dir` | `'ltr'` or `'rtl'`. Set this for right-to-left locales. |
-| `targetDocument` | The `Document` that portaled content is rendered into (iframes, popups, shadow roots). |
-| `applyStylesToPortals` | Ensures tokens/styles are applied to content rendered through portals. |
-| `customStyleHooks_unstable` / `overrides_unstable` | Escape hatches for style overrides and token overrides. |
+- `label` supplies the visible label; `required` adds the indicator and marks the control required.
+- `hint` renders persistent helper text; `validationMessage` renders the message and uses the `validationState` (`'error'`, `'warning'`, `'success'`, `'none'`) to style it.
+- `orientation` switches between stacked (`vertical`) and side-by-side (`horizontal`) layouts, and `size` mirrors the control sizes.
+- `Field` children may also be a render function that receives the control props, which is how you wire a non-FluentUI control into the same label/description plumbing.
 
-Render one `FluentProvider` near the top of the tree, above **every** FluentUI component — including components that will later be rendered inside overlays. If your app is embedded in an iframe or a different document, pass `targetDocument` and `applyStylesToPortals` so portaled surfaces still receive theme tokens.
+Group related controls with `RadioGroup` (with `Radio` children, `layout='horizontal' | 'vertical' | 'horizontal-stacked'`), a single `Checkbox`/`Switch` per boolean, `Select` with `Option` children for short lists, and `Dropdown`/`Combobox` with `Option` (and `OptionGroup`) for longer lists. Use `MessageBar` to report the result of a submit.
 
-## 4. Importing and rendering components
+## 8. Overlays, portals and feedback
 
-```tsx
-import { Button, Input, Field } from '@fluentui/react-components';
-```
+- `Dialog` is modal by default; `modalType` distinguishes modal, non-modal and alert behaviour, `inertTrapFocus` keeps focus inside the surface, and `unmountOnClose` decides whether the content is destroyed when closed. Compose with `DialogTrigger` (inside `DialogActions` for the cancel path), `DialogSurface`, `DialogBody`, `DialogTitle`, `DialogContent`, `DialogActions`.
+- `Menu` provides dropdowns and command menus: `MenuTrigger`, `MenuPopover`, `MenuList`, `MenuItem`, `MenuItemLink`, `MenuItemCheckbox`, `MenuItemRadio`, `MenuItemSwitch`, `MenuGroup`, `MenuGroupHeader`, `MenuDivider`, `MenuSplitGroup`.
+- `Popover` is the low-level anchored surface (`PopoverTrigger` + `PopoverSurface`), while `Tooltip` is for short supplementary text and requires a `relationship` (`'label'`, `'description'`, `'inaccessible'`).
+- `Drawer`, `OverlayDrawer` and `InlineDrawer` (with `DrawerHeader`, `DrawerHeaderTitle`, `DrawerHeaderNavigation`, `DrawerBody`, `DrawerFooter`) provide panel layouts.
+- Feedback: `ProgressBar`, `Spinner`, `Skeleton` / `SkeletonItem` for loading, `MessageBar` / `MessageBarGroup` for inline status, `Toaster` / `Toast` for transient notifications, and `AriaLiveAnnouncer` for programmatic announcements.
 
-Always import from the package root. The library is tree-shakeable, so importing a few components does not pull in the rest. Cross-package components (`DatepickerCompat`, `TimepickerCompat`, `CalendarCompat`, `MenuGridPreview`, `MotionComponentsPreview`, `HeadlessComponentsPreview`, `ContextSelector`) are imported from their own packages, as shown above.
+Because overlays render in portals, remember the provider rules from section 3: apply styles to portals, or point `targetDocument` at the right document.
 
-## 5. Slots: the composition primitive
+## 9. Data display and navigation at scale
 
-A **slot** is a named part of a component. You fill it either as a shorthand prop or by passing a React element; the component supplies the correct element, class names and ARIA attributes.
+- Tables: `Table`, `TableHeader`, `TableBody`, `TableRow`, `TableCell`, `TableHeaderCell`, `TableSelectionCell`, `TableCellLayout`, `TableCellActions`, `TableResizeHandle` for static markup; `DataGrid` and its subcomponents (`DataGridHeader`, `DataGridHeaderCell`, `DataGridBody`, `DataGridRow`, `DataGridCell`, `DataGridSelectionCell`) add sorting, selection, column sizing and virtualization-friendly rendering driven by `sortable` / `sortDirection`, `selectionMode` and `columnSizingOptions`.
+- Trees: `Tree` with `TreeItem`, `TreeItemLayout`, `TreeItemPersonaLayout`, plus the flattened `FlatTree` / `FlatTreeItem` for virtualized trees.
+- Identity and status: `Avatar`, `AvatarGroup`, `AvatarGroupItem`, `AvatarGroupPopover`, `Persona`, `Badge`, `CounterBadge`, `PresenceBadge`, `Tag`, `InteractionTag`, `TagGroup`.
+- Navigation: `TabList` with `Tab` (`selectedValue` / `defaultSelectedValue` and `onTabSelect`), `Breadcrumb` with `BreadcrumbItem`, `BreadcrumbButton`, `BreadcrumbDivider`, `Link`, and the `Nav` family (`Nav`, `NavItem`, `NavSubItem`, `NavCategory`, `NavCategoryItem`, `NavSubItemGroup`, `NavSectionHeader`, `NavDivider`, `SplitNavItem`, `NavDrawer` and its header/body/footer, `Hamburger`, `AppItem`) with `density`, `selectedValue` and `openCategories` for application shells.
 
-Common slots across the library:
+## 10. Theming, direction and styling rules
 
-- `Button` → `root`, `icon`
-- `Badge` → `root`, `icon`
-- `Input` → `root`, `input`, `contentBefore`, `contentAfter`
-- `Field` → `root`, `label`, `validationMessage`, `validationMessageIcon`, `hint`
-- `Persona` → `root`, `avatar`, `presence`, `primaryText`, `secondaryText`, `tertiaryText`, `quaternaryText`
-- `Tooltip` → `content`
-- `Card` → `root`, `floatingAction`, `checkbox`
-- `Label` → `root`, `required`
-- `Spinner` → `root`, `spinner`, `spinnerTail`, `label`
+- Provide `theme` on the provider for global theming and define the object outside of render so its identity is stable. Nested providers inherit and can override theme, direction and portal behaviour for a subtree - that is how you build an RTL region or an embedded widget.
+- Set `dir='rtl'` on a provider (or the root provider) for right-to-left locales; components lay themselves out accordingly.
+- Style individual components with the `className` and `style` props, which flow to the root slot, or with slot-level shorthands for inner parts (`icon`, `action`, `header`, `media`, and so on).
+- Never target the generated class names FluentUI produces, and avoid global CSS that redefines component internals; it will break on upgrade. For deep customisation, use the provider's override hooks instead.
+- Portalled surfaces (menus, popovers, dialogs, tooltips) are attached to the document body; use `applyStylesToPortals` so they inherit provider styling.
 
-Practical rule: **prefer slots over hand-rolled markup.** `<Button icon={<Spinner size="tiny" />}>` looks right in every theme and size, whereas a hand-built `<span>` wrapper will not.
+## 11. TypeScript tips
 
-## 6. Props that shape appearance
+- Import props types from the same package as the component, or derive them: `React.ComponentProps<typeof Button>`.
+- Slot props are typed as slot values, so they accept an element, a shorthand object, or the shorthand content type of that slot.
+- Change callbacks are overloaded with a typed data argument - annotate your handlers to get completion for `data.value`, `data.checked`, `data.open`, and similar fields.
+- Component state hooks are rarely needed for regular application work; treat them as internal and start with props and composition.
 
-FluentUI exposes a small, consistent vocabulary instead of free-form styling props. The most common axes are `appearance`, `size`, `shape`, `color` and `orientation`, and their allowed values differ per component:
+## 12. Accessibility checklist
 
-| Axis | Components and values |
-| --- | --- |
-| `appearance` | `Button`: `secondary` \| `primary` \| `outline` \| `subtle` \| `transparent` · `Input`/`Textarea`: `outline` \| `underline` \| `filled-darker` \| `filled-lighter` (+ `-shadow` variants on `Input`/`Textarea`) · `Select`: `outline` \| `underline` \| `filled-darker` \| `filled-lighter` · `Badge`: `filled` \| `ghost` \| `outline` \| `tint` · `Card`: `filled` \| `filled-alternative` \| `outline` \| `subtle` · `Divider`: `brand` \| `default` \| `strong` \| `subtle` · `Spinner`: `primary` \| `inverted` · `Link`: `default` \| `subtle` |
-| `size` | `Button`: `ButtonSize` · `Badge`: `tiny` → `extra-large` · `Avatar`: `AvatarSize` · `Persona`: `extra-small` → `huge` · `Text`: `100` → `1000` · `Slider`/`Switch`/`SpinButton`: `small` \| `medium` · `Input`/`Select`/`Textarea`/`Field`: `small` \| `medium` \| `large` · `Breadcrumb`/`Toolbar`: `small` \| `medium` \| `large` |
-| `shape` | `Button`: `rounded` \| `circular` \| `square` · `Badge`: `circular` \| `rounded` \| `square` · `Image`: `square` \| `circular` \| `rounded` · `Checkbox`: `square` \| `circular` · `ProgressBar`: `rounded` \| `square` |
-| `color` | `Badge`: `brand`, `danger`, `important`, `informative`, `severe`, `subtle`, `success`, `warning` · `Avatar`: `neutral`, `brand`, `colorful`, or a named color · `Rating`: `brand` \| `marigold` \| `neutral` · `ProgressBar`: `brand` \| `success` \| `warning` \| `error` |
+- Give every control an accessible name: a `Field` label for form controls, or `aria-label` for icon-only buttons.
+- Use `Tooltip` with an explicit `relationship`; never rely on a tooltip as the only label for a control.
+- Prefer `disabledFocusable` over `disabled` when users should still discover the control and its explanation.
+- Let overlays manage focus, and choose `Dialog` intent deliberately (`modalType`, `inertTrapFocus`).
+- Announce results with `MessageBar` (which supports `politeness`) or `AriaLiveAnnouncer` rather than rendering silent text.
+- Keyboard behaviour is built in - verify it: arrow keys in `TabList`, `Menu`, `Tree`, `DataGrid` and `Breadcrumb` (`focusMode`), Escape to dismiss overlays, and Tab order that matches reading order.
+- Do not encode meaning in colour alone; pair status colours (`Badge`, `MessageBar`, `ProgressBar`) with text or icons.
 
-If a component does not list a value, it does not support it — for example `Select` has no `filled-darker-shadow` appearance, and `Slider` has no `large` size.
+## 13. Troubleshooting
 
-## 7. Controlled vs. uncontrolled state
+- **Nothing looks styled.** FluentProvider is missing, or there are two React copies / two versions of the library in the bundle, which breaks the context.
+- **Menus and popovers ignore my theme.** Set `applyStylesToPortals` on the provider, or use `targetDocument` when rendering into another document.
+- **A controlled dialog never closes.** You passed `open` without `onOpenChange`, so the state never updates.
+- **A trigger fires twice or nests buttons.** When the child is already a `Button`, pass `disableButtonEnhancement` to `DialogTrigger`, `MenuTrigger` or `PopoverTrigger`.
+- **The label is not associated with my input.** `Field` wiring applies to FluentUI controls; for a custom control use the render-function children form and spread the provided control props.
+- **Tabs or menus do not respond.** You switched to a controlled API but did not handle `onTabSelect` / `onOpenChange`.
 
-Nearly every stateful component offers a pair of props:
+## 14. Suggested learning path
 
-| Uncontrolled (default) | Controlled | Change callback |
-| --- | --- | --- |
-| `defaultValue` | `value` | `onChange` (`Input`, `Textarea`, `Select`) |
-| `defaultChecked` | `checked` | `onChange` (`Checkbox`, `Switch`) |
-| `defaultOpen` | `open` | `onOpenChange` (`Dialog`, `Popover`, `Menu`, `DatepickerCompat`) |
-| `defaultSelected` | `selected` | `onSelectionChange` (`Card`) |
-| `defaultSelectedValue` | `selectedValue` | `onSelectionChange`/`onNavItemSelect` (`SwatchPicker`, `Nav`) |
-| `defaultOpenItems` | `openItems` | `onToggle` (`Accordion`, `Tree`) |
-| `defaultSelectedItems` | `selectedItems` | `onSelectionChange` (`List`) |
-| `defaultActiveIndex` | `activeIndex` | `onActiveIndexChange` (`Carousel`) |
-| `defaultSelectedTime` | `selectedTime` | `onTimeChange` (`TimepickerCompat`) |
-| `defaultOpenCategories` | `openCategories` | `onNavCategoryItemToggle` (`Nav`) |
-| `defaultCheckedValues` | `checkedValues` | `onCheckedValueChange` (`Toolbar`) |
-
-Two rules make this painless:
-
-1. **Never mix** an uncontrolled default with a controlled value (`value` plus `defaultValue` on the same component).
-2. **Read from `data`, not from the DOM event.** Callbacks are typed `(event, data)` and `data` carries the new value: `InputOnChangeData.value`, `CheckboxOnChangeData.checked`, `SwitchOnChangeData.checked`, `SliderOnChangeData.value`, `SelectOnChangeData.value`, `TextareaOnChangeData.value`, `RadioOnChangeData.value`, `CardOnSelectData` for `Card.onSelectionChange`, `OnOpenChangeData` for `Popover.onOpenChange`, `MenuOpenChangeData` for `Menu.onOpenChange`, `OnVisibleChangeData` for `Tooltip.onVisibleChange`.
-
-## 8. Forms: let `Field` do the wiring
-
-`Field` is the glue for every form control. It owns the `label`, `hint`, `validationMessage` and `validationMessageIcon` slots, plus `validationState` (`error` \| `warning` \| `success` \| `none`), `required`, `orientation` (`vertical` \| `horizontal`) and `size`.
-
-```tsx
-<Field label="Email" required validationState="error" validationMessage="Enter a valid address">
-  <Input type="email" />
-</Field>
-```
-
-- Use `Field` for `Input`, `Textarea`, `Select`, `SpinButton`, `Search`, `Slider`, `Radio`, `DatepickerCompat` and `TimepickerCompat`.
-- `Checkbox` and `Switch` render their own label, so a `Field`-level `label` is usually redundant for them — use `Field` only when you need a hint or validation message.
-- When you need full control, pair `Label` (`htmlFor`, `required`, `weight`, `size`) with a control that carries a matching `id`.
-- `InfoLabel` attaches an info button with a popover (`info`, `popover`, `inline`, `size`) when a short hint is not enough.
-
-Remaining form controls: `Radio` (`labelPosition`: `after` \| `below`), `Switch` (`labelPosition`: `above` \| `after` \| `before`, `disabledFocusable`), `Slider` (`min`, `max`, `step`, `vertical`), `SpinButton` (`value`/`displayValue`, `min`, `max`, `step`, `stepPage`, `precision`), `Rating` (`max`, `step`: `0.5` \| `1`, `itemLabel`, `iconFilled`/`iconOutline`), `ColorPicker` (`color: HsvColor`, `onColorChange`), `SwatchPicker` (`layout`: `row` \| `grid`, `focusMode`, `spacing`) and `Combobox` (`freeform`). `TagPicker` composes an input with a popover for multi-value entry (`noPopover`, `inline`, `onOpenChange`, `onOptionSelect`).
-
-## 9. Displaying data
-
-- `Avatar` — `name` (drives initials), `color`, `shape`, `size`, `active` + `activeAppearance` for presence.
-- `Persona` — combines an avatar, presence dot and up to four lines of text; `textPosition` (`after` \| `before` \| `below`), `textAlignment`, `presenceOnly`.
-- `Badge` — status pills; `iconPosition` (`before` \| `after`).
-- `Text` — typography primitive with `size` (100–1000), `weight`, `italic`, `underline`, `strikethrough`, `truncate`, `wrap`, `block`, `align`, `font`.
-- `Divider` — `vertical`, `inset`, `alignContent`.
-- `Image` — `fit`, `block`, `bordered`, `shadow`, `shape`.
-- `Card` — a surface with `appearance`, `orientation`, `size`, `focusMode` and optional selection via `selected`/`defaultSelected` + `onSelectionChange`.
-- `Skeleton` — loading placeholders (`animation`: `wave` \| `pulse`, `appearance`: `opaque` \| `translucent`, `shape`: `circle` \| `square` \| `rectangle`, `width`, `size`).
-- `List`, `Table`, `Tree` — structured collections with `navigationMode`/`selectionMode` (and `selectedItems`/`defaultSelectedItems` for `List`).
-- `Tags` — compact secondary actions (`value`, `hasSecondaryAction`).
-
-## 10. Feedback and status
-
-- `Spinner` — `size` from `extra-tiny` to `huge`, `appearance` (`primary` \| `inverted`), `labelPosition` (`above` \| `below` \| `before` \| `after`) and `delay` (milliseconds before it appears — worth setting for fast operations to avoid flicker).
-- `ProgressBar` — `value`, `max`, `shape`, `thickness` (`medium` \| `large`) and `color` (`brand` \| `success` \| `warning` \| `error`).
-- `Toast` — transient confirmations; `appearance` controls the visual weight.
-- `MessageBar` — persistent inline messaging with `intent`, `politeness` (`polite` \| `assertive`) and `shape`.
-
-## 11. Overlays, portals and layering
-
-- `Tooltip` — `content` (slot) plus the **required** `relationship` prop: `'label'` when the tooltip *is* the accessible name (icon-only buttons), `'description'` when it adds detail, `'inaccessible'` when it is purely decorative and must not be announced. Also `showDelay`, `hideDelay`, `visible`, `withArrow`, `appearance`.
-- `Popover` — the generic anchored surface: `open`/`defaultOpen`/`onOpenChange`, `openOnHover`, `openOnContext`, `mouseLeaveDelay`, `closeOnScroll`, `closeOnIframeFocus`, `inline`, `size`, `withArrow`, `positioning`, and the focus props `trapFocus`, `legacyTrapFocus`, `inertTrapFocus`, `unstable_disableAutoFocus`.
-- `Menu` — `openOnHover`, `openOnContext`, `hoverDelay`, `inline`, `persistOnItemClick`, `closeOnScroll`, `positioning`, `open`/`defaultOpen`/`onOpenChange`.
-- `Dialog` — `open`/`defaultOpen`/`onOpenChange`, `modalType`, `inertTrapFocus`, `unmountOnClose`.
-- `Drawer` — `type`: `'inline'` (pushes content) or `'overlay'`.
-- `TeachingPopover` — guided, multi-step coach marks; combine the carousel parts (`navType`, `value`, `mediaLength`) with the footer layout props (`footerLayout`, `layout`).
-- `Portal` — render anywhere in the DOM: `mountNode` accepts an `HTMLElement`, `{ element, className }`, or `null`.
-- `Positioning` — the low-level primitive that anchors surfaces; most components expose a `positioning` prop instead of requiring direct use.
-
-Because portals escape the React subtree, theme tokens and direction must reach them. Render the `FluentProvider` above the overlay, and set `applyStylesToPortals` (plus `targetDocument` for cross-document rendering).
-
-## 12. Navigation and collections
-
-- `Breadcrumb` — `focusMode` (`arrow` \| `tab`) and `size`.
-- `Nav` — sidebar navigation with `density`, `selectedValue`/`defaultSelectedValue`, `openCategories`/`defaultOpenCategories`, `multiple`, and `onNavItemSelect`.
-- `Link` — `appearance`, `inline`, `disabled`, `disabledFocusable`.
-- `Tabs` — `size`, `vertical`, `appearance` (`transparent` \| `subtle` \| `subtle-circular` \| `filled-circular`), `defaultSelectedValue`, `onTabSelect`, `selectTabOnFocus`, `reserveSelectedTabSpace`.
-- `Accordion` — `collapsible`, `multiple`, `navigation` (`linear` \| `circular`), `openItems`/`defaultOpenItems`, `onToggle`.
-- `Tree` — `navigationMode`, `appearance`, `size`, `selectionMode`, `openItems`/`defaultOpenItems`, `checkedItems`.
-- `Carousel` — `align`, `circular`, `draggable`, `groupSize`, `whitespace`, `motion`, `autoplayInterval`, `announcement`, `activeIndex`/`defaultActiveIndex`.
-- `Toolbar` — `size`, `vertical`, `checkedValues`/`defaultCheckedValues`, `onCheckedValueChange`.
-- `Overflow` — collapses items that do not fit; requires an `id`, takes an `onOverflowChange` callback and an optional `groupId`.
-
-## 13. Dates and times
-
-- `DatepickerCompat` — an input plus a calendar popup. Control it with `value`/`onSelectDate`, or let it be uncontrolled; also `minDate`, `maxDate`, `formatDate`, `parseDateFromString`, `allowTextInput`, `open`/`defaultOpen`/`onOpenChange`, `inlinePopup`, `showWeekNumbers`, `showGoToToday`, `highlightCurrentMonth`, `firstDayOfWeek`, `positioning`.
-- `TimepickerCompat` — `selectedTime`/`defaultSelectedTime`, `onTimeChange`, `increment`, `startHour`, `endHour`, `dateAnchor`, `formatDateToTimeString`, `parseTimeStringToDate`.
-- `CalendarCompat` — the full month/year grid with a much larger, more imperative surface (`navigatedDate`, `selectedDate`, `navigationIcons`, `strings`, `onNavigateDate`, `onSelectDate`, `dateRangeType`, `showWeekNumbers`, `yearPickerHidden`, and more). It is the lowest-level option and expects you to supply navigation icons and localized strings.
-
-## 14. Utilities
-
-- `Motion` — wrapper primitives for enter/exit (`children`, `appear`, `visible`, `direction`, `unmountOnExit`, `imperativeRef`, `onMotionStart`/`onMotionFinish`/`onMotionCancel`, `replayKey`).
-- `MotionComponentsPreview` — staggered container animations (`itemDelay`, `itemDuration`, `delayMode`, `hideMode`, `reversed`).
-- `Portal` — DOM placement.
-- `Positioning` — anchor positioning.
-- `ContextSelector` — context selectors that avoid re-rendering consumers when unrelated context values change.
-- `Tabster` — focus order, groupper and modalizer primitives that power the library's keyboard behavior.
-- `Aria` — renders accessible label markup for components that need both a visual label and an announcement.
-- `Utilities` / `HeadlessComponentsPreview` — shared internals and unstyled entry points.
-- `MenuGridPreview` — an opt-in grid layout for rich menus with sub-actions and sub-text.
-
-## 15. Accessibility checklist
-
-1. **Give every icon-only action a name.** Use `Tooltip` with `relationship="label"`, or an explicit `aria-label` on the control.
-2. **Always set `Tooltip.relationship`.** It is required and drives whether the tooltip is a label, a description, or ignored by assistive tech.
-3. **Use `Field` for control labels and validation** so the label, hint and error text are programmatically associated with the input.
-4. **Prefer `disabledFocusable` over `disabled`** on interactive elements that must stay reachable by keyboard (for example, a `Button` that should still show a tooltip).
-5. **Keep portals inside a `FluentProvider`** and set `applyStylesToPortals`/`targetDocument` — otherwise portaled surfaces lose theme tokens and can break contrast.
-6. **Set `dir`** on the `FluentProvider` for RTL locales instead of mirroring styles by hand.
-7. **Announce dynamic status.** `MessageBar` exposes `politeness` (`polite`/`assertive`) and `Carousel` accepts an `announcement` function — use them rather than relying on visual changes alone.
-8. **Verify focus trapping.** `Dialog` (`inertTrapFocus`, `modalType`), `Popover` (`trapFocus`, `inertTrapFocus`, `unstable_disableAutoFocus`) and `Drawer` (`type`) control whether focus is contained while a surface is open.
-
-## 16. TypeScript tips
-
-- Change handlers are typed for you: write `onChange={(_ev, data) => setValue(data.value)}` and the `ev`/`data` types are inferred from the component props.
-- Slot props accept either a primitive or an object: `contentBefore={<>$</>}` or `contentBefore={{ children: '$' }}` both type-check.
-- Prefer narrowing unions (`ButtonSize`, `AvatarSize`, `PopoverSize`, `DialogModalType`, `MessageBarIntent`, `NavDensity`, `TabValue`, `SelectionItemId`, `DataGridCellFocusMode`, `SkeletonItemSize`) over importing raw string literals.
-- Complex labels are typed as `any`/`ReactNode` in places (for example `Checkbox.children`), so it is on you to keep them semantic — a `<span>` with an aria-label is not a substitute for a real `<label>`.
-
-## 17. Suggested path from here
-
-1. Add the root `FluentProvider` and a couple of `Button`s.
-2. Build your form with `Field` + `Input`/`Select`/`Checkbox`.
-3. Add `Tooltip` and `Dialog` for help and confirmation flows, verifying focus and portal theming.
-4. Layer in `Avatar`/`Persona`/`Badge` for identity and status, and `Spinner`/`ProgressBar` for long-running work.
-5. Audit keyboard order, screen-reader names and RTL rendering before shipping.
+1. Get `FluentProvider` plus `Button`, `Text`, `Divider` and `Badge` on screen.
+2. Build one real form with `Field`, `Input`, `Select`, `Checkbox`, `Switch`, `RadioGroup` and `MessageBar`.
+3. Add one `Dialog` and one `Menu` to learn overlays and portals.
+4. Compose `Card` layouts with `Avatar` and `Badge`, then add `TabList` for page structure.
+5. Only then reach for `Table` / `DataGrid`, `Tree` and the `Nav` family, which have the largest prop surfaces.
 
 ## Key Takeaways
 
-- Render a single Provider near the root of the application. It supplies theme tokens, text direction (`dir`) and portal style handling (`applyStylesToPortals`, `targetDocument`) to every FluentUI component, including content rendered through portals.
-- Import from the package root (`@fluentui/react-components`); only the compat/preview capabilities (`DatepickerCompat`, `TimepickerCompat`, `CalendarCompat`, `MenuGridPreview`, `MotionComponentsPreview`, `HeadlessComponentsPreview`, `ContextSelector`) come from their own packages.
-- Compose through slots rather than raw markup: `icon` on Button and Badge, `contentBefore`/`contentAfter` on Input, `label`/`hint`/`validationMessage` on Field, `content` on Tooltip, and the text and presence slots on Persona.
-- Every stateful component offers an uncontrolled/controlled pair — `defaultValue`/`value`, `defaultChecked`/`checked`, `defaultOpen`/`open`, `defaultSelected`/`selected`, `selectedValue`/`defaultSelectedValue`, `openItems`/`defaultOpenItems`, `activeIndex`/`defaultActiveIndex`, `selectedTime`/`defaultSelectedTime`, `checkedValues`/`defaultCheckedValues`. Pick one pair and stay in it.
-- Change handlers are always `(event, data)`. Read the new value from `data` (for example `data.value`, `data.checked`, `data.selected`, `data.open`) instead of reaching into the DOM event.
-- Express visual variation with the documented prop vocabulary (`appearance`, `size`, `shape`, `color`, `orientation`, `focusMode`) — the allowed values differ per component, so check the component before assuming a value exists.
-- Wrap form controls in Field to get labels, hints and validation wired to the control for free, and use `disabledFocusable` instead of `disabled` when an element must remain keyboard reachable.
+- Wrap your application exactly once in FluentProvider; it supplies theme, text direction and portal configuration to every FluentUI component below it, including overlays that render into portals.
+- Import everything from the single package `@fluentui/react-components`. No CSS file import is required - component styles are generated and injected at runtime.
+- Components are assembled from slots (a root plus named sub-elements). Fill a slot with a React element, plain content, or a shorthand object, and use the `as` prop on root slots when the rendered element must change.
+- Every stateful component offers a controlled and an uncontrolled API. Use `default*` props for self-managed state, or the value prop plus the matching change callback (`onOpenChange`, `onChange`, `onTabSelect`, `onSelectionChange`, `onActiveIndexChange`) when state lives outside the component.
+- Field is the centre of form accessibility: it owns label, required indicator, hint and validation message, and wires them to the control inside it via `validationState` and `validationMessage`.
+- Prefer `disabledFocusable` over `disabled` when a control should stay keyboard reachable and explain itself (loading states, tooltips on disabled controls).
+- When the child of DialogTrigger, MenuTrigger or PopoverTrigger is already a Button, pass `disableButtonEnhancement` to avoid nested buttons and double toggles.
+- Style with `className` and `style` on components (and slot shorthands for inner parts), never against generated class names; use the provider's `theme`, `dir`, `targetDocument`, `applyStylesToPortals` and its override hooks for global concerns.
+- Learn the library by family - buttons, forms, data display, feedback, layout, navigation, overlays, utilities - and start with `Button`, `Text`, `Field`, `Input` and `Dialog` before the large `DataGrid`, `Tree` and `Nav` surfaces.
 
 ## Examples
 
-### App shell: Provider, Button, Avatar, Badge, Text and Divider
+### Application bootstrap with FluentProvider
 
-The minimum viable FluentUI screen. Provider wraps everything and receives the text direction plus applyStylesToPortals so content rendered in overlays keeps its tokens. Note how appearance/size/color props — not CSS — drive the look.
+The minimum integration: mount React, wrap the tree in a single FluentProvider, and render your app. Everything FluentUI renders below this point inherits theme, direction and portal configuration.
 
 ```tsx
+// src/main.tsx
 import * as React from 'react';
-import { Avatar, Badge, Button, Divider, FluentProvider, Text } from '@fluentui/react-components';
+import { createRoot } from 'react-dom/client';
+import { FluentProvider } from '@fluentui/react-components';
+import { App } from './App';
+import './index.css';
 
-export const AppHeader: React.FC = () => (
-  <FluentProvider dir="ltr" applyStylesToPortals>
-    <header
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: 16,
-      }}
-    >
-      <Avatar
-        name="Ada Lovelace"
-        color="brand"
-        active="active"
-        activeAppearance="ring"
-      />
-      <Text size={500} weight="semibold">
-        FluentUI Playground
-      </Text>
-      <Badge appearance="tint" color="success" size="small">
-        Connected
-      </Badge>
-      <Divider vertical />
-      <Button appearance="primary" onClick={() => console.log('sign in')}>
-        Sign in
-      </Button>
-      <Button appearance="subtle">Docs</Button>
-    </header>
-  </FluentProvider>
+const container = document.getElementById('root');
+
+if (!container) {
+  throw new Error('Could not find the #root element in index.html');
+}
+
+createRoot(container).render(
+  <React.StrictMode>
+    {/*
+      One FluentProvider for the whole app.
+      - no theme prop  -> the default light theme is used
+      - dir            -> 'ltr' | 'rtl' for the subtree
+      - applyStylesToPortals -> keeps portal content (menus, dialogs, tooltips) on-theme
+    */}
+    <FluentProvider applyStylesToPortals>
+      <App />
+    </FluentProvider>
+  </React.StrictMode>,
 );
-
-export default AppHeader;
 ```
 
-### Controlled form with Field, Input, Select and Textarea
+### Application shell CSS
 
-Shows the Field + control pattern, validation state, and reading new values from the second onChange argument (data.value) instead of the DOM event.
+FluentUI v9 needs no stylesheet import. This small global file only prepares the host page so the provider can fill the viewport, and documents the rule about not targeting generated class names.
+
+```css
+/* src/index.css */
+
+/* FluentUI v9 component styles are generated and injected at runtime.
+   There is no FluentUI CSS bundle to import - this file only sets up the shell. */
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Never style against FluentUI's generated class names (for example .f1abc2de).
+   Use the className and style props of the components instead, or the
+   provider's customStyleHooks_unstable / overrides_unstable escape hatches. */
+```
+
+### First screen: Button, Text, Badge, Divider, Field
+
+Demonstrates appearance and size vocabulary, the Button icon slot with a loading Spinner, disabledFocusable versus disabled, Input slot props (contentAfter) and the `as` prop on a root slot.
 
 ```tsx
+// src/App.tsx
 import * as React from 'react';
-import { Button, Checkbox, Field, Input, Select, Switch, Textarea } from '@fluentui/react-components';
+import {
+  Badge,
+  Button,
+  Divider,
+  Field,
+  Input,
+  Spinner,
+  Text,
+} from '@fluentui/react-components';
 
-type Plan = 'starter' | 'pro' | 'enterprise';
+export const App: React.FC = () => {
+  const [query, setQuery] = React.useState('');
+  const [isSaving, setIsSaving] = React.useState(false);
 
-export const SignupForm: React.FC = () => {
-  const [fullName, setFullName] = React.useState('');
-  const [email, setEmail] = React.useState('');
-  const [plan, setPlan] = React.useState<Plan>('pro');
-  const [notes, setNotes] = React.useState('');
-  const [accepted, setAccepted] = React.useState(false);
-  const [newsletter, setNewsletter] = React.useState(true);
-  const [submitted, setSubmitted] = React.useState(false);
-
-  const emailInvalid = submitted && !email.includes('@');
-
-  const onSubmit = (ev: React.FormEvent<HTMLFormElement>) => {
-    ev.preventDefault();
-    setSubmitted(true);
+  const handleSave = () => {
+    setIsSaving(true);
+    window.setTimeout(() => setIsSaving(false), 1200);
   };
 
   return (
-    <form onSubmit={onSubmit} style={{ display: 'grid', gap: 16, maxWidth: 480 }}>
+    <div style={{ display: 'grid', gap: 16, padding: 24, maxWidth: 720 }}>
+      <Text block size={600} weight='semibold'>
+        FluentUI v9 is running
+      </Text>
+
+      <Text block>
+        Every control on this page comes from the single package{' '}
+        <code>@fluentui/react-components</code>.
+      </Text>
+
       <Field
-        label="Full name"
-        required
-        hint="Use the name you would like us to greet you with."
+        label='Search components'
+        hint='Try Button, Dialog or DataGrid.'
+        size='medium'
       >
         <Input
-          value={fullName}
-          placeholder="Ada Lovelace"
-          onChange={(_ev, data) => setFullName(data.value)}
+          value={query}
+          placeholder='Search...'
+          onChange={(event, data) => setQuery(data.value)}
+          contentAfter={
+            query.length > 0 ? (
+              <Badge appearance='tint' color='informative' size='small'>
+                {query.length} chars
+              </Badge>
+            ) : null
+          }
         />
       </Field>
 
-      <Field
-        label="Email"
-        required
-        validationState={emailInvalid ? 'error' : 'none'}
-        validationMessage={emailInvalid ? 'Enter a valid email address.' : undefined}
-      >
-        <Input
-          type="email"
-          appearance="outline"
-          value={email}
-          onChange={(_ev, data) => setEmail(data.value)}
-        />
-      </Field>
+      <Divider />
 
-      <Field label="Plan" required>
-        <Select
-          value={plan}
-          onChange={(_ev, data) => setPlan(data.value as Plan)}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Button
+          appearance='primary'
+          disabledFocusable={isSaving}
+          icon={isSaving ? <Spinner size='extra-tiny' appearance='inverted' /> : undefined}
+          onClick={handleSave}
         >
-          <option value="starter">Starter</option>
-          <option value="pro">Pro</option>
-          <option value="enterprise">Enterprise</option>
+          {isSaving ? 'Saving...' : 'Save'}
+        </Button>
+
+        <Button appearance='secondary'>Cancel</Button>
+
+        {/* Root slots accept `as`, so the same Button can render an anchor. */}
+        <Button appearance='subtle' as='a' href='https://react.fluentui.dev'>
+          Documentation
+        </Button>
+      </div>
+    </div>
+  );
+};
+```
+
+### A complete settings form with Field, controls and MessageBar
+
+Shows Field wiring for label, hint, required and validation, a controlled RadioGroup, a controlled Select with Option children, Checkbox and Switch, custom submit validation, and a success MessageBar.
+
+```tsx
+// src/AccountSettingsForm.tsx
+import * as React from 'react';
+import {
+  Button,
+  Checkbox,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  Option,
+  Radio,
+  RadioGroup,
+  Select,
+  Switch,
+  Text,
+} from '@fluentui/react-components';
+
+type FormErrors = {
+  email?: string;
+};
+
+export const AccountSettingsForm: React.FC = () => {
+  const [email, setEmail] = React.useState('');
+  const [plan, setPlan] = React.useState('team');
+  const [digest, setDigest] = React.useState('daily');
+  const [marketing, setMarketing] = React.useState(false);
+  const [beta, setBeta] = React.useState(true);
+  const [errors, setErrors] = React.useState<FormErrors>({});
+  const [saved, setSaved] = React.useState(false);
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaved(false);
+
+    const nextErrors: FormErrors = {};
+    if (email.trim().length === 0) {
+      nextErrors.email = 'An email address is required.';
+    } else if (!email.includes('@')) {
+      nextErrors.email = 'Enter an address in the format name@example.com.';
+    }
+
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    // Persist the settings here.
+    setSaved(true);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 16, maxWidth: 520 }}>
+      <Text block size={500} weight='semibold'>
+        Account settings
+      </Text>
+
+      <Field
+        label='Email address'
+        required
+        validationState={errors.email ? 'error' : 'none'}
+        validationMessage={errors.email}
+        hint='We use this address for security notifications only.'
+      >
+        <Input
+          type='email'
+          value={email}
+          placeholder='name@example.com'
+          onChange={(event, data) => setEmail(data.value)}
+        />
+      </Field>
+
+      <Field label='Plan'>
+        <RadioGroup
+          value={plan}
+          layout='horizontal'
+          onChange={(event, data) => setPlan(data.value)}
+        >
+          <Radio value='personal' label='Personal' />
+          <Radio value='team' label='Team' />
+          <Radio value='enterprise' label='Enterprise' />
+        </RadioGroup>
+      </Field>
+
+      <Field label='Email digest'>
+        <Select value={digest} onChange={(event, data) => setDigest(data.value)}>
+          <Option value='daily'>Daily</Option>
+          <Option value='weekly'>Weekly</Option>
+          <Option value='never' disabled>
+            Never
+          </Option>
         </Select>
       </Field>
 
-      <Field label="Anything we should know?">
-        <Textarea
-          value={notes}
-          resize="vertical"
-          placeholder="Optional"
-          onChange={(_ev, data) => setNotes(data.value)}
-        />
-      </Field>
-
       <Checkbox
-        checked={accepted}
-        label="I accept the terms and conditions"
-        onChange={(_ev, data) => setAccepted(Boolean(data.checked))}
+        checked={marketing}
+        label='Send me product announcements'
+        onChange={(event, data) => setMarketing(data.checked === true)}
       />
 
       <Switch
-        checked={newsletter}
-        label="Send me product updates"
-        onChange={(_ev, data) => setNewsletter(data.checked)}
+        checked={beta}
+        label='Join the beta channel'
+        onChange={(event, data) => setBeta(data.checked)}
       />
 
-      <Button type="submit" appearance="primary" disabled={!accepted}>
-        Create account
-      </Button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Button type='submit' appearance='primary'>
+          Save changes
+        </Button>
+        <Button type='reset' appearance='secondary'>
+          Reset
+        </Button>
+      </div>
+
+      {saved && (
+        <MessageBar intent='success'>
+          <MessageBarBody>
+            <MessageBarTitle>Changes saved</MessageBarTitle>
+            <div>Your account settings were updated.</div>
+          </MessageBarBody>
+        </MessageBar>
+      )}
     </form>
   );
 };
-
-export default SignupForm;
 ```
 
-### Data display: Card, Persona, Avatar, Badge, Image, Divider and Text
+### A controlled Dialog with a form inside
 
-A selectable profile card. Card reports selection through onSelectionChange (data carries the new state), while Persona, Badge and Text handle identity and typography without custom CSS.
-
-```tsx
-import * as React from 'react';
-import { Avatar, Badge, Button, Card, Divider, Image, Persona, Text } from '@fluentui/react-components';
-
-export const ProfileCard: React.FC = () => {
-  const [selected, setSelected] = React.useState(false);
-
-  return (
-    <Card
-      appearance="outline"
-      orientation="vertical"
-      size="medium"
-      selected={selected}
-      onSelectionChange={(_ev, data) => setSelected(data.selected)}
-      style={{ maxWidth: 360 }}
-    >
-      <Image
-        block
-        shape="rounded"
-        fit="cover"
-        shadow
-        src="https://example.com/cover.png"
-        alt="Team cover artwork"
-      />
-
-      <Persona
-        name="Ada Lovelace"
-        size="large"
-        textPosition="after"
-        avatar={{ color: 'colorful', name: 'Ada Lovelace' }}
-      />
-
-      <Divider />
-
-      <Text block size={300} weight="regular">
-        Building design systems and analytical engines since 1843.
-      </Text>
-
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <Badge appearance="filled" color="brand" shape="rounded">
-          Staff
-        </Badge>
-        <Badge
-          appearance="outline"
-          color="informative"
-          icon={<Avatar name="Remote" size={16} />}
-          iconPosition="before"
-        >
-          Remote
-        </Badge>
-      </div>
-
-      <Button appearance="secondary">Follow</Button>
-    </Card>
-  );
-};
-
-export default ProfileCard;
-```
-
-### Settings panel with Radio, Slider, Switch, Spinbutton and Rating
-
-Demonstrates the full range of stateful form controls: manual Radio grouping with a shared name, Slider value changes, Spinbutton nullable values, controlled Switch, and an uncontrolled Rating.
+Full Dialog composition: DialogTrigger with disableButtonEnhancement, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, controlled open state via onOpenChange, and a submit button that is disabled until the form is valid.
 
 ```tsx
+// src/CreateProjectDialog.tsx
 import * as React from 'react';
-import { Divider, Field, Radio, Rating, Slider, SpinButton, Switch, Text } from '@fluentui/react-components';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  Field,
+  Input,
+  Text,
+  Textarea,
+} from '@fluentui/react-components';
 
-type Density = 'comfortable' | 'compact';
+export const CreateProjectDialog: React.FC = () => {
+  const [open, setOpen] = React.useState(false);
+  const [name, setName] = React.useState('');
+  const [description, setDescription] = React.useState('');
 
-export const SettingsPanel: React.FC = () => {
-  const [density, setDensity] = React.useState<Density>('comfortable');
-  const [zoom, setZoom] = React.useState(100);
-  const [fontSize, setFontSize] = React.useState<number | null>(14);
-  const [reduceMotion, setReduceMotion] = React.useState(false);
+  const close = () => setOpen(false);
 
-  return (
-    <div style={{ display: 'grid', gap: 20, maxWidth: 420 }}>
-      <Text weight="semibold" size={400}>
-        Appearance
-      </Text>
-
-      <Field label="Density">
-        <div style={{ display: 'flex', gap: 16 }}>
-          <Radio
-            name="density"
-            value="comfortable"
-            label="Comfortable"
-            checked={density === 'comfortable'}
-            onChange={(_ev, data) => setDensity(data.value as Density)}
-          />
-          <Radio
-            name="density"
-            value="compact"
-            label="Compact"
-            checked={density === 'compact'}
-            onChange={(_ev, data) => setDensity(data.value as Density)}
-          />
-        </div>
-      </Field>
-
-      <Field label={`Interface scale - ${zoom}%`}>
-        <Slider
-          min={50}
-          max={200}
-          step={10}
-          value={zoom}
-          onChange={(_ev, data) => setZoom(data.value)}
-        />
-      </Field>
-
-      <Field label="Base font size" hint="Measured in pixels.">
-        <SpinButton
-          appearance="outline"
-          size="medium"
-          min={8}
-          max={32}
-          step={1}
-          value={fontSize}
-          onChange={(_ev, data) => setFontSize(data.value ?? null)}
-        />
-      </Field>
-
-      <Switch
-        checked={reduceMotion}
-        label="Reduce motion"
-        onChange={(_ev, data) => setReduceMotion(data.checked)}
-      />
-
-      <Divider />
-
-      <Field label="How would you rate this guide?">
-        <Rating defaultValue={5} max={5} step={1} size="medium" color="brand" />
-      </Field>
-    </div>
-  );
-};
-
-export default SettingsPanel;
-```
-
-### Feedback: Spinner, Progress and a Tooltip on a disabled button
-
-Shows asynchronous feedback patterns, including the important trick of using disabledFocusable so a button that cannot be activated is still keyboard reachable and can explain itself through a Tooltip with relationship="description".
-
-```tsx
-import * as React from 'react';
-import { Badge, Button, ProgressBar, Spinner, Text, Tooltip } from '@fluentui/react-components';
-
-export const SaveBar: React.FC = () => {
-  const [saving, setSaving] = React.useState(false);
-  const [progress, setProgress] = React.useState(0);
-
-  const startSaving = () => {
-    setSaving(true);
-    setProgress(0);
-
-    const timer = window.setInterval(() => {
-      setProgress((current) => {
-        const next = current + 25;
-        if (next >= 100) {
-          window.clearInterval(timer);
-          setSaving(false);
-          return 100;
-        }
-        return next;
-      });
-    }, 400);
+  const handleCreate = () => {
+    // Create the project here, then close.
+    setName('');
+    setDescription('');
+    close();
   };
 
   return (
-    <div style={{ display: 'grid', gap: 12, maxWidth: 420 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        {saving ? (
-          <Spinner size="tiny" label="Saving changes" labelPosition="after" />
-        ) : (
-          <Badge appearance="tint" color="success">
-            All changes saved
-          </Badge>
-        )}
-      </div>
+    <Dialog open={open} onOpenChange={(event, data) => setOpen(data.open)}>
+      {/* The child is already a Button, so opt out of button enhancement. */}
+      <DialogTrigger disableButtonEnhancement>
+        <Button appearance='primary'>New project</Button>
+      </DialogTrigger>
 
-      <ProgressBar
-        value={progress}
-        max={100}
-        shape="rounded"
-        thickness="medium"
-        color={progress === 100 ? 'success' : 'brand'}
+      <DialogSurface>
+        <DialogBody>
+          <DialogTitle>New project</DialogTitle>
+
+          <DialogContent>
+            <Field label='Project name' required hint='Shown in the workspace switcher.'>
+              <Input
+                value={name}
+                placeholder='Contoso migration'
+                onChange={(event, data) => setName(data.value)}
+              />
+            </Field>
+
+            <Field label='Description'>
+              <Textarea
+                value={description}
+                rows={3}
+                resize='vertical'
+                onChange={(event, data) => setDescription(data.value)}
+              />
+            </Field>
+
+            <Text block size={200}>
+              Projects are private until you invite teammates.
+            </Text>
+          </DialogContent>
+
+          <DialogActions>
+            <DialogTrigger disableButtonEnhancement>
+              <Button appearance='secondary' onClick={close}>
+                Cancel
+              </Button>
+            </DialogTrigger>
+            <Button
+              appearance='primary'
+              disabled={name.trim().length === 0}
+              onClick={handleCreate}
+            >
+              Create project
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
+  );
+};
+```
+
+### Card composition with Avatar, Badge, Image and a Menu
+
+Shows the Card subcomponent model (Card + CardHeader + CardPreview + CardFooter), slot props (image, header, description, action), the CardFooter action slot, and a Menu attached to a transparent icon-only Button with an accessible name.
+
+```tsx
+// src/ProjectCard.tsx
+import * as React from 'react';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  CardFooter,
+  CardHeader,
+  CardPreview,
+  Image,
+  Menu,
+  MenuDivider,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+  Text,
+} from '@fluentui/react-components';
+
+export interface Project {
+  name: string;
+  ownerName: string;
+  summary: string;
+  coverUrl: string;
+  status: 'active' | 'paused';
+}
+
+export interface ProjectCardProps {
+  project: Project;
+  onOpen: () => void;
+}
+
+export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onOpen }) => (
+  <Card appearance='outline' size='medium' style={{ maxWidth: 320 }}>
+    <CardPreview>
+      <Image
+        block
+        fit='cover'
+        src={project.coverUrl}
+        alt={'Cover image for ' + project.name}
+        style={{ height: 96 }}
       />
+    </CardPreview>
 
-      <Text size={200}>
-        {progress}% complete
-      </Text>
-
-      <div style={{ display: 'flex', gap: 8 }}>
-        <Button appearance="primary" disabled={saving} onClick={startSaving}>
-          Save
-        </Button>
-
-        <Tooltip
-          content="You need the Editor role to publish this document"
-          relationship="description"
-          showDelay={200}
-          withArrow
-        >
-          <Button appearance="secondary" disabledFocusable>
-            Publish
-          </Button>
-        </Tooltip>
-      </div>
-    </div>
-  );
-};
-
-export default SaveBar;
-```
-
-### Accessibility: Tooltip relationships, Label + Input, and RTL
-
-A compact accessibility example: relationship="label" for an icon-only action, "inaccessible" for decorative text, an explicit Label/htmlFor pairing, and a right-to-left Provider.
-
-```tsx
-import * as React from 'react';
-import { Button, Field, Input, Label, FluentProvider, Tooltip } from '@fluentui/react-components';
-
-export const AccessibleToolbar: React.FC = () => {
-  const [projectName, setProjectName] = React.useState('');
-  const inputId = 'project-name-input';
-
-  return (
-    <FluentProvider dir="rtl" applyStylesToPortals>
-      <div style={{ display: 'grid', gap: 16, maxWidth: 420 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Tooltip content="Delete project" relationship="label">
-            <Button appearance="subtle" shape="circular">
-              x
-            </Button>
-          </Tooltip>
-
-          <Tooltip content="Deleting cannot be undone" relationship="inaccessible">
-            <Button appearance="subtle">Undo</Button>
-          </Tooltip>
-
-          <Tooltip content="Archive keeps the project read-only" relationship="description">
-            <Button appearance="outline" disabledFocusable>
-              Archive
-            </Button>
-          </Tooltip>
+    <CardHeader
+      image={<Avatar name={project.ownerName} color='colorful' />}
+      header={
+        <Text block truncate weight='semibold'>
+          {project.name}
+        </Text>
+      }
+      description={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Badge
+            size='small'
+            appearance='tint'
+            color={project.status === 'active' ? 'success' : 'warning'}
+          >
+            {project.status}
+          </Badge>
+          <Text block size={200} truncate>
+            {project.summary}
+          </Text>
         </div>
+      }
+      action={
+        <Menu>
+          <MenuTrigger disableButtonEnhancement>
+            <Button
+              appearance='transparent'
+              aria-label={'More actions for ' + project.name}
+            >
+              ...
+            </Button>
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              <MenuItem onClick={onOpen}>Open</MenuItem>
+              <MenuItem>Duplicate</MenuItem>
+              <MenuDivider />
+              <MenuItem disabled={project.status === 'active'}>Archive</MenuItem>
+            </MenuList>
+          </MenuPopover>
+        </Menu>
+      }
+    />
 
-        <Label htmlFor={inputId} required weight="semibold" size="medium">
-          Project name
-        </Label>
-        <Input
-          id={inputId}
-          value={projectName}
-          onChange={(_ev, data) => setProjectName(data.value)}
-        />
-
-        <Field
-          label="Repository URL"
-          hint="Shown in the project overview."
-          validationState="warning"
-          validationMessage="Repositories are private by default."
-        >
-          <Input type="url" appearance="underline" />
-        </Field>
-      </div>
-    </FluentProvider>
-  );
-};
-
-export default AccessibleToolbar;
+    <CardFooter action={<Button appearance='primary' onClick={onOpen}>Open project</Button>} />
+  </Card>
+);
 ```
 
-### Cross-package components: DatepickerCompat and TimepickerCompat
+### Workspace toolbar, Menu and controlled TabList
 
-Compat packages follow the same conventions as the core library, so they drop straight into a Field. DatepickerCompat takes value/onSelectDate and TimepickerCompat takes selectedTime/onTimeChange.
+Combines Toolbar with ToolbarGroup and ToolbarDivider, Tooltip with an explicit relationship, a Menu dropdown inside the toolbar, and a controlled TabList using selectedValue plus onTabSelect.
 
 ```tsx
+// src/WorkspaceTabs.tsx
 import * as React from 'react';
-import { DatepickerCompat } from '@fluentui/react-datepicker-compat';
-import { TimepickerCompat } from '@fluentui/react-timepicker-compat';
-import { Button, Field, Text } from '@fluentui/react-components';
+import {
+  Menu,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+  Tab,
+  TabList,
+  Toolbar,
+  ToolbarButton,
+  ToolbarDivider,
+  ToolbarGroup,
+  Tooltip,
+} from '@fluentui/react-components';
 
-export const ScheduleMeeting: React.FC = () => {
-  const [date, setDate] = React.useState<Date | null>(null);
-  const [time, setTime] = React.useState<Date | null>(null);
+export const WorkspaceTabs: React.FC = () => {
+  const [selected, setSelected] = React.useState<string>('overview');
 
   return (
-    <div style={{ display: 'grid', gap: 16, maxWidth: 380 }}>
-      <Text weight="semibold" size={400}>
-        Schedule a meeting
-      </Text>
+    <div style={{ display: 'grid', gap: 12, padding: 16 }}>
+      <Toolbar aria-label='Workspace commands'>
+        <ToolbarGroup>
+          <Tooltip content='Create a new item' relationship='label'>
+            <ToolbarButton appearance='primary'>New</ToolbarButton>
+          </Tooltip>
+          <Tooltip content='Save the current view' relationship='description'>
+            <ToolbarButton>Save</ToolbarButton>
+          </Tooltip>
+        </ToolbarGroup>
 
-      <Field label="Meeting date" required>
-        <DatepickerCompat
-          placeholder="Select a date"
-          value={date}
-          minDate={new Date()}
-          onSelectDate={(next) => setDate(next ?? null)}
-        />
-      </Field>
+        <ToolbarDivider />
 
-      <Field label="Start time" required hint="30 minute increments.">
-        <TimepickerCompat
-          placeholder="Select a time"
-          increment={30}
-          selectedTime={time}
-          onTimeChange={(_ev, data) => setTime(data.selectedTime)}
-        />
-      </Field>
+        <ToolbarGroup>
+          <Menu>
+            <MenuTrigger disableButtonEnhancement>
+              <ToolbarButton>Export</ToolbarButton>
+            </MenuTrigger>
+            <MenuPopover>
+              <MenuList>
+                <MenuItem>Export as CSV</MenuItem>
+                <MenuItem>Export as JSON</MenuItem>
+              </MenuList>
+            </MenuPopover>
+          </Menu>
+        </ToolbarGroup>
+      </Toolbar>
 
-      <Button
-        appearance="primary"
-        disabled={!date || !time}
-        onClick={() => console.log('scheduled', date, time)}
+      <TabList
+        appearance='subtle'
+        selectedValue={selected}
+        onTabSelect={(event, data) => setSelected(data.value as string)}
       >
-        Schedule
-      </Button>
+        <Tab value='overview'>Overview</Tab>
+        <Tab value='activity'>Activity</Tab>
+        <Tab value='settings' disabled>
+          Settings
+        </Tab>
+      </TabList>
+
+      {/* In a real app, connect this panel to the selected tab with id / aria-controls. */}
+      <div style={{ padding: 16, borderTop: '1px solid #e0e0e0' }}>
+        Showing the <strong>{selected}</strong> panel.
+      </div>
     </div>
   );
 };
+```
 
-export default ScheduleMeeting;
+### Nested FluentProvider for an RTL region with a portalled Popover
+
+Demonstrates that providers nest: dir switches the subtree to right-to-left, and applyStylesToPortals keeps the Popover (which renders outside the DOM subtree) styled by this provider rather than the root one.
+
+```tsx
+// src/EmbeddedWidget.tsx
+import * as React from 'react';
+import {
+  Button,
+  FluentProvider,
+  Popover,
+  PopoverSurface,
+  PopoverTrigger,
+  Text,
+} from '@fluentui/react-components';
+
+export const EmbeddedWidget: React.FC = () => (
+  /*
+    Nested providers are cheap and supported:
+    - dir changes text direction for this subtree only
+    - applyStylesToPortals makes overlays that render into a portal
+      (popovers, menus, dialogs, tooltips, toasts) pick up this provider
+      instead of the document root one
+  */
+  <FluentProvider dir='rtl' applyStylesToPortals>
+    <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 360 }}>
+      <Text block size={400} weight='semibold'>
+        Embedded widget
+      </Text>
+
+      <Text block size={200}>
+        Direction and styling are scoped to this provider.
+      </Text>
+
+      <Popover withArrow positioning='below-start'>
+        <PopoverTrigger disableButtonEnhancement>
+          <Button appearance='primary'>Show details</Button>
+        </PopoverTrigger>
+        <PopoverSurface>
+          <Text block>
+            This surface is rendered in a portal and still inherits the
+            provider styles and direction.
+          </Text>
+        </PopoverSurface>
+      </Popover>
+    </div>
+  </FluentProvider>
+);
 ```
 
 ## Pitfalls
 
-- Forgetting the root Provider. Components render without theme tokens and can fall back to unstyled or low-contrast output; overlays that render through portals are especially affected, which is why `applyStylesToPortals` (and `targetDocument` for cross-document rendering) matter.
-- Mixing controlled and uncontrolled props, such as passing both `value` and `defaultValue`, or `checked` without an `onChange`. The control appears frozen or React logs a warning. Use a `defaultX` prop alone, or the `x` prop together with its `onXChange` handler.
-- Reaching into the DOM event in change handlers. `Button`-style events are not where the new value lives — `Input.onChange` gives you `(ev, data)` and you must read `data.value`; `Checkbox`/`Switch` use `data.checked`, `Slider` uses `data.value`, `Card.onSelectionChange` uses `data.selected`, and `Tooltip.onVisibleChange` uses `data.visible`.
-- Omitting `Tooltip.relationship`. It is a required prop, and choosing the wrong value (`label` vs. `description` vs. `inaccessible`) either duplicates or hides information for screen-reader users.
-- Using `disabled` when the user still needs to reach the control. A truly `disabled` element cannot be focused and cannot surface its `Tooltip`; use `disabledFocusable` for that case.
-- Assuming every component supports every value in a family. `Select` has no `filled-darker-shadow` appearance, `Slider` has no `large` size, and `Link` has no `primary` appearance — the value lists are per-component.
-- Building overlays outside the Provider subtree. Portaled surfaces mount at the document level, so theme tokens, direction and focus behavior must be provided by the Provider that sits above them; otherwise set `targetDocument` and `applyStylesToPortals` deliberately.
-- Hand-rolling labels and error text next to a control instead of using `Field` or `Label` with a matching `id`. The visual result looks correct but assistive technology never associates the text with the input.
-- Relying on visual changes alone for status. `Spinner` and `Progress` need meaningful text or a `label`/`labelPosition`, `MessageBar` exposes `politeness` for announcements, and `Carousel` provides an `announcement` callback.
-- Reaching past the public API for details that belong to a component — for example rendering `Skeleton` placeholders or `Table` rows without the component's own structure. Use the component's slots and props instead of substituting bespoke markup.
+- Forgetting FluentProvider (or rendering a component outside it) leaves components unstyled and can break overlay styling. Two copies of React or of the component library in the bundle break the context just as effectively even when the provider is present.
+- Mixing v8 imports (`@fluentui/react`) with v9 imports (`@fluentui/react-components`) in the same tree produces duplicated contexts and inconsistent theming. Pick v9 and stay on it.
+- Passing `open`, `value`, `checked`, `selectedValue` or `activeIndex` without the matching change handler freezes the component, because the controlled prop can never be updated. Always pair a controlled prop with `onOpenChange`, `onChange`, `onTabSelect`, `onSelectionChange` or `onActiveIndexChange`.
+- Wrapping an existing Button in DialogTrigger, MenuTrigger or PopoverTrigger without `disableButtonEnhancement` nests buttons and can toggle twice or break focus.
+- Using `disabled` when `disabledFocusable` is what you want: a fully disabled control is removed from the accessibility tree and will not show a tooltip, so users lose the explanation.
+- Defining a `theme` object inline in a component body creates a new object identity on every render and forces the provider subtree to re-render. Define the theme once at module scope.
+- Assuming a portalled overlay (menu, popover, dialog, tooltip, toast) inherits provider styles automatically. Portals attach to the document body, so set `applyStylesToPortals`, or use `targetDocument` when rendering into an iframe or another document.
+- Using Tooltip without a meaningful `relationship`, or as the only label for an icon-only button. `relationship` is required and should match the semantics ('label' when it is the name, 'description' when it is supplementary).
+- Styling against generated class names or overriding component internals with global CSS. These class names are not part of the API and change between builds; use `className`/`style`, slot shorthands, or the provider's `customStyleHooks_unstable` and `overrides_unstable` hooks instead.
+- Reading values from the raw event when the second callback argument already carries typed data (`data.value`, `data.checked`, `data.open`), which leads to brittle handlers and lost type safety.
 
 ## Accessibility
 
-FluentUI v9 components ship with roles, ARIA wiring, focus management and keyboard interaction built in, but several decisions remain yours. (1) Naming: every icon-only action needs an accessible name — either use `Tooltip` with `relationship="label"` or set an explicit aria label on the control. `Tooltip.relationship` is required and must be chosen deliberately: `label` when the tooltip *is* the name, `description` when it supplements an existing name, and `inaccessible` when the content is decorative and must not be announced. (2) Form semantics: use `Field` so the label, `hint` and `validationMessage` slots are programmatically associated with the control, and reflect validity through `validationState` in addition to color. When you need manual control, pair `Label` (with `htmlFor`) and a matching `id` on the control. (3) Focus: keep interactive elements reachable — prefer `Button.disabledFocusable` and `Switch.disabledFocusable` over `disabled` when the element must still be discoverable, and configure trapping on surfaces via `Dialog.modalType`/`inertTrapFocus`, `Popover.trapFocus`/`inertTrapFocus`/`unstable_disableAutoFocus`, and `Drawer.type`. (4) Portals: overlays render outside the normal subtree, so keep them under the root `Provider` and set `applyStylesToPortals` (and `targetDocument` when rendering into another document) so contrast and theming survive. (5) Direction: set `Provider.dir` to `rtl` for right-to-left locales rather than mirroring manually. (6) Announcements: status changes should be conveyed beyond color — `MessageBar` exposes `politeness` (`polite` or `assertive`), `Spinner` accepts a `labelPosition`, `Progress` can be paired with visible text, and `Carousel` accepts an `announcement` function. (7) Keyboard models are already implemented for collections and menus (`Breadcrumb.focusMode`, `Accordion.navigation`, `Tabs.selectTabOnFocus`, `Tree.navigationMode`, `List.navigationMode`, `SwatchPicker.focusMode`, `Table.focusMode`), so preserve those props and verify tab order after customizing. (8) Decorative motion should stay non-essential; use the `Motion` and `MotionComponentsPreview` primitives for presence and stagger effects rather than blocking interactions.
+FluentUI v9 components implement ARIA roles, keyboard interaction and focus management for you, but they cannot invent the meaning of your content - naming and semantics remain your responsibility. Give every control an accessible name: use a Field label (which is wired to the inner control together with hint and validation text) for form controls, and `aria-label` for icon-only buttons such as the overflow Menu trigger in a CardHeader. Use Tooltip with an explicit, accurate `relationship` ('label' when the tooltip is the accessible name, 'description' when it adds supplementary information, 'inaccessible' when it duplicates information available elsewhere) and never rely on a tooltip as the sole label for a control, because tooltips only appear on hover or focus and are not reliably announced. Prefer `disabledFocusable` over `disabled` when users should still be able to reach the control and understand why it is unavailable. Let overlays manage focus: Dialog is modal by default with a focus trap (tune it with `modalType` and `inertTrapFocus`), Menus and Popovers move focus and close on Escape, and Drawers keep a logical reading order. Announce dynamic results through live regions rather than silent text: MessageBar supports `politeness` ('polite' or 'assertive'), Toaster/Toast surfaces notifications, and AriaLiveAnnouncer covers arbitrary programmatic announcements. Verify keyboard behaviour rather than assuming it: arrow-key navigation in TabList, Menu, Toolbar, Tree, DataGrid and Breadcrumb (`focusMode` controls arrow versus tab behaviour in Breadcrumb), Escape to dismiss, and a tab order that matches visual order. Do not encode meaning in colour alone - pair Badge, MessageBar and ProgressBar colours with text or icons - and make sure every Image has meaningful `alt` text (or an empty alt when decorative). Finally, set `dir='rtl'` on the appropriate FluentProvider (or at the root) for right-to-left locales so both layout and keyboard semantics stay correct, and keep `size` and `appearance` consistent across a form so visual hierarchy still communicates emphasis to sighted users.
 
-**Referenced components**: Provider, Button, Input, Field, Label, Textarea, Select, Checkbox, Radio, Switch, Slider, Spinbutton, Rating, Combobox, TagPicker, Infolabel, ColorPicker, SwatchPicker, Avatar, Persona, Badge, Text, Divider, Image, Card, Skeleton, Tags, List, Table, Tree, Spinner, Progress, Toast, MessageBar, Tooltip, Popover, Menu, Dialog, Drawer, TeachingPopover, Portal, Positioning, Breadcrumb, Link, Nav, Tabs, Accordion, Carousel, Toolbar, Overflow, Motion, MotionComponentsPreview, ContextSelector, Tabster, Aria, Utilities, HeadlessComponentsPreview, MenuGridPreview, DatepickerCompat, TimepickerCompat, CalendarCompat
+**Referenced components**: FluentProvider, Button, CompoundButton, MenuButton, SplitButton, ToggleButton, Text, Divider, Badge, CounterBadge, PresenceBadge, Avatar, AvatarGroup, AvatarGroupItem, AvatarGroupPopover, Persona, Image, Skeleton, SkeletonItem, Field, Label, InfoLabel, InfoButton, Input, Textarea, Select, Option, OptionGroup, Dropdown, Combobox, Listbox, Checkbox, Radio, RadioGroup, Switch, Slider, SpinButton, SearchBox, Rating, RatingDisplay, Spinner, ProgressBar, MessageBar, MessageBarBody, MessageBarTitle, MessageBarActions, MessageBarGroup, Dialog, DialogTrigger, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, Popover, PopoverTrigger, PopoverSurface, Menu, MenuTrigger, MenuPopover, MenuList, MenuItem, MenuDivider, MenuGroup, MenuGroupHeader, MenuItemLink, MenuItemCheckbox, MenuItemRadio, MenuItemSwitch, MenuSplitGroup, Tooltip, Toolbar, ToolbarButton, ToolbarDivider, ToolbarGroup, ToolbarToggleButton, ToolbarRadioButton, ToolbarRadioGroup, TabList, Tab, Card, CardHeader, CardPreview, CardFooter, Table, TableHeader, TableBody, TableRow, TableCell, TableHeaderCell, TableSelectionCell, TableCellLayout, TableCellActions, TableResizeHandle, DataGrid, DataGridHeader, DataGridHeaderCell, DataGridBody, DataGridRow, DataGridCell, DataGridSelectionCell, Tree, TreeItem, TreeItemLayout, TreeItemPersonaLayout, FlatTree, FlatTreeItem, List, ListItem, Tag, TagGroup, InteractionTag, TagPicker, Nav, NavItem, NavSubItem, NavCategory, NavCategoryItem, NavSubItemGroup, NavSectionHeader, NavDivider, NavDrawer, NavDrawerHeader, NavDrawerBody, NavDrawerFooter, Hamburger, AppItem, SplitNavItem, Breadcrumb, BreadcrumbItem, BreadcrumbButton, BreadcrumbDivider, Link, Drawer, OverlayDrawer, InlineDrawer, DrawerHeader, DrawerHeaderTitle, DrawerHeaderNavigation, DrawerBody, DrawerFooter, Accordion, AccordionItem, AccordionHeader, AccordionPanel, Carousel, CarouselCard, CarouselNav, CarouselButton, Toast, Toaster, ToastTrigger, ToastTitle, ToastBody, ToastFooter, AriaLiveAnnouncer, Portal, OverflowItem, OverflowDivider
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

@@ -7,9 +7,9 @@
 
 ## Overview
 
-Badge is a small, purely presentational data-display component that renders a compact label, count, or status marker next to the element it describes. It exposes two slots: a required root slot that renders the visible capsule, and an optional icon slot exposed through the icon prop for a small leading or trailing glyph. Visually it is driven by five orthogonal props: appearance (filled, ghost, outline, tint), color (brand, danger, important, informative, severe, subtle, success, warning), shape (circular, rounded, square), size (tiny, extra-small, small, medium, large, extra-large), and iconPosition (before, after). Badge holds no state, manages no focus, and is not interactive — it is a decoration layer that adds glanceable metadata such as unread counts, status, or category to a parent control like a Button, Avatar, Tab, Menu item, or Card.
+Badge is a small, non-interactive visual indicator that annotates other content with a short status, a count, or a categorical label. It renders as a single inline root element with an optional icon slot placed before or after the label, and its entire visual identity is controlled by five presentational props: appearance, color, shape, size, and iconPosition. Because the component is purely decorative-by-default, it ships with no focus behavior, no keyboard handling, and no implicit ARIA role — the meaning must come from its text, from an accessible name you supply, or from the label of the control the Badge is attached to. Defaults are appearance filled, color brand, shape circular, size medium, and iconPosition before, so an unconfigured Badge already reads as a brand-colored circular pill. Typical uses include unread counts such as 999+, status words such as New or Beta, severity markers next to a record, and compact category markers inside tables, cards, and list items.
 
-**When to use**: Use Badge when you need a short, non-interactive annotation attached to another element: unread counts, status words such as New or Blocked, category labels, or numeric totals. It is the right choice when the information must be visible at a glance and must not steal space or focus from the parent control. Do not use Badge when the annotation itself must be clickable (use Button or Link), when the message is long-form or requires dismissal (use MessageBar), when the annotation is a key-value label for a form field (use Label or Infolabel), or when the text is simply emphasized body copy (use Text). If the marker is meant to be removed or filtered by the user, Tag and TagPicker are the appropriate components rather than Badge.
+**When to use**: Use Badge when you need a compact, static, attention-drawing marker that sits next to other content: notification counts, status or severity words, version or environment labels, and short category markers. Reach for CounterBadge instead when the requirement is specifically a numeric count indicator and the count is the primary payload. Choose PresenceBadge when the state is an availability or presence state tied to a person. Choose Tag or InteractionTag when the user must select, dismiss, or otherwise act on the item — Badge itself offers no interaction, focus, or dismissal. Use Badge rather than plain bold text when the value needs a distinct, tokenized color or shape treatment that stays consistent across the product, and prefer a Badge over a full MessageBar when the information is a short attribute of an existing element rather than a page-level notification.
 
 ## Props Reference
 
@@ -23,13 +23,11 @@ Badge is a small, purely presentational data-display component that renders a co
 
 ### Prop Guidance
 
-- **appearance**: Controls visual weight. filled is the default and reads as a solid, high-emphasis capsule; tint is a softer, low-contrast variant that still carries color; ghost removes the fill so the badge sits quietly on a surface; outline draws a border instead of a fill and works better on busy or photographic backgrounds. Note the documented restriction that ghost and outline combined with subtle color are intended only for use on brand backgrounds. `tint`
-- **color**: Selects the semantic palette. Use brand for neutral product metadata, danger and important for errors and blockers, severe for the highest-severity escalation, warning for caution, success for completed or healthy states, informative for neutral notices, and subtle for the quietest treatment. Always duplicate the meaning in text or an icon so color is not the only signal. `success`
-- **iconPosition**: Places the icon slot content before or after the badge text, defaulting to before. Use before when the icon categorizes the content (a status dot or type glyph) and after when the icon acts as an action affordance hint or trailing indicator. Setting this prop when the icon slot is empty has no visible effect. `after`
-- **shape**: Controls corner rounding. Use circular (the default) for counts and single characters so the capsule reads as a pill, rounded for short words and chips that need a softer rectangle, and square for dense tabular or badge-like contexts where a tight rectangle reads more precisely. `rounded`
-- **size**: Sets the scale across six steps from tiny to extra-large, defaulting to medium. Match the badge to the parent control: tiny and extra-small inside dense tables, avatars, and toolbars, small and medium beside standard Buttons, Menu items, and Tabs, and large or extra-large when the badge stands alone or must be legible at a distance. `small`
-- **icon (slot)**: The optional icon slot renders a glyph inside the badge and respects iconPosition. Keep icons visually small and single-color so they inherit the badge foreground, and treat meaningful icons as requiring either their own accessible name or inclusion in the parent control's label. Icons also render correctly with no text content, producing a compact icon-only badge. `ClipboardPasteRegular`
-- **root (slot)**: The required root slot is the inline element that renders the capsule. Use it to attach className, id, or data attributes, but avoid restructuring it into a block element or applying absolute positioning directly, since that fights the layout of the surrounding control. `className`
+- **appearance**: Controls the visual weight of the badge. filled is the default and the highest-emphasis option, suitable for neutral or custom surfaces. ghost removes the background so the badge blends with the surface, outline adds a stroke-only treatment for a structured look, and tint produces the softest, lowest-contrast result that reads best on known backgrounds. Choose the appearance based on how much the badge should compete with its neighbor; a badge on a dense table row generally wants less weight than a badge on an empty state. `tint`
+- **color**: Selects a preset semantic color ramp. brand is the default and is the safe choice for generic counters and neutral status. danger and severe are for error and blocking states, warning for caution, success for confirmation, important and informative for graded emphasis, and subtle for the quietest treatment, which the ColorAndAppearance story reserves for brand backgrounds. Never let color be the only difference between two states; combine it with a word or an icon. Note that the eight values listed here are the only supported presets. `success`
+- **shape**: Sets the corner treatment of the badge. circular is the default and produces the familiar pill for short text or a true circle for a single character, rounded is the middle ground for multi-character labels that should not look like a lozenge, and square is for badges that need to align tightly with rectangular UI such as table cells. Shape affects corner radius only; a circular badge with a long label still renders as a pill. `rounded`
+- **size**: Chooses one of six preset heights and font sizes, from tiny up to extra-large, with medium as the default. Match the badge to the text or control it sits beside so the two share an optical baseline, and avoid tiny and extra-small for anything that carries information the user must read. Larger sizes give longer labels and icons more room without clipping. `extra-small`
+- **iconPosition**: Determines whether the icon slot renders before or after the label, defaulting to before. Keep the default when the icon reinforces what the label means, which is the usual pattern for a status glyph, and use after when the icon is a trailing accent that should not delay reading the text. The prop has no visible effect when no icon is provided. `after`
 
 ### Slots
 
@@ -116,97 +114,91 @@ ColorAndAppearance.parameters = {
 
 ### Do's
 
-- Keep badge content extremely short — a number, an abbreviation, or one word such as New, Beta, or Blocked — because the component sizes itself around compact content.
-- Pair the color prop with text or an icon so the meaning survives without color perception; information conveyed by color alone fails the use-of-color guideline referenced in the component's own Color story.
-- Choose appearance deliberately by emphasis level: filled for high-emphasis counts and alerts, tint and ghost for quiet in-context annotations, outline for annotations on busy or photographic backgrounds.
-- Match size to the surrounding control so the badge does not dominate it — small or medium beside standard Buttons and Menu items, tiny or extra-small inside dense tables, avatars, and toolbars.
-- Use shape circular for numeric counts and single characters, and rounded or square when the badge carries a short word or behaves like an inline token.
-- Use the icon slot with iconPosition before or after when a glyph reinforces meaning, and make sure the icon is either decorative or covered by the parent control's accessible name.
-- Format values yourself before passing them in, for example capping large totals behind a plus suffix, since Badge neither truncates nor abbreviates content.
+- Pair every color with text or a meaningful icon so the status is not communicated by color alone, which is the explicit accessibility guidance in the Color story.
+- Pick the appearance to match the surface the Badge sits on: filled for neutral or custom surfaces, ghost and outline when the Badge would otherwise compete with adjacent controls, and tint for the lightest visual weight on a known background.
+- Keep the label to a few characters or a single word. The canonical pattern in the examples is a capped count such as 999+, which the application must format itself.
+- Match size to the neighboring typography or control so baselines and control heights line up; medium is the default and pairs well with body text, while tiny and extra-small are for dense surfaces.
+- Leave iconPosition at its before default when the icon reinforces the label, and switch to after only when the icon reads as a trailing indicator rather than a prefix.
+- Give the Badge an accessible name when its visible text is not self-explanatory, for example by adding an aria-label to the root that spells out what the count refers to.
+- Use the icon slot for a symbol and always include accompanying text when the icon carries real meaning, since the Icon story requires either the icon itself or the parent control's label to convey the information.
+- Use color equal to subtle together with ghost or outline appearance only on a brand-colored background, as called out in the ColorAndAppearance story.
 
 ### Don'ts
 
-- Don't attach click, hover, or focus behavior expectations to a Badge — it renders no interactive semantics, has no disabled state, and is never a tab stop.
-- Don't rely on color alone to communicate state; a red badge without a word or icon is meaningless to screen reader users and to anyone with color-vision deficiency.
-- Don't use Badge for messages the user must not miss, such as validation failures or service outages — MessageBar, Field validation messages, and Toast exist for that purpose.
-- Don't put sentences, multi-line text, or long localized strings in a Badge; the capsule grows very wide and legibility at tiny and extra-small sizes degrades quickly.
-- Don't use size tiny or extra-small for content that must be reliably read, such as legal or financial status text, because the smallest sizes trade legibility for density.
-- Don't combine ghost or outline appearance with subtle color on neutral backgrounds; the component's own guidance states those subtle variants are intended only for use on brand backgrounds.
-- Don't use a lone icon in the icon slot as the only carrier of meaning unless the parent control's label already includes that information.
-- Don't mutate the root slot with absolute positioning hacks to float the badge over a parent; wrap the pair in a positioned container and leave the Badge's own layout intact.
+- Do not attach click handlers or expect focus and pressed states. Badge is not focusable, is not announced as a control, and cannot satisfy keyboard or screen reader interaction requirements.
+- Do not use a red or green Badge alone to signal error or success. Color is not a sufficient channel on its own and fails WCAG use-of-color expectations.
+- Do not place sentences, paragraphs, or multi-word explanations inside a Badge. It is sized for short markers and will stretch or wrap awkwardly.
+- Do not render a Badge with the subtle color on an arbitrary or unknown background; the subtle and ghost/outline combinations are intended for brand backgrounds and lose contrast elsewhere.
+- Do not use Badge as a substitute for Field validation messaging, MessageBar, or Toast when the information is an actionable message the user must notice and respond to.
+- Do not stack many differently colored Badges in a row to express hierarchy; that becomes visual noise and users cannot decode the ordering.
+- Do not rely on an unlabeled Badge floating over an icon-only button to communicate a count, because the count will not be part of the button's accessible name.
+- Do not repeat the same information in the visible parent label and in the Badge when both are exposed to assistive technology, which causes duplicate announcements.
 
 ## Anti-Patterns
 
-### Color as the only carrier of meaning
+### Making the badge act like a button
 
-❌ A badge that is red for error and green for success but contains only a number communicates nothing to screen reader users or to anyone who cannot distinguish those colors, violating the use-of-color requirement called out in the component's own Color documentation.
+❌ Attaching an onClick handler, hover styling, and a button role to a Badge makes it look interactive while leaving it unreachable by keyboard and unannounced as a control, so mouse users can trigger it and keyboard or screen reader users cannot.
 
-✅ Pair the color prop with an explicit word such as Failed or Passed, or with a labeled icon, and ensure the parent control's accessible name includes the same information.
+✅ If the element must be actionable, use a Button, ToggleButton, Tag, or InteractionTag that provides focus, keyboard activation, and correct semantics, and keep Badge purely presentational next to it.
 
-### Treating Badge as an interactive control
+### Communicating status by color alone
 
-❌ Adding click handlers, hover cursors, or tab stops to a Badge creates an element that looks interactive in the DOM but exposes no button or link semantics, no focus ring requirements, and no keyboard activation, so keyboard and screen reader users cannot operate it.
+❌ A row of red and green badges with no text or icon forces users with color vision deficiencies to guess, and it fails the WCAG use-of-color guidance that the Color story explicitly cites.
 
-✅ When the annotation must be actionable, place a real Button, Link, or Menu item in the layout and use the Badge purely as the visual counter or status inside it.
+✅ Always include a short word or a meaningful icon inside the badge so the status is readable without color, using color only as a redundant reinforcement.
 
-### Substituting Badge for messaging components
+### Using subtle colors on arbitrary surfaces
 
-❌ Using a Badge to surface failures, warnings, or instructions that users must act on hides important content in a small, easily missed, non-announced element with no dismissal or action affordance.
+❌ The subtle color combined with ghost or outline appearance is designed for brand backgrounds; on a neutral or dark custom surface the resulting foreground and background collapse into each other and the label becomes unreadable.
 
-✅ Use MessageBar for page-level notices, Field validation messages for input errors, and Toast for transient notifications, reserving Badge for at-a-glance metadata.
+✅ Reserve subtle with ghost or outline for brand-colored surfaces, and use filled with a palette color or an outlined neutral badge for ordinary surfaces.
 
-### Overloading the badge with long text
+### Treating the badge as a text container
 
-❌ Putting a full sentence or a long localized string in a Badge forces the capsule to grow very wide, breaks alignment with the parent control, and becomes unreadable at tiny and extra-small sizes.
+❌ Dropping a full sentence or a long multi-word explanation into a Badge breaks the compact layout, wraps unpredictably at small sizes, and dilutes the visual signal the badge is supposed to give.
 
-✅ Keep badge content to a number, abbreviation, or single word; if more context is needed, move that context to Tooltip, Text, or a dedicated status column.
+✅ Reduce the content to a short label or a capped count, and move explanatory text to body copy, a Tooltip, or a MessageBar depending on how much the user needs to act on it.
 
-### Restyling the root to float over a parent
+### Unlabeled count floating over an icon-only control
 
-❌ Pushing the badge out of normal flow with absolute positioning overrides makes it overlap adjacent content unpredictably, breaks in RTL or zoomed layouts, and defeats the size and spacing tokens the component applies.
+❌ A numeric badge rendered next to an icon-only button is not part of the button's accessible name, so screen reader users hear the icon's label and never learn that there are unread items.
 
-✅ Wrap the parent control and the badge in a relatively positioned container and let the Badge keep its intrinsic sizing, adjusting offsets through wrapper spacing tokens such as tokens.spacingHorizontalXS.
+✅ Fold the count into the control's accessible name, or expose it through an aria-label on the badge and associate it with the control, so the count is announced with the action.
 
 ## Accessibility
 
-**Requirements**: Badge must satisfy WCAG 1.4.1 Use of Color: any status, severity, or category encoded through the color prop must also be present as text or conveyed by the parent control's accessible name. Contrast requirements (WCAG 1.4.3 for text and 1.4.11 for non-text contrast) apply to the badge capsule and its label against whatever surface it sits on, which is why ghost and outline subtle variants are documented as brand-background only. Text must remain readable at the chosen size step, so tiny and extra-small should not carry critical content. Badge renders no implicit ARIA role, so it never becomes a live region or a landmark on its own; if a badge value changes dynamically and must be announced, the update has to be owned by the surrounding control or an explicit live region in the consuming app.
+**Requirements**: Badge is presentational: it exposes no interactive semantics, is not focusable, and does not participate in the tab order, so every accessibility requirement around it falls on the surrounding composition. Information conveyed by color must also be conveyed by text or an icon to satisfy WCAG guidance on use of color, and every appearance and color combination must maintain at least 4.5:1 contrast for normal-sized text and 3:1 for large text against the background it is rendered on. The tiny and extra-small sizes are the highest risk for legibility and contrast, so avoid them for information the user must read. When a badge conveys information that changes dynamically, announce the change through a dedicated live region such as AriaLiveAnnouncer rather than assuming the badge itself will be re-announced.
 
-| Key | Action |
-| --- | --- |
-| `Tab` | Focus moves past the badge to the next focusable element. The badge itself is never a tab stop and receives no focus styling. |
-| `Enter` | Has no effect on the badge itself; when the badge is nested inside an interactive parent such as a Button or Menu item, pressing Enter activates that parent control. |
-| `Space` | Has no effect on the badge itself; when nested inside a button-like parent, Space activates the parent control instead. |
-| `Arrow keys` | No effect. Badge does not implement roving focus, navigation, or any key handling of its own. |
+**ARIA**: aria-label, aria-hidden, role
 
-**ARIA**: aria-hidden — apply to decorative icon content inside the icon slot, or to the badge as a whole when it is purely visual duplication of adjacent text., aria-label — apply to the parent control when a count or status must be included in that control's spoken name, since the badge does not provide one itself., aria-labelledby — alternative to aria-label on the parent control when an existing visible element already names the badge., aria-describedby — use on the parent control when the badge value is supplementary context rather than part of the name., role — Badge applies no role by default; avoid inventing interactive roles for it, and keep any live-region role on the surrounding control instead.
-
-**Screen Reader**: Because Badge renders a plain inline element with no role, screen readers read its text content in document order as part of the surrounding element's text, so a count inside a button becomes part of that button's announced name. The color, shape, size, and appearance props are never announced, meaning severity or category encoded only visually is invisible to assistive technology. An icon-only badge contributes nothing to the accessibility tree unless the icon carries its own accessible name or the parent control's label includes the same information. A badge that is purely decorative should be hidden with aria-hidden so it is not read twice.
+**Screen Reader**: Badge renders an inline element with no implicit role, so screen readers read its text in the natural reading order of the surrounding content, inline with whatever precedes and follows it. A Badge containing text such as 999+ or New is announced as plain text with no context, which is why the parent control's label should include the meaning of the badge. A Badge with no children and no icon, as shown in the Shapes and Sizes examples, produces an empty element that is silent to screen readers and conveys nothing at all unless it is labeled or described elsewhere. Purely decorative badges can be removed from the accessibility tree with aria-hidden on the root when the adjacent text already carries the information, preventing duplicate announcements, while an aria-label on the root supplies a name when the visible content is ambiguous.
 
 ## Styling
 
-Style Badge through the className on the root slot using makeStyles and Griffel tokens rather than inline style objects. Corner rounding is driven by tokens.borderRadiusCircular, tokens.borderRadiusMedium, and tokens.borderRadiusSmall for the circular, rounded, and square shapes; typography by tokens.fontSizeBase100 through tokens.fontSizeBase300 with tokens.lineHeightBase100 through tokens.lineHeightBase300 and optional tokens.fontWeightSemibold for counts; padding by tokens.spacingHorizontalXXS and tokens.spacingHorizontalXS with tokens.spacingVerticalXXS. Filled brand badges pair tokens.colorBrandBackground with tokens.colorNeutralForegroundOnBrand, while outline appearances use tokens.strokeWidthThin with tokens.colorNeutralStroke1 or tokens.colorBrandStroke1. When you need to overlay a badge on an Avatar or icon, give the wrapper a relative position and let the Badge keep its intrinsic layout instead of restyling the root. Prefer changing appearance, color, and size props over overriding background and foreground classes, because those props resolve to pre-generated atomic classes.
+Badge is styled through Griffel, so the recommended customization path is makeStyles plus tokens imported from the same package, exactly as the ColorAndAppearance story does. Because the root is a slot, a className passed to Badge lands on the root element and can adjust padding, background, border, and text color without breaking the appearance defaults. Real tokens worth using when overriding: tokens.colorBrandBackground and tokens.colorNeutralForegroundOnBrand for brand-filled treatment, tokens.colorNeutralBackground1, tokens.colorNeutralForeground1, and tokens.colorNeutralStroke1 for a neutral outlined pill, tokens.colorPaletteRedBackground3, tokens.colorPaletteGreenBackground3, tokens.colorPaletteYellowBackground3, and tokens.colorPaletteMarigoldBackground3 for severity backgrounds, tokens.colorBrandBackground2 and tokens.colorBrandForeground2 for the low-emphasis tint look, tokens.borderRadiusCircular, tokens.borderRadiusMedium, and tokens.borderRadiusSmall to echo the shape prop, tokens.strokeWidthThin for outline borders, tokens.fontSizeBase100 through tokens.fontSizeBase300 to align with the size scale, tokens.fontWeightSemibold for emphasis, and spacing tokens such as tokens.spacingHorizontalXS and tokens.spacingHorizontalSNudge for the gap between the icon and the label. To style the glyph itself, put your own class on the element you pass into the icon slot rather than trying to reach into the component internals.
 
 ## Performance
 
-Badge is one of the lightest components in the library: it renders a single root element with an optional icon node and uses slot merging rather than wrapper elements, so it has no measurable interaction cost. The main cost in real applications is volume — long lists, tables, and grids can render hundreds of badges, and while each instance is cheap, re-rendering a virtualized list with fresh icon elements on every pass defeats memoization. Hoist icon elements or memoize them, avoid creating inline style objects per render, and prefer the appearance, color, shape, and size props over custom className overrides because prop-driven styles reuse pre-generated atomic classes while ad hoc overrides generate new rules per call site.
+Badge is one of the cheapest components in the library: it renders a single root element and, at most, one icon element, with no state, effects, or event listeners of its own. The performance cost therefore comes from the parent, so optimize the list, table, or card grid that renders badges rather than the badges themselves. In large tables or virtualized lists, create the icon element once per data item rather than constructing fresh elements on every keystroke or scroll tick, and prefer Griffel classes from makeStyles over new inline style objects, which would defeat the atomic class cache and force style recalculation. Frequent numeric updates to a counter badge should be throttled or debounced so every increment does not trigger a full parent re-render; the badge itself will never batch or delay those updates for you.
 
 ## Theming & Tokens
 
-Badge draws all of its color, typography, spacing, and radius values from the Fluent theme supplied by the Provider, so switching themes restyles it automatically. Filled brand badges use tokens.colorBrandBackground with tokens.colorNeutralForegroundOnBrand, while tint and outline treatments use brand and neutral foreground and stroke tokens such as tokens.colorBrandForeground1, tokens.colorNeutralForeground1, tokens.colorNeutralStroke1, tokens.colorBrandStroke1, and tokens.colorSubtleBackground. Semantic colors resolve to palette tokens — for example danger and important to the red family (tokens.colorPaletteRedBackground3, tokens.colorPaletteRedForeground1), success to the green family (tokens.colorPaletteGreenBackground3, tokens.colorPaletteGreenForeground1), warning to the marigold and yellow family (tokens.colorPaletteYellowBackground3, tokens.colorPaletteMarigoldBackground3), severe to the dark orange family (tokens.colorPaletteDarkOrangeBackground3), and informative to neutral surfaces such as tokens.colorNeutralBackground3 with tokens.colorNeutralForeground1. Size maps to tokens.fontSizeBase100 through tokens.fontSizeBase300 and matching line heights, shape maps to tokens.borderRadiusSmall, tokens.borderRadiusMedium, and tokens.borderRadiusCircular, and padding uses tokens.spacingHorizontalXXS, tokens.spacingHorizontalXS, and tokens.spacingVerticalXXS.
+Badge resolves all of its colors, radii, spacing, and typography from the theme supplied by FluentProvider, so it automatically follows light, dark, high-contrast, and brand-variant themes without any prop changes. The brand color maps to the brand background and on-brand foreground tokens, palette colors map to the shared color palette tokens, and the tint and ghost appearances map to the softer brand and neutral background tokens. Radius comes from the shared circular, medium, and small radius tokens that the shape prop selects from, borders come from the thin stroke width token, and text sizing comes from the base font size ramp that the size prop selects from. Overriding any of these at the component level is done with Griffel classes and the same tokens, which keeps the badge consistent when the surrounding theme switches.
 
 ## Migration Notes
 
-Compared with the Fluent UI v8 Badge, the v9 component is slot-based: the root and icon slots are the only extension points, and the icon arrives through the icon slot prop rather than being spread into arbitrary child markup. The v8 size scale used names such as smallest, smaller, small, medium, large, larger, and largest, whereas v9 uses tiny, extra-small, small, medium, large, and extra-large with medium as the default. Appearance and shape keep the same value names as v8 (filled, ghost, outline, tint; rounded, circular, square), while the color set is the v9 semantic palette of brand, danger, important, informative, severe, subtle, success, and warning. Styling moves from mergeStyleSets and theme objects to makeStyles and tokens imported from the package, and theme values flow from the v9 Provider rather than the v8 theme context.
+Moving from Fluent UI React v8 to v9 changes how Badge is authored and styled. The v8 size scale that ranged from smallest to largest was replaced by the six-step scale tiny, extra-small, small, medium, large, and extra-large, so any size value carried over from v8 must be remapped. The appearance values filled, ghost, outline, and tint carried over with filled remaining the default, and the color names brand, danger, important, informative, severe, subtle, success, and warning also carried over with brand remaining the default, but the underlying colors now resolve to v9 theme tokens rather than the older palette. Icon rendering moved into the icon slot, and iconPosition still accepts before and after with before as the default. Styling that previously relied on overriding generated CSS class names should be rewritten with makeStyles and tokens or with a className on the root slot, and the component now expects a FluentProvider near the app root so that the theme tokens it consumes are available.
 
 ## Edge Cases
 
-- A Badge rendered with no children still renders an empty capsule, as shown in the Shapes and Sizes stories; it occupies layout space, so only do this intentionally for icon-only or purely decorative markers.
-- iconPosition before or after has no visible effect when the icon slot is empty, so the prop can be set without any visual change and should not be used as a proxy for layout intent.
-- Badge never truncates or abbreviates its content; a raw total like a five-digit number renders at full width, so capping values behind a plus suffix is the consumer's responsibility.
-- Long text inside a circular badge produces a very wide pill rather than a clipping issue, because circular only controls the corner radius and not the maximum width.
-- Combining ghost or outline appearance with subtle color is documented as intended for brand backgrounds only; on neutral surfaces the resulting contrast may fall below readable thresholds.
-- An icon-only badge with no label contributes no accessible name, so screen reader users hear nothing unless the parent control's label includes the same information.
-- Because Badge has no focus or hover states of its own, any visual affordance it appears to have comes entirely from the parent control it is nested in.
+- A Badge with no children and no icon renders as a bare shape, which is exactly what the Shapes and Sizes examples show; it conveys nothing to assistive technology and should only be used when an adjacent label supplies the meaning.
+- The iconPosition prop has no visible effect unless the icon slot is populated, so layouts that appear to ignore it usually just have an empty icon slot.
+- Badge never truncates or computes content. A literal 999+ must be formatted by the application, and a long label will simply widen the badge rather than ellipsize, which can disturb adjacent layout at small sizes.
+- The shape prop only changes corner radius, so a circular badge containing several characters renders as an elongated pill rather than a circle.
+- The subtle color is intended for brand backgrounds when paired with ghost or outline appearance, so reusing that combination on neutral surfaces can produce insufficient contrast.
+- Very small sizes reduce both the font size and the badge height, which lowers legibility and makes the badge hard to tap or point at even though it is not interactive.
+- When the same count appears in a parent control's label and inside a badge, screen readers announce it twice unless the decorative badge is hidden from the accessibility tree.
 
 ## See Also
 

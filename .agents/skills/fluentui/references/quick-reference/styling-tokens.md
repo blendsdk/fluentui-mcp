@@ -2,351 +2,414 @@
 
 > **Category**: quick-reference
 
-## 1. Mental model
+## 1. Import surface
 
+```tsx
+import {
+  // tokens + styling
+  tokens, makeStyles, makeResetStyles, makeStaticStyles, mergeClasses, shorthands,
+  // theming
+  FluentProvider, webLightTheme, webDarkTheme, teamsLightTheme, teamsDarkTheme,
+  teamsHighContrastTheme, createLightTheme, createDarkTheme, themeToTokensObject,
+} from '@fluentui/react-components';
+import type { Theme, BrandVariants } from '@fluentui/react-components';
 ```
-BrandVariants → createLightTheme/createDarkTheme → Theme → <FluentProvider theme={...}> → tokens.* → var(--token)
-```
 
-- `tokens` is a flat map: `tokens.colorBrandBackground === 'var(--colorBrandBackground)'`.
-- A `Theme` is just the **values** of those CSS custom properties, applied by `FluentProvider` via a theme class on a wrapper element.
-- Switching themes = one class swap → CSS rules are never regenerated, components never re-render for styling.
-- Write `var(--colorBrandBackground)` in plain CSS or inline `style` — it resolves anywhere inside the `FluentProvider` subtree.
-- Never hard-code hex/px: always go through `tokens.*`.
+| API | What it does |
+| --- | --- |
+| `tokens.<name>` | The design token. At runtime it is the string `'var(--<name>)'`. |
+| `makeStyles()` | Returns a `useStyles()` hook; emits atomic CSS classes from a style object. |
+| `makeResetStyles()` | Returns a `useStyles()` hook emitting **one** reset-level class (ideal for component roots / overriding library defaults). |
+| `makeStaticStyles()` | Global, non-atomic styles (selectors like `body`, `@font-face`). |
+| `mergeClasses(...)` | Merges class names; last argument wins. Use instead of template strings. |
+| `ax(...)` | Joins conditional class strings (`ax('a', cond && 'b')`). |
+| `shorthands.*` | CSS shorthand helpers that expand to longhands (`border`, `padding`, `gap`, …). |
+| `FluentProvider` | Injects theme CSS variables, `dir`, and propagates styles into portals. |
+| `themeToTokensObject(theme)` | Converts any `Theme` into a flat `tokens`-shaped object (non-React code, SSR, canvas). |
 
-## 2. Core APIs (all exported from `@fluentui/react-components`)
+## 2. Mental model
 
-| API | Kind | Purpose |
-|---|---|---|
-| `tokens` | object | `tokenName → 'var(--tokenName)'` |
-| `webLightTheme`, `webDarkTheme` | `Theme` | default Fluent 2 light / dark |
-| `teamsLightTheme`, `teamsDarkTheme`, `teamsHighContrastTheme` | `Theme` | Microsoft Teams themes |
-| `createLightTheme(brand)` / `createDarkTheme(brand)` | fn | build a `Theme` from `BrandVariants` |
-| `createHighContrastTheme()` | fn | high-contrast theme |
-| `themeToTokensObject(theme)` | fn | turn a `Theme` into a `Tokens` object |
-| `makeStyles({...})` | fn | atomic Griffel class factory → returns a hook |
-| `makeResetStyles(...)` / `makeStaticStyles(...)` | fn | non-atomic base class / global CSS |
-| `mergeClasses(...)` | fn | merge + dedupe class names |
-| `shorthands` | object | `border`, `borderColor`, `borderRadius`, `borderStyle`, `borderWidth`, `padding`, `paddingBlock`, `paddingInline`, `margin`, `gap`, `inset`, `outline`, `overflow`, `transition`, `textDecorationLine`, `flex`, `grid` |
-| `BrandVariants`, `Theme`, `PartialTheme` | types | — |
+| Fact | Detail |
+| --- | --- |
+| Tokens are CSS variables | `tokens.colorNeutralForeground1 === 'var(--colorNeutralForeground1)'` |
+| Provider injects the values | The nearest `FluentProvider` writes `--colorNeutralForeground1: …` onto its root element |
+| Theme swap is free | Changing the `theme` prop only swaps CSS variable values — no React re-render, no class regeneration |
+| Portals stay themed | `applyStylesToPortals` (default `true`) copies the theme variables to portal mount nodes |
+| Scoping is built in | A nested `FluentProvider` themes only its subtree (e.g. a dark panel inside a light app) |
+| Naming grammar | `color{Family}{Role}{Variant}{State}`, e.g. `colorBrandForegroundLinkHover` |
 
-## 3. `FluentProvider` props that control tokens
+## 3. Color tokens
 
-| Prop | Type | Default | Notes |
-|---|---|---|---|
-| `theme` | `PartialTheme` | `webLightTheme` | values merged over the base theme |
-| `applyStylesToPortals` | boolean | `true` | injects the theme class into portal-rendered content |
-| `targetDocument` | `Document` | owning document | portals + SSR |
-| `dir` | `'ltr' \| 'rtl'` | inherited | text direction |
-| `customStyleHooks_unstable` | `FluentProviderCustomStyleHooks` | — | per-component style override, tree-wide |
-| `overrides_unstable` | `OverridesContextValue_unstable` | — | global token override, e.g. `{ tokens: { colorBrandBackground: '#b4009e' } }` |
+### 3.1 Neutral — text, surfaces, borders
 
-A **nested** `FluentProvider` re-themes only its subtree. To tweak one token, spread a partial theme (`{ ...webLightTheme, colorBrandBackground: '#b4009e' }`) instead of building a whole new theme.
+| Token | Role |
+| --- | --- |
+| `colorNeutralForeground1` | Primary text / icons |
+| `colorNeutralForeground2`, `…3`, `…4` | Secondary → quaternary text |
+| `colorNeutralForegroundDisabled` | Disabled text |
+| `colorNeutralForegroundOnBrand` | Text on brand-colored fills |
+| `colorNeutralForegroundInverted`, `…Inverted2`, `…InvertedLink` | Text/icons/links on inverted (dark) surfaces |
+| `colorNeutralForeground2Link` (+`Hover`,`Pressed`,`Selected`) | Links in secondary text |
+| `colorNeutralBackground1` … `colorNeutralBackground6` | Surface layers (1 = base, higher = raised/alternate panels) |
+| `colorNeutralBackground1Hover` / `…Pressed` / `…Selected` | Interaction states (also available on 2–5) |
+| `colorNeutralBackgroundDisabled` | Disabled surface |
+| `colorNeutralBackgroundInverted` | Inverted surface |
+| `colorNeutralBackgroundAlpha`, `colorNeutralBackgroundAlpha2` | Translucent surfaces (overlays, acrylic) |
+| `colorNeutralStroke1`, `…2`, `…3` | Borders (1 = strongest default) |
+| `colorNeutralStroke1Hover` / `…Pressed` / `…Selected` (also 2, 3) | Border interaction states |
+| `colorNeutralStrokeAccessible` | High-contrast-safe stroke (underlines, active indicators) |
+| `colorNeutralStrokeDisabled` | Disabled border |
+| `colorNeutralShadowAmbient`, `…AmbientLighter`, `…Key`, `…KeyDarker` | Shadow base colors |
 
-## 4. Token reference
+### 3.2 Brand, compound, subtle, transparent
 
-### 4.1 Color — semantic families
+| Token | Role |
+| --- | --- |
+| `colorBrandBackground` (+`Hover`,`Pressed`,`Selected`) | Solid brand fill |
+| `colorBrandBackground2` (+`Hover`,`Pressed`) | Low-emphasis brand fill |
+| `colorBrandBackground3`, `colorBrandBackgroundStatic` | Strong brand surfaces / non-inverting brand |
+| `colorBrandBackgroundInverted` (+ states) | Brand fill on inverted surfaces |
+| `colorBrandForeground1`, `…2` | Brand text and icons |
+| `colorBrandForegroundLink` (+`Hover`,`Pressed`,`Selected`) | Brand links |
+| `colorBrandStroke1`, `…2` (+`2Hover`,`2Pressed`,`2Contrast`) | Brand borders |
+| `colorCompoundBrandBackground` (+`Hover`,`Pressed`) | Fill for control-over-brand (Checkbox, Slider, Switch thumbs) |
+| `colorCompoundBrandForeground1` (+`Hover`,`Pressed`) | Foreground for compound-brand controls |
+| `colorCompoundBrandStroke` (+`Hover`,`Pressed`) | Stroke for compound-brand controls |
+| `colorSubtleBackground` (+`Hover`,`Pressed`,`Selected`) | Hover/active fills on flat surfaces |
+| `colorTransparentBackground` (+ states) | Fully transparent fills |
+| `colorTransparentStroke` (+ states) | Fully transparent strokes |
+| `colorBrandShadowAmbient`, `colorBrandShadowKey` | Brand-tinted shadows |
 
-| Family | Tokens | Suffixes |
-|---|---|---|
-| Neutral foreground | `colorNeutralForeground1`..`4` | *(base)*, `Hover`, `Pressed`, `Selected`, `Disabled`; also `colorNeutralForegroundStatic`, `colorNeutralForegroundInverted`, `colorNeutralForegroundOnBrand` |
-| Neutral background | `colorNeutralBackground1`..`6` | *(base)*, `Hover`, `Pressed`, `Selected`, `Disabled`; also `colorNeutralBackgroundStatic`, `colorNeutralBackgroundInverted`, `colorNeutralBackgroundAlpha` |
-| Neutral stroke | `colorNeutralStroke1`..`3` | *(base)*, `Hover`, `Pressed`, `Selected`, `Disabled`; also `colorNeutralStrokeAccessible`, `colorNeutralStrokeAlpha` |
-| Focus stroke | `colorStrokeFocus1`, `colorStrokeFocus2` | — |
-| Brand foreground | `colorBrandForeground1`, `colorBrandForeground2` | `Hover`, `Pressed`, `Selected`, `Disabled`; also `colorBrandForegroundLink`(`Hover`/`Pressed`), `colorBrandForegroundOnBrand`(`Hover`/`Pressed`/`Disabled`) |
-| Brand background | `colorBrandBackground`, `colorBrandBackground2`..`6` | `Hover`, `Pressed`, `Selected`, `Disabled`, `Static`, `Inverted` |
-| Brand stroke | `colorBrandStroke1`, `colorBrandStroke2` | `Hover`, `Pressed`, `Selected`, `Disabled`, `Contrast` |
-| Compound (checked/selected controls) | `colorCompoundBrandBackground`, `colorCompoundBrandForeground1`, `colorCompoundBrandStroke` | `Hover`, `Pressed` |
-| Overlay scrim | `colorBackgroundOverlay` | — |
-| Shadow colors | `colorNeutralShadowAmbient`, `colorNeutralShadowKey`, `colorBrandShadowAmbient`, `colorBrandShadowKey` | — |
+### 3.3 Status and raw palette
 
-> Not every suffix exists on every family — check the token table for the exact name before using.
+| Family | Pattern |
+| --- | --- |
+| Status | `colorStatus{Success\|Warning\|Danger}{Background1\|Background2\|Background3\|Border1\|Border2\|BorderActive\|Foreground1\|Foreground2\|Foreground3}` |
+| Palette | `colorPalette{Red\|Green\|Blue\|Yellow\|Marigold\|Berry\|Plum\|Navy\|Teal\|…}{Background1..3\|Foreground1..3\|Border1\|Border2\|BorderActive}` |
 
-### 4.2 Color — palette & status
+Prefer **status** tokens for feedback UI (Badge, MessageBar, ProgressBar) and **palette** tokens only for data viz / custom brand accents.
 
-| Pattern | Families / intents | Example |
-|---|---|---|
-| `colorPalette{Family}Background{1\|2\|3}` | Red, Green, DarkOrange, Yellow, Berry, LightBlue, Marigold, Navy, Lavender, Gold, Plum, Beige, Mink, Pink, Pumpkin, Peach, Magenta, Grape, Lime, Teal, … | `colorPaletteRedBackground2` |
-| `colorPalette{Family}Foreground{1\|2\|3}` | same | `colorPaletteGreenForeground1` |
-| `colorPalette{Family}Border{1\|2}` | same | `colorPaletteYellowBorder1` |
-| `colorStatus{Intent}Background{1\|2\|3}` | Success, Warning, Danger, Info | `colorStatusDangerBackground1` |
-| `colorStatus{Intent}Foreground{1\|2\|3}` | same | `colorStatusWarningForeground1` |
-| `colorStatus{Intent}Border{1\|2}` | same | `colorStatusSuccessBorder1` |
+### 3.4 Semantic recipes
 
-Semantic tokens for UI chrome; palette + status tokens for badges, charts, illustrations and callouts.
-
-### 4.3 A few concrete `webLightTheme` values
-
-| Token | `webLightTheme` |
-|---|---|
-| `colorNeutralBackground1` | `#ffffff` |
-| `colorNeutralForeground1` | `#242424` |
-| `colorNeutralStroke1` | `#d1d1d1` |
-| `colorNeutralBackgroundDisabled` | `#f0f0f0` |
-| `colorNeutralForegroundDisabled` | `#bdbdbd` |
-| `colorBrandBackground` | `#0f6cbd` |
-| `colorCompoundBrandBackground` | `#0f6cbd` |
-| `colorNeutralForegroundOnBrand` | `#ffffff` |
-| `colorStrokeFocus2` | `#000000` |
-
-Dark, Teams and high-contrast themes reuse the **same token names** with different values — never branch your CSS on the active theme.
-
-### 4.4 Typography
-
-| Token | Value |
-|---|---|
-| `fontFamilyBase` | `'Segoe UI', 'Segoe UI Web (West European)', -apple-system, …` |
-| `fontFamilyMonospace`, `fontFamilyNumeric` | monospace / tabular stacks |
-| `fontSizeBase100` → `fontSizeBase1000` | 10 / 12 / 14 / 16 / 20 / 24 / 28 / 32 / 40 / 68 px |
-| `lineHeightBase100` → `lineHeightBase1000` | 14 / 16 / 20 / 22 / 28 / 32 / 36 / 40 / 52 / 92 px |
-| `fontSizeHero700`..`fontSizeHero1000`, `lineHeightHero700`..`lineHeightHero1000` | hero / display sizes |
-| `fontWeightRegular` / `fontWeightMedium` / `fontWeightSemibold` / `fontWeightBold` | 400 / 500 / 600 / 700 |
-
-Paired scale rule: body = `fontSizeBase300` + `lineHeightBase300`; captions = `fontSizeBase200`; subtitles = `fontSizeBase400` + `fontWeightSemibold`.
-
-### 4.5 Spacing / radius / stroke / shadow / motion
-
-| Category | Tokens | Values |
-|---|---|---|
-| Spacing | `spacingHorizontal{None,XXS,XS,SNudge,S,MNudge,M,L,XL,XXL,XXXL}` and the same for `spacingVertical*` | 0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 32 px |
-| Radius | `borderRadiusNone`, `borderRadiusSmall`, `borderRadiusMedium`, `borderRadiusLarge`, `borderRadiusXLarge`, `borderRadiusCircular` | 0, 2, 4, 6, 8, 10000 px |
-| Stroke | `strokeWidthThin`, `strokeWidthThick`, `strokeWidthThicker`, `strokeWidthThickest` | 1, 2, 3, 4 px |
-| Shadow | `shadow2`, `shadow4`, `shadow8`, `shadow16`, `shadow28`, `shadow64` (+ `…Brand` variants) | elevation presets |
-| Duration | `durationUltraFast`, `durationFaster`, `durationFast`, `durationNormal`, `durationSlow`, `durationSlower`, `durationUltraSlow` | 50, 100, 150, 200, 300, 400, 500 ms |
-| Curve | `curveAccelerateMax/Mid/Min`, `curveDecelerateMax/Mid/Min`, `curveEasyEaseMax`, `curveEasyEase`, `curveLinear` | cubic-bezier presets |
-
-Horizontal and vertical spacing are **separate scales** — `spacingVerticalM` for row gaps, `spacingHorizontalM` for column gaps.
-
-## 5. Which token for what
-
-| Need | Token |
-|---|---|
-| Page / surface background | `colorNeutralBackground1` |
-| Card on a surface | `colorNeutralBackground1` + `shadow4` (or `colorNeutralBackground2`) |
+| I need… | Use |
+| --- | --- |
+| Page background | `colorNeutralBackground1` |
+| Card / popover surface | `colorNeutralBackground1` or `colorNeutralBackground2` |
+| Hovered row / subtle button | `colorSubtleBackgroundHover` / `colorNeutralBackground1Hover` |
 | Body text | `colorNeutralForeground1` |
-| Secondary text | `colorNeutralForeground2` |
-| Disabled text / background | `colorNeutralForegroundDisabled` / `colorNeutralBackgroundDisabled` |
-| Border / divider | `colorNeutralStroke1` (subtler: `colorNeutralStroke2`) |
-| Accessible border (input outline, ~3:1) | `colorNeutralStrokeAccessible` |
-| Primary action fill | `colorBrandBackground` + `colorBrandBackgroundHover` / `colorBrandBackgroundPressed` |
-| Text on a brand fill | `colorNeutralForegroundOnBrand` |
-| Link | `colorBrandForegroundLink` (+ `Hover` / `Pressed`) |
-| Checked / selected control | `colorCompoundBrandBackground` / `colorCompoundBrandStroke` |
-| Focus ring | `colorStrokeFocus2` + `strokeWidthThick` |
-| Danger / warning / success messaging | `colorStatusDanger*` / `colorStatusWarning*` / `colorStatusSuccess*` |
-| Modal scrim | `colorBackgroundOverlay` |
+| Helper / caption text | `colorNeutralForeground2` or `…3` |
+| Disabled text | `colorNeutralForegroundDisabled` |
+| Default border | `colorNeutralStroke1` |
+| Primary button fill | `colorBrandBackground` + `colorNeutralForegroundOnBrand` |
+| Error text | `colorStatusDangerForeground1` |
+| Danger banner | `colorStatusDangerBackground1` + `colorStatusDangerBorder1` |
 
-## 6. Patterns
+## 4. Typography tokens
 
-- `makeStyles` (atomic, hashed classes) is the default. Use `makeResetStyles` for base classes where specificity/override order matters, and `makeStaticStyles` for global selectors.
-- Pseudo-classes and at-rules are nested objects inside the style object: `':hover': {...}`, `':focus-visible': {...}`, `'@media (forced-colors: active)': {...}`.
-- Compose component styles with the `className` prop: `className={mergeClasses(styles.base, active && styles.active)}`.
-- Prefer `FluentProvider`-level controls before reaching for `customStyleHooks_unstable` / `overrides_unstable` (both `_unstable`).
+| Scale | Font size token (px) | Line height token (px) |
+| --- | --- | --- |
+| 100 | `fontSizeBase100` (10) | `lineHeightBase100` (14) |
+| 200 | `fontSizeBase200` (12) | `lineHeightBase200` (16) |
+| 300 | `fontSizeBase300` (14) | `lineHeightBase300` (20) |
+| 400 | `fontSizeBase400` (16) | `lineHeightBase400` (22) |
+| 500 | `fontSizeBase500` (20) | `lineHeightBase500` (28) |
+| 600 | `fontSizeBase600` (24) | `lineHeightBase600` (32) |
+| 700 | `fontSizeBase700` (28) | `lineHeightBase700` (36) |
+| 800 | `fontSizeBase800` (32) | `lineHeightBase800` (40) |
+| 900 | `fontSizeBase900` (40) | `lineHeightBase900` (52) |
+| 1000 | `fontSizeBase1000` (68) | `lineHeightBase1000` (92) |
+| Hero 700–1000 | `fontSizeHero700`…`fontSizeHero1000` (28/32/40/68) | `lineHeightHero700`…`lineHeightHero1000` (36/40/52/92) |
 
-## 7. Plain-CSS / non-Griffel surfaces
+| Token | Value / role |
+| --- | --- |
+| `fontFamilyBase` | `'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif` |
+| `fontFamilyMonospace` | `Consolas, 'Courier New', Courier, monospace` |
+| `fontFamilyNumeric` | `Bahnschrift, 'Segoe UI', …` |
+| `fontWeightRegular` / `Medium` / `Semibold` / `Bold` | 400 / 500 / 600 / 700 |
 
-Any descendant of `FluentProvider` can read tokens as CSS custom properties:
+**Rule:** always pair `fontSizeBaseN` with `lineHeightBaseN` (same N). The `Text` component `size` prop uses the same 100–1000 scale.
 
-```css
-.my-chart-tooltip {
-  background-color: var(--colorNeutralBackground1);
-  color: var(--colorNeutralForeground1);
-  border: var(--strokeWidthThin) solid var(--colorNeutralStroke1);
-  border-radius: var(--borderRadiusMedium);
-  padding: var(--spacingVerticalS) var(--spacingHorizontalM);
-  box-shadow: var(--shadow8);
-  font: var(--fontWeightRegular) var(--fontSizeBase200) / var(--lineHeightBase200) var(--fontFamilyBase);
-}
+## 5. Spacing tokens
+
+Every suffix exists in both axes: `spacingHorizontal{Suffix}` and `spacingVertical{Suffix}`.
+
+| Suffix | Value | Example token |
+| --- | --- | --- |
+| `None` | 0 | `spacingVerticalNone` |
+| `XXS` | 2px | `spacingHorizontalXXS` |
+| `XS` | 4px | `spacingVerticalXS` |
+| `SNudge` | 6px | `spacingHorizontalSNudge` |
+| `S` | 8px | `spacingVerticalS` |
+| `M` | 12px | `spacingHorizontalM` |
+| `L` | 16px | `spacingVerticalL` |
+| `XL` | 20px | `spacingHorizontalXL` |
+| `XXL` | 24px | `spacingVerticalXXL` |
+| `XXXL` | 32px | `spacingHorizontalXXXL` |
+
+## 6. Radius, stroke, shadow
+
+| Category | Tokens |
+| --- | --- |
+| Border radius | `borderRadiusNone` (0), `borderRadiusSmall` (2px), `borderRadiusMedium` (4px), `borderRadiusLarge` (6px), `borderRadiusXLarge` (8px), `borderRadiusCircular` (10000px) |
+| Stroke width | `strokeWidthNone` (0), `strokeWidthThin` (1px), `strokeWidthThick` (2px), `strokeWidthThicker` (3px), `strokeWidthThickest` (4px) |
+| Shadow | `shadow2`, `shadow4`, `shadow8`, `shadow16`, `shadow28`, `shadow64` |
+| Brand shadow | `shadow2Brand`, `shadow4Brand`, `shadow8Brand`, `shadow16Brand`, `shadow28Brand`, `shadow64Brand` |
+
+## 7. Motion tokens
+
+| Duration token | Value |
+| --- | --- |
+| `durationUltraFast` | 50ms |
+| `durationFaster` | 100ms |
+| `durationFast` | 150ms |
+| `durationNormal` | 200ms |
+| `durationSlow` | 300ms |
+| `durationSlower` | 400ms |
+| `durationUltraSlow` | 500ms |
+
+| Curve token | Use for |
+| --- | --- |
+| `curveAccelerateMax` / `…Mid` / `…Min` | Elements **leaving** (exit animations) |
+| `curveDecelerateMax` / `…Mid` / `…Min` | Elements **entering** (enter animations) |
+| `curveEasyEaseMax`, `curveEasyEase` | Two-way transitions, hover/press states |
+| `curveLinear` | Constant motion (progress, spinners) |
+
+## 8. Theming
+
+```tsx
+<FluentProvider theme={isDark ? webDarkTheme : webLightTheme}>…</FluentProvider>
 ```
 
-The CSS variable name is always `--` + the token name.
+| Export | Use |
+| --- | --- |
+| `webLightTheme` (default) / `webDarkTheme` | Standard web apps |
+| `teamsLightTheme` / `teamsDarkTheme` / `teamsHighContrastTheme` | Teams-flavored themes |
+| `createLightTheme(brand)` / `createDarkTheme(brand)` | Custom light/dark themes from a brand ramp |
+| `createHighContrastTheme(brand?)` | High-contrast theme |
+| `themeToTokensObject(theme)` | Flat tokens object from any `Theme`, for non-React code |
+| `Theme` type | `tokens`-shaped object (the type of a full theme) |
 
-## 8. Quick decision list
+Nested providers create **scoped** themes — the inner provider only overrides CSS variables for its subtree.
 
-1. Need a color/size? → find the `tokens.*` name; never type a hex or px.
-2. Need a new brand? → `BrandVariants` + `createLightTheme`/`createDarkTheme` + `<FluentProvider theme>`.
-3. Need one token different? → `overrides_unstable={{ tokens: {...} }}` or a partial theme spread.
-4. Need a component styled differently everywhere? → `customStyleHooks_unstable`.
-5. Need it in a portal? → `applyStylesToPortals` (default `true`) / `targetDocument`.
-6. Need it in CSS? → `var(--tokenName)`.
+## 9. `shorthands`
+
+| Shorthand | Expands to |
+| --- | --- |
+| `shorthands.border(width, style, color)` | `borderWidth` + `borderStyle` + `borderColor` |
+| `shorthands.borderTop` / `Right` / `Bottom` / `Left(...)` | per-side border longhands |
+| `shorthands.borderRadius(...)` | 4 corner radii |
+| `shorthands.padding(...)` / `shorthands.margin(...)` | 4 side longhands |
+| `shorthands.paddingBlock` / `paddingInline` / `marginBlock` / `marginInline` | 2-side axis longhands |
+| `shorthands.gap(...)`, `shorthands.inset(...)`, `shorthands.overflow(...)` | axis longhands |
+| `shorthands.outline(...)`, `shorthands.textDecoration(...)`, `shorthands.transition(...)`, `shorthands.flex(...)`, `shorthands.gridArea` / `gridColumn` / `gridRow` / `gridTemplate(...)` | corresponding longhands |
+
+**Why it matters:** shorthands expand to longhands, so `mergeClasses` overrides resolve predictably instead of fighting over CSS shorthand/longhand order.
+
+## 10. Token math
+
+Token values are `var()` strings, so no JS arithmetic — use CSS `calc()`:
+
+```ts
+padding: `calc(${tokens.spacingVerticalM} * 2)`,   // ✅
+// parseInt(tokens.spacingVerticalM)               // ❌ NaN
+```
 
 ## Key Takeaways
 
-- `tokens.x` is literally the string `'var(--x)'` — the same style class works unchanged in web light/dark, Teams and high-contrast themes; only the Provider-applied variable values change.
-- A theme is created from a full 16-key `BrandVariants` object (keys 10..160, step 10) via `createLightTheme(brand)` / `createDarkTheme(brand)`, then applied with `<Provider theme={...}>`; nested Providers re-theme only their subtree.
-- `makeStyles` + `mergeClasses` + `shorthands` is the canonical v9 styling pipeline: build atomic classes from tokens at module scope, then pass them to components through `className`.
-- Use semantic tokens (`colorBrand*`, `colorNeutral*`, `colorCompoundBrand*`, `colorStatus*`) for UI chrome; reserve `colorPalette*` for accents, badges and data visualization.
-- Portal-rendered content (Portal, Menu, Popover, Dialog, Tooltip) is outside the Provider DOM node — `applyStylesToPortals` (default `true`) plus `targetDocument` keeps the theme variables available there.
-- Escape hatches in order of preference: a partial theme spread, `overrides_unstable={{ tokens: {...} }}` for global token overrides, then `customStyleHooks_unstable` for per-component style changes (both `_unstable`).
-- Token scales are fixed sets: spacing (`spacingHorizontal|Vertical` × None→XXXL), radius (`borderRadius` None→XLarge/Circular), stroke (`strokeWidthThin→Thickest`), shadows (`shadow2→shadow64`), durations and curves — compose from the scale instead of inventing values.
+- `tokens.*` from `@fluentui/react-components` is the only supported styling contract — every value resolves to a CSS custom property injected by the nearest `FluentProvider`.
+- Take `tokens`, `makeStyles`, `makeResetStyles`, `makeStaticStyles`, `mergeClasses`, and `shorthands` all from `@fluentui/react-components`; combine classes with `mergeClasses` so later classes win.
+- Theme switching (`webLightTheme` ↔ `webDarkTheme`, custom `createLightTheme(createDarkTheme(brand))`, or a nested provider) swaps CSS variables only — no re-render and no class regeneration.
+- Typography scale numbers must match: pair `fontSizeBaseN` with `lineHeightBaseN` (100–1000, plus `Hero700`–`Hero1000`). The `Text` `size` prop uses the same scale.
+- Spacing exists on both axes (`spacingHorizontal*` / `spacingVertical*`), radius is `borderRadiusSmall|Medium|Large|XLarge|Circular`, and motion pairs `duration*` with `curve*` (Accelerate = exit, Decelerate = enter, EasyEase = both).
+- Use `themeToTokensObject(theme)` when you need tokens outside React (canvas, DOM, SSR) and keep `applyStylesToPortals` enabled so portals keep the theme.
 
 ## Examples
 
-### Brand theme → Provider
+### Token-driven styles with makeStyles
 
-Build light/dark themes from a 16-step BrandVariants palette and apply them at the app root.
+Card-like surface built entirely from color, spacing, radius, shadow, typography and motion tokens; mergeClasses composes the compact variant.
 
 ```tsx
-import { FluentProvider, Button, createLightTheme, createDarkTheme, type BrandVariants, type Theme } from '@fluentui/react-components';
+import {
+  tokens, makeStyles, mergeClasses, shorthands,
+} from '@fluentui/react-components';
 
-// BrandVariants requires ALL keys 10..160 in steps of 10
-const brand: BrandVariants = {
-  10: '#020305', 20: '#111723', 30: '#16263d', 40: '#193253',
-  50: '#1b3f6a', 60: '#1b4c82', 70: '#18599b', 80: '#1267b4',
-  90: '#3174c2', 100: '#4f82c8', 110: '#6790cb', 120: '#7d9ed0',
-  130: '#92acd5', 140: '#a7bada', 150: '#bbc8df', 160: '#cfd6e4',
+const useStyles = makeStyles({
+  root: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    color: tokens.colorNeutralForeground1,
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke1),
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    boxShadow: tokens.shadow4,
+    fontFamily: tokens.fontFamilyBase,
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
+    fontWeight: tokens.fontWeightSemibold,
+    transition: `background-color ${tokens.durationFast} ${tokens.curveEasyEase}`,
+    ':hover': { backgroundColor: tokens.colorNeutralBackground1Hover },
+  },
+  compact: {
+    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
+  },
+});
+
+export const Surface = ({ compact }: { compact?: boolean }) => {
+  const styles = useStyles();
+  return <div className={mergeClasses(styles.root, compact && styles.compact)}>Content</div>;
 };
+```
 
-const lightTheme: Theme = createLightTheme(brand);
-const darkTheme: Theme = createDarkTheme(brand);
+### App theme via FluentProvider
+
+Theme switching by swapping the theme prop; only CSS variables change, so no re-render of the styled subtree.
+
+```tsx
+import {
+  FluentProvider, webLightTheme, webDarkTheme, Card, Text, Button,
+} from '@fluentui/react-components';
 
 export const App = ({ isDark }: { isDark: boolean }) => (
-  <FluentProvider theme={isDark ? darkTheme : lightTheme}>
-    <Button appearance="primary">Primary uses colorBrandBackground</Button>
+  <FluentProvider theme={isDark ? webDarkTheme : webLightTheme}>
+    <Card appearance='outline' size='medium'>
+      <Text size={400} weight='semibold'>Themed card</Text>
+      <Button appearance='primary'>Confirm</Button>
+    </Card>
   </FluentProvider>
 );
 ```
 
-### makeStyles with tokens + shorthands
+### Custom brand theme
 
-The canonical Fluent v9 styled component: tokens for every value, shorthands for CSS shorthands, nested pseudo-classes for states.
+Build a light/dark theme from a BrandVariants ramp (keys 10-160) and hand it to FluentProvider.
 
 ```tsx
-import { makeStyles, tokens, shorthands } from '@fluentui/react-components';
+import {
+  FluentProvider, createLightTheme, createDarkTheme,
+  type BrandVariants, type Theme,
+} from '@fluentui/react-components';
 
-export const useSurfaceStyles = makeStyles({
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: tokens.spacingVerticalM,
-    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
-    ...shorthands.border(tokens.strokeWidthThin, 'solid', tokens.colorNeutralStroke1),
-    ...shorthands.borderRadius(tokens.borderRadiusLarge),
-    backgroundColor: tokens.colorNeutralBackground1,
+const brand: BrandVariants = {
+  10: '#020305', 20: '#111723', 30: '#1c2333', 40: '#242b40',
+  50: '#2d3449', 60: '#363e54', 70: '#40485f', 80: '#0f6cbd',
+  90: '#4d566f', 100: '#5a6380', 110: '#646e8b', 120: '#6f7996',
+  130: '#7a85a2', 140: '#8b96b2', 150: '#9da7c0', 160: '#afb8ce',
+};
+
+const myLightTheme: Theme = createLightTheme(brand);
+const myDarkTheme: Theme = createDarkTheme(brand);
+
+export const BrandedApp = () => (
+  <FluentProvider theme={myLightTheme}>{/* app */}</FluentProvider>
+);
+```
+
+### Scoped (nested) theme
+
+A dark-themed section inside a light app: the nested provider only overrides CSS variables for its subtree.
+
+```tsx
+import { FluentProvider, webDarkTheme, Card, Text } from '@fluentui/react-components';
+
+export const DimmedPanel = () => (
+  <FluentProvider theme={webDarkTheme} style={{ borderRadius: '6px' }}>
+    <Card appearance='filled-alternative'>
+      <Text size={300}>This panel uses dark tokens only.</Text>
+    </Card>
+  </FluentProvider>
+);
+```
+
+### Typography tokens
+
+Hero + body typography pairs using matching fontSize/lineHeight scale numbers; matches the Text component size scale.
+
+```tsx
+import { tokens, makeStyles } from '@fluentui/react-components';
+
+const useStyles = makeStyles({
+  hero: {
+    fontFamily: tokens.fontFamilyBase,
+    fontSize: tokens.fontSizeHero700,
+    lineHeight: tokens.lineHeightHero700,
+    fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground1,
+  },
+  body: {
     fontFamily: tokens.fontFamilyBase,
     fontSize: tokens.fontSizeBase300,
     lineHeight: tokens.lineHeightBase300,
     fontWeight: tokens.fontWeightRegular,
-    boxShadow: tokens.shadow4,
-    transitionProperty: 'background-color, box-shadow',
-    transitionDuration: tokens.durationNormal,
-    transitionTimingFunction: tokens.curveEasyEase,
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground1Hover,
-      ...shorthands.borderColor(tokens.colorNeutralStroke1Hover),
-      boxShadow: tokens.shadow8,
-    },
-    ':focus-visible': {
-      ...shorthands.outline(tokens.strokeWidthThick, 'solid', tokens.colorStrokeFocus2),
-      outlineOffset: `calc(-1 * ${tokens.strokeWidthThick})`,
-    },
-    '@media (forced-colors: active)': {
-      ...shorthands.borderColor('CanvasText'),
-    },
+    color: tokens.colorNeutralForeground2,
+  },
+  code: {
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+    lineHeight: tokens.lineHeightBase200,
   },
 });
 ```
 
-### mergeClasses for conditional tokens
+### Motion tokens and calc() math
 
-Compose a base class with a state class and hand it to a component via className.
+Duration/curve tokens in a transition, plus CSS calc() since token values are var() strings and cannot be used in JS math.
 
 ```tsx
-import { Button, makeStyles, mergeClasses, tokens, shorthands } from '@fluentui/react-components';
+import { tokens, makeStyles, shorthands } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
-  base: {
-    ...shorthands.borderRadius(tokens.borderRadiusCircular),
-    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
-  },
-  active: {
-    backgroundColor: tokens.colorCompoundBrandBackground,
-    color: tokens.colorNeutralForegroundOnBrand,
+  root: {
+    ...shorthands.padding(`calc(${tokens.spacingVerticalM} * 2)`),
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    opacity: 0,
+    transitionProperty: 'opacity, transform',
+    transitionDuration: tokens.durationNormal,
+    transitionTimingFunction: tokens.curveDecelerateMid,
+    ':hover': { opacity: 1 },
+    ':active': {
+      transitionDuration: tokens.durationUltraFast,
+      transitionTimingFunction: tokens.curveAccelerateMid,
+    },
   },
 });
-
-export const Pill = ({ active, children }: { active: boolean; children: string }) => {
-  const styles = useStyles();
-  return (
-    <Button
-      appearance="subtle"
-      className={mergeClasses(styles.base, active && styles.active)}
-    >
-      {children}
-    </Button>
-  );
-};
 ```
 
-### Provider escape hatches + portals
+### Tokens outside React / in portals
 
-Global token override, tree-wide component style override, and theme inheritance into Portal content.
+themeToTokensObject converts a Theme into a flat tokens object for non-React code, and applyStylesToPortals keeps portal content themed.
 
 ```tsx
-import { FluentProvider, Portal, Button, webLightTheme, tokens } from '@fluentui/react-components';
+import {
+  FluentProvider, webDarkTheme, themeToTokensObject,
+} from '@fluentui/react-components';
 
-// Partial theme: same token names, one value changed
-const appTheme = { ...webLightTheme, colorBrandBackground: '#b4009e' };
+// 1. Plain-DOM code (charts, canvas, iframes) can read theme values directly.
+const dark = themeToTokensObject(webDarkTheme);
+const el = document.getElementById('chart-tooltip');
+if (el) {
+  el.style.backgroundColor = dark.colorNeutralBackground1;
+  el.style.color = dark.colorNeutralForeground1;
+  el.style.borderRadius = dark.borderRadiusMedium;
+}
 
+// 2. Portal content stays themed by default.
 export const App = () => (
-  <FluentProvider
-    theme={appTheme}
-    // default true: injects the theme class into portal content (Portal, Menu, Popover, Dialog, Tooltip...)
-    applyStylesToPortals
-    targetDocument={document}
-    // Escape hatch: same override for every instance in the tree
-    customStyleHooks_unstable={{
-      useButtonStyles_unstable: (state) => {
-        state.root.style.fontWeight = tokens.fontWeightSemibold;
-      },
-    }}
-    // Alternative global token override: overrides_unstable={{ tokens: { colorBrandBackground: '#b4009e' } }}
-  >
-    <Portal>
-      <Button appearance="primary">Inherits the theme class</Button>
-    </Portal>
+  <FluentProvider theme={webDarkTheme} applyStylesToPortals={true}>
+    {/* menus, dialogs, popovers inherit the theme */}
   </FluentProvider>
 );
 ```
 
-### Tokens in plain CSS
-
-Token names map 1:1 to CSS custom properties, so any non-Griffel surface inside Provider works.
-
-```css
-/* CSS variable name = '--' + token name */
-.my-chart-tooltip {
-  background-color: var(--colorNeutralBackground1);
-  color: var(--colorNeutralForeground1);
-  border: var(--strokeWidthThin) solid var(--colorNeutralStroke1);
-  border-radius: var(--borderRadiusMedium);
-  padding: var(--spacingVerticalS) var(--spacingHorizontalM);
-  box-shadow: var(--shadow8);
-  font: var(--fontWeightRegular) var(--fontSizeBase200) / var(--lineHeightBase200)
-    var(--fontFamilyBase);
-}
-
-.my-chart-tooltip:hover {
-  background-color: var(--colorNeutralBackground1Hover);
-}
-
-.my-chart-tooltip:focus-visible {
-  outline: var(--strokeWidthThick) solid var(--colorStrokeFocus2);
-}
-```
-
 ## Pitfalls
 
-- Hard-coding hex colors, px values or box-shadows instead of `tokens.*` breaks dark, Teams and high-contrast themes instantly — every color, size, radius, shadow and duration should come from `tokens`.
-- `tokens.colorX` is a `var(--colorX)` string, not a literal value: you cannot parse, compare or compute with it in JS. Read computed styles or resolve the theme when you need a real color (e.g. for canvas/chart libraries).
-- Calling `makeStyles` inside a component body recreates the style classes and violates hook rules — always define style hooks at module scope and call the returned hook inside the component.
-- `mergeClasses(a, b)` does not guarantee precedence by argument order: when two atomic classes set the same property, the one defined later in the `makeStyles` object wins. Put override rules after base rules in the same style object.
-- Forgetting portal theming: content rendered by `Portal` (and Popover/Menu/Dialog/Tooltip surfaces) sits outside the Provider element, so without `applyStylesToPortals` / a nested `Provider` / correct `targetDocument` the CSS variables are missing and the content renders unstyled (also a common SSR/hydration mismatch).
-- `BrandVariants` must be a complete record — all 16 keys from 10 to 160 in steps of 10 — or the type fails; missing keys silently produce broken brand ramps.
-- Wrapping a subtree in a nested `Provider` with a brand-new theme resets every token. Pass a partial theme (`{ ...webLightTheme, colorBrandBackground: '#b4009e' }`) to change only what you need.
-- Using `colorPalette*` or `colorStatus*` tokens for general chrome (borders, backgrounds, body text) yields inconsistent semantics across themes — use the semantic neutral/brand tokens instead, and never patch with `!important`.
+- Hardcoding hex/px instead of tokens: breaks `webLightTheme`/`webDarkTheme` switching, Teams themes, and high-contrast themes. Always use `tokens.*`.
+- Doing JS math on tokens — they are `var(--…)` strings, so `parseInt(tokens.spacingVerticalM)` is `NaN`. Use CSS: `calc(${tokens.spacingVerticalM} * 2)`.
+- Styling without a `FluentProvider` ancestor: the CSS variables are never defined, so colors resolve to nothing and components look unstyled. Wrap the app root (or the preview/iframe) in a provider.
+- Composing class names with template strings or `? :` concatenation instead of `mergeClasses` — you lose Griffel's deterministic ordering, so conditional overrides stop working.
+- Using a raw CSS shorthand (`padding: '10px'`) alongside a longhand override class: use `shorthands.padding(...)` / `shorthands.margin(...)`, which expand to longhands and merge predictably.
+- Reaching for `colorPalette*` tokens in component UI: use semantic tokens (`colorNeutral*`, `colorBrand*`, `colorCompoundBrand*`, `colorStatus*`) so themes and high contrast stay correct; reserve palette tokens for data visualization.
+- Expecting `makeStaticStyles` to be scoped — it emits global CSS; keep it for `body`/`@font-face`-level rules and use `makeStyles`/`makeResetStyles` for component styles.
 
-**Referenced components**: Provider, Portal, Button
+**Referenced components**: FluentProvider, Card, Text, Button
 
 <!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

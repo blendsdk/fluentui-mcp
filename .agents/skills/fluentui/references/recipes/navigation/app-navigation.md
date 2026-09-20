@@ -4,616 +4,771 @@
 
 ## Goal
 
-Build a complete application navigation shell composed of FluentUI v9 pieces: a primary Nav rail with nested categories and controlled selection, a header with brand, search Input, icon buttons with Tooltips and an account Menu triggered by an Avatar, a Breadcrumb trail for the current route, secondary TabList navigation, and a Drawer-based version of the rail for narrow viewports.
+Build a complete Fluent UI React v9 application navigation shell: a navigation rail (NavDrawer) with app branding, flat destinations, expandable categories and sub-items, a small-screen overlay variant triggered by a Hamburger, account actions in a footer Menu, breadcrumbs that mirror the current location, and a menu-bar navigation variant — all driven by one source of truth for the selected value.
 
 ## When to Use
 
-Use this recipe when you are building the persistent chrome of an application — a dashboard, admin console, portal, or docs site — where users repeatedly move between top-level destinations, nested sections, and peer views of the current page, and you need that navigation to stay consistent across routes and viewport sizes.
+Use this recipe when an application needs a persistent, hierarchical way to move between many destinations: a left rail with grouped sections and expandable categories, a mobile/overlay drawer for narrow viewports, app-level landing items (AppItem/AppItemStatic), a location trail (Breadcrumb), and optional command-style menu bars (Menu). It is the right fit for product shells, admin consoles, and document-centric tools where selection must stay in sync with routing state.
 
 ## When Not to Use
 
-Do not use a full Nav rail for marketing pages, landing pages, or short single-page flows; a header with Link and Button is enough there. Do not use Nav for a linear step sequence (use a progress/stepper pattern instead) or for a table of contents inside one article (use Tree or inline anchors). If the user only switches between peer views of the same object and the hierarchy never changes, TabList alone is the right answer — adding a Nav rail duplicates navigation and creates two competing landmarks.
+Avoid this recipe for simple marketing pages with three or four flat links (use Link or Breadcrumb alone), for switching views inside a single page or panel (use TabList + Tab, or Toolbar for command groups), for arbitrarily deep user-generated hierarchies (use Tree / FlatTree with TreeItem or TreeItemPersonalityLayout), and for a purely transient command palette or context actions (use Menu or a Dialog with a search field).
 
-## What this recipe builds
+Compose Fluent UI React v9 navigation components into an app shell: a persistent navigation rail with expandable categories, an overlay drawer for small screens, app branding, account actions in the rail footer, and breadcrumbs that mirror the current location.
 
-An application shell with four cooperating navigation surfaces:
+## Outcome
 
-- **Primary navigation** — a vertical `Nav` rail with `NavItem` leaves, `NavCategory` groups, and `NavSubItem` children.
-- **Header** — brand text, a search `Input`, icon-only `Button`s wrapped in `Tooltip`, and an account `Menu` triggered by an `Avatar`.
-- **Breadcrumb** — `Breadcrumb` with `BreadcrumbItem`, `BreadcrumbButton`, and `BreadcrumbDivider` describing where the current route sits in the hierarchy.
-- **Secondary navigation** — a `TabList` of `Tab`s for peer views of the current page.
+- A **navigation rail** (`NavDrawer` + `NavDrawerBody`) that shows app branding, flat destinations, grouped sections, and expandable categories with sub items.
+- **One source of truth** for "where am I": `selectedValue` / `openCategories` state that also drives the page heading and the breadcrumb.
+- A **small-screen variant** that opens the same navigation as an overlay from a `Hamburger` trigger and closes itself after a selection.
+- **Account actions** (`Menu`) pinned to `NavDrawerFooter`.
+- A **menu-bar variant** for command-style, document-centric apps.
 
-On narrow viewports the rail moves into a `Drawer` that overlays the content.
+## Pattern chooser
 
-## Layout skeleton
+| Pattern | Building blocks | Use when |
+| --- | --- | --- |
+| Persistent rail | `NavDrawer type="inline"` + `NavDrawerHeader` / `NavDrawerBody` / `NavDrawerFooter` | Desktop-first apps with 5–20 destinations |
+| Overlay drawer | `NavDrawer type="overlay"` + `Hamburger` + `Tooltip` | The same information architecture on narrow viewports |
+| Menu bar | `Menu` + `MenuTrigger` + `MenuPopover` + `MenuList` + `MenuItem` (+ nested `Menu` for submenus) | Command-style, document-centric apps (File / View / …) |
+| Location trail | `Breadcrumb` + `BreadcrumbItem` + `BreadcrumbButton` + `BreadcrumbDivider` | Hierarchical pages that need a "where am I" trail |
 
-Use CSS grid for the shell and let the rail scroll independently of the page:
+## 1. Wrap the application once in FluentProvider
 
-```css
-grid-template-columns: 260px 1fr;
-overflow: hidden;
+`NavDrawer`, `Menu`, `Tooltip` and `Breadcrumb` all read design tokens from context. If your app already renders a provider at the root, skip this step; otherwise wrap the shell once:
+
+```tsx
+<FluentProvider>
+  <AppShell />
+</FluentProvider>
 ```
 
-The `Nav` occupies the first column; `<main id="main-content">` occupies the second and owns its own scroll container. Style everything with `makeStyles` and `tokens` so the shell follows the active theme (light, dark, high contrast).
+## 2. Model destinations as `value`s
 
-## 1. Primary navigation with `Nav`
+Every navigable element in the rail carries a `value`. That value is the key used by:
 
-`Nav` is a **controlled list**. Give it `selectedValue` and update that value from `onNavItemSelect` using the selected item's `data.value`.
+- `selectedValue` to highlight the current destination,
+- `onNavItemSelect` / `onNavCategoryItemToggle` to report what the user picked,
+- `openCategories` to remember which categories are expanded.
 
-- Leaves are `NavItem value="..."` (optionally with `icon`).
-- Nesting is expressed with `NavCategory value="..."` (the collapsible parent), `NavCategoryItem` (its clickable header, with `icon` and children), and `NavSubItemGroup` / `NavSubItem value="..."` for the children.
-- Leave categories uncontrolled with `defaultOpenCategories={["work"]}`, or control them with `openCategories` + `onNavCategoryItemToggle` when you need to persist open state (example 1 does this).
-- `multiple` keeps more than one category open at a time.
-- `density` (`small` | `medium` | `large`) changes row height — use `small` in a dense desktop rail and `medium` in a touch drawer.
-- `NavSectionHeader` and `NavDivider` group the list without adding non-interactive noise to the tab order.
+Keep the model in one place so JSX and state never disagree:
 
-Keep selection in **one** place, ideally derived from the router location, so the rail, breadcrumb, and tabs can never disagree.
+```tsx
+type Destination = { value: string; label: string; href: string };
 
-## 2. Header: brand, search, actions, account
+type NavEntry =
+  | { kind: "item"; value: string; label: string; href: string }
+  | { kind: "category"; value: string; label: string; subItems: Destination[] };
+```
 
-The header is a single flex row: brand `Text`, an `Input` (`type="search"`, `contentBefore` for the magnifier), then icon-only `Button`s and the account `Menu`.
+You can hand-author the JSX (as the examples do) or loop over `NavEntry[]`, emitting `NavItem` for `kind: "item"` and `NavCategory` → `NavCategoryItem` → `NavSubItemGroup` → `NavSubItem` for `kind: "category"`. Values must be unique across the whole rail.
 
-- Icon-only buttons **must** have an accessible name. The cleanest way is `Tooltip` with `relationship="label"`, which labels the button through the tooltip content — do not also add `aria-label`, or assistive technology reads both.
-- The account trigger is a `MenuTrigger` (`disableButtonEnhancement` when the child is already a `Button`) whose child `Button` renders an `Avatar` in its `icon` slot and carries an `aria-label` describing the account.
-- Inside, use `MenuPopover` > `MenuList` > `MenuItem`, with `MenuDivider` to separate destructive actions such as sign out.
-- Put a skip `Link` at the very start of the header so keyboard users can jump past the navigation to `#main-content`.
+## 3. Choose controlled or uncontrolled selection
 
-## 3. Breadcrumbs
+`defaultSelectedValue` and `defaultOpenCategories` make the rail self-managing — perfect for prototypes. As soon as selection must drive a router, a page heading or a breadcrumb, lift the state:
 
-`Breadcrumb` renders a navigation landmark, so it needs its own `aria-label` (for example "Breadcrumb") and a `size` that matches your header typography. Mark the final crumb with `current` on `BreadcrumbButton` so it becomes `aria-current="page"` — screen reader users rely on that to know where they are. `focusMode="arrow"` lets users walk the trail with the arrow keys instead of tabbing through every crumb.
+```tsx
+const [selectedValue, setSelectedValue] = React.useState("home");
+const [openCategories, setOpenCategories] = React.useState<string[]>(["reports"]);
 
-If the trail can be longer than the available width, collapse middle segments into a `Menu` triggered from a `BreadcrumbButton` that reads "..." and keep first/last crumbs visible.
+<NavDrawer
+  open
+  type="inline"
+  selectedValue={selectedValue}
+  openCategories={openCategories}
+  onNavItemSelect={(_event, data) => setSelectedValue(String(data.value))}
+  onNavCategoryItemToggle={(_event, data) => {
+    const value = String(data.value);
+    setOpenCategories((current) =>
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value],
+    );
+  }}
+>
+```
 
-## 4. Secondary navigation with `TabList`
+Never pass a `default*` prop and its controlled counterpart at the same time.
 
-When several peer views belong to the current page (Overview / Activity / Members / Settings), use `TabList` + `Tab` rather than another `Nav`. `TabList` implements roving tabindex and arrow-key navigation for you; you supply `selectedValue` and `onTabSelect`. Pair each `Tab` with a panel element that has `role="tabpanel"` so the relationship is announced.
+## 4. Build categories and sub items
 
-## 5. Responsive: move the rail into a `Drawer`
+```tsx
+<NavCategory value="reports">
+  <NavCategoryItem icon={<ReportsIcon />}>Reports</NavCategoryItem>
+  <NavSubItemGroup>
+    <NavSubItem value="reports-usage" href="/reports/usage">Usage</NavSubItem>
+    <NavSubItem value="reports-billing" href="/reports/billing">Billing</NavSubItem>
+  </NavSubItemGroup>
+</NavCategory>
+```
 
-Below your breakpoint, render the same `Nav` inside a `Drawer` with `type="overlay"`, controlled by `open` / `onOpenChange`, and a trigger button in the header. Add a close `Button` inside the drawer, and close the drawer when a destination is picked (call your selection handler and `setOpen(false)` in the same callback).
+Notes:
 
-For a viewport-aware shell, track the breakpoint yourself (`window.matchMedia` in a `useEffect`) and switch the drawer `type` between `overlay` for small screens and `inline` for large ones, instead of rendering two copies of the navigation. Never mount the same landmark twice — duplicate nav landmarks confuse screen reader users and duplicate ids break `aria-controls`.
+- `NavCategoryItem` reads its identity from the enclosing `NavCategory`; the value that `onNavCategoryItemToggle` reports is the **category's** `value`.
+- Sub items must live inside a `NavSubItemGroup` inside the category; they inherit the category context and disappear when it collapses.
+- Add `multiple` to the drawer when several categories may be expanded at the same time; omit it for an accordion-style rail.
 
-## 6. Wiring to a router
+## 5. Branding, sections and dividers
 
-Represent every destination as a stable string id ("work-assigned", "releases-current") that maps to a route. Derive `selectedValue` from `location.pathname` when possible; if you keep local state, keep it in one component and pass it down. For real navigations pass `href` on `NavItem`/`BreadcrumbButton`; for client-side routers attach an `onClick` that routes programmatically and, for `href` anchors, prevents the default full-page reload.
+Use `AppItem` for the application root (it renders an anchor when `href` is provided) and `AppItemStatic` when the brand area must not be a link (for example when a Hamburger sits next to it). Group long rails with `NavSectionHeader` and separate logical blocks with `NavDivider`:
+
+```tsx
+<AppItem href="/" icon={<LogoIcon />}>Contoso Ops</AppItem>
+<NavItem value="home" href="/home" icon={<HomeIcon />}>Home</NavItem>
+<NavSectionHeader>Analytics</NavSectionHeader>
+{/* categories ... */}
+<NavDivider />
+<NavItem value="settings" href="/settings" icon={<SettingsIcon />}>Settings</NavItem>
+```
+
+## 6. Put account actions in the footer
+
+`NavDrawerFooter` is a real footer region — the natural home for the signed-in user and global actions. A `Menu` keeps the rail compact while exposing account settings and sign out:
+
+```tsx
+<NavDrawerFooter>
+  <Menu>
+    <MenuTrigger disableButtonEnhancement>
+      <Button
+        appearance="subtle"
+        icon={<Avatar name="Ada Lovelace" size={24} />}
+        style={{ width: "100%", justifyContent: "flex-start" }}
+      >
+        Ada Lovelace
+      </Button>
+    </MenuTrigger>
+    <MenuPopover>
+      <MenuList>
+        <MenuItem>Account settings</MenuItem>
+        <MenuDivider />
+        <MenuItem>Sign out</MenuItem>
+      </MenuList>
+    </MenuPopover>
+  </Menu>
+</NavDrawerFooter>
+```
+
+## 7. Responsive overlay navigation
+
+On narrow viewports the same rail becomes an overlay that is opened by a `Hamburger` and closes itself as soon as the user picks a destination. Because `open` is controlled, the `onNavItemSelect` handler is the single place that both records the selection and dismisses the drawer:
+
+```tsx
+const [isNavOpen, setIsNavOpen] = React.useState(false);
+
+<Tooltip content="Open navigation" relationship="label">
+  <Hamburger onClick={() => setIsNavOpen(true)} />
+</Tooltip>
+
+<NavDrawer
+  type="overlay"
+  open={isNavOpen}
+  selectedValue={selectedValue}
+  onNavItemSelect={(_event, data) => {
+    setSelectedValue(String(data.value));
+    setIsNavOpen(false);
+  }}
+>
+  ...
+</NavDrawer>
+```
+
+Always pair the overlay with a visible close affordance in `NavDrawerHeader` so users are never trapped with a controlled `open`.
+
+## 8. Mirror the location with Breadcrumb
+
+Breadcrumbs complete the picture for pages deep in a hierarchy. Render them next to the content, label the region, and mark the last crumb with `current` (it is then exposed as the current page and should not be a link):
+
+```tsx
+<Breadcrumb aria-label="Breadcrumb">
+  <BreadcrumbItem>
+    <BreadcrumbButton>Home</BreadcrumbButton>
+  </BreadcrumbItem>
+  <BreadcrumbDivider />
+  <BreadcrumbItem>
+    <BreadcrumbButton current>{currentPage}</BreadcrumbButton>
+  </BreadcrumbItem>
+</Breadcrumb>
+```
+
+Drive `currentPage` from the same `selectedValue` used by the rail so the two can never drift apart. Use `focusMode="tab"` on `Breadcrumb` when the trail is long and you want Tab (instead of arrow keys) to move between crumbs.
+
+## 9. Menu-bar variant
+
+For command-style apps, a `Menu` bar with nested `Menu` for submenus replaces the rail. Nest the child `Menu` **inside** `MenuList` and give the parent `MenuItem` `hasSubmenu`:
+
+```tsx
+<Menu>
+  <MenuTrigger disableButtonEnhancement>
+    <Button appearance="subtle">File</Button>
+  </MenuTrigger>
+  <MenuPopover>
+    <MenuList>
+      <MenuItem onClick={() => setPage("Untitled document")}>New document</MenuItem>
+      <Menu>
+        <MenuTrigger disableButtonEnhancement>
+          <MenuItem hasSubmenu>Open recent</MenuItem>
+        </MenuTrigger>
+        <MenuPopover>
+          <MenuList>
+            <MenuItem onClick={() => setPage("quarterly-report.docx")}>quarterly-report.docx</MenuItem>
+          </MenuList>
+        </MenuPopover>
+      </Menu>
+      <MenuDivider />
+      <MenuItem>Sign out</MenuItem>
+    </MenuList>
+  </MenuPopover>
+</Menu>
+```
+
+## Layout notes
+
+- Put the rail and the content area in a flex row and give the content `flex: 1; minWidth: 0` so wide tables and long titles can shrink instead of pushing the rail off screen.
+- The inline drawer draws its own surface and border; keep page padding on the content element, not on the drawer.
+- Icons render at 20px inside nav items; use a single small icon component per destination and mark decorative graphics `aria-hidden` / `focusable="false"`.
+- Keep the rail footer to one or two rows — anything more belongs in a page-level settings surface.
+
+## Accessibility checkpoints
+
+- Label every navigation landmark; `Breadcrumb` accepts `aria-label`, and the rail needs a recognizable title (the visible text in `NavDrawerHeader` serves this purpose).
+- Selection state and the `current` breadcrumb must match the rendered route so assistive technology announces the page the user is actually on.
 
 ## Examples
 
-### AppSidebarNav — primary navigation with nested categories
+### App shell with an inline navigation drawer
 
-A controlled Nav rail with flat items, a section header, two collapsible categories with sub-items (open state controlled through onNavCategoryItemToggle), dividers, small density, and a content pane that reflects the selected value.
+Desktop-first shell: a persistent NavDrawer rail with app branding (AppItem), flat destinations, a section header, two expandable categories with sub items, a divider, an account Menu in the footer, and a Breadcrumb that mirrors the controlled selectedValue.
 
 ```tsx
 import * as React from "react";
-import { Nav, NavCategory, NavCategoryItem, NavDivider, NavItem, NavSectionHeader, NavSubItem, NavSubItemGroup, Text, makeStyles, tokens } from "@fluentui/react-components";
+import {
+  AppItem,
+  Avatar,
+  Breadcrumb,
+  BreadcrumbButton,
+  BreadcrumbDivider,
+  BreadcrumbItem,
+  Button,
+  FluentProvider,
+  Menu,
+  MenuDivider,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+  NavCategory,
+  NavCategoryItem,
+  NavDivider,
+  NavDrawer,
+  NavDrawerBody,
+  NavDrawerFooter,
+  NavDrawerHeader,
+  NavItem,
+  NavSectionHeader,
+  NavSubItem,
+  NavSubItemGroup,
+  Text,
+} from "@fluentui/react-components";
 
-/* --- Decorative inline icons (swap for @fluentui/react-icons in your app) --- */
-const DashboardIcon = () => (
-  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
-    <rect x="2.5" y="2.5" width="6" height="6" rx="1.5" fill="currentColor" />
-    <rect x="11.5" y="2.5" width="6" height="6" rx="1.5" fill="currentColor" />
-    <rect x="2.5" y="11.5" width="6" height="6" rx="1.5" fill="currentColor" />
-    <rect x="11.5" y="11.5" width="6" height="6" rx="1.5" fill="currentColor" />
+/* Decorative inline icons keep this example dependency-free.
+   Replace them with @fluentui/react-icons in a real app. */
+const iconProps = {
+  width: 20,
+  height: 20,
+  viewBox: "0 0 20 20",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.5,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  "aria-hidden": "true",
+  focusable: "false",
+} as const;
+
+const LogoIcon = () => (
+  <svg {...iconProps}>
+    <rect x="2.5" y="2.5" width="15" height="15" rx="4" />
   </svg>
 );
 
-const ActivityIcon = () => (
-  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
-    <path d="M2.5 10.5h4l2-6 3 11 2-5h4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+const HomeIcon = () => (
+  <svg {...iconProps}>
+    <path d="M3 9 10 3l7 6v8H3V9Z" />
   </svg>
 );
 
-const FolderIcon = () => (
-  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
-    <path
-      d="M2.5 5.5a2 2 0 0 1 2-2h2.3c.42 0 .82.18 1.1.5l.94.94h6.16a2 2 0 0 1 2 2v7.56a2 2 0 0 1-2 2H4.5a2 2 0 0 1-2-2z"
-      fill="currentColor"
-    />
+const TeamIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="8" cy="7" r="3" />
+    <path d="M2.5 17c0-2.5 2.5-4 5.5-4s5.5 1.5 5.5 4" />
+  </svg>
+);
+
+const ReportsIcon = () => (
+  <svg {...iconProps}>
+    <path d="M4 17V9M10 17V4M16 17v-5" />
+  </svg>
+);
+
+const InboxIcon = () => (
+  <svg {...iconProps}>
+    <path d="M3 4h14v12H3V4Z" />
+    <path d="M3 11h4l1 2h4l1-2h4" />
   </svg>
 );
 
 const SettingsIcon = () => (
-  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
-    <circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    <circle cx="10" cy="10" r="2.25" fill="currentColor" />
+  <svg {...iconProps}>
+    <circle cx="10" cy="10" r="3" />
+    <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.9 4.9l1.4 1.4M13.7 13.7l1.4 1.4M15.1 4.9l-1.4 1.4M6.3 13.7l-1.4 1.4" />
   </svg>
 );
 
-const useStyles = makeStyles({
-  root: {
-    display: "flex",
-    height: "520px",
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: tokens.borderRadiusMedium,
-    overflow: "hidden",
-  },
-  nav: {
-    width: "260px",
-    padding: tokens.spacingVerticalS,
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
-  },
-  page: {
-    flexGrow: 1,
-    padding: tokens.spacingHorizontalXL,
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
-  heading: {
-    margin: 0,
-  },
-});
-
-/** Route ids used both by the nav and by your router. */
-const pageTitles: Record<string, string> = {
-  dashboard: "Dashboard",
-  activity: "Activity",
-  "work-assigned": "Work items · Assigned to me",
-  "work-recent": "Work items · Recently updated",
-  "work-backlog": "Work items · Backlog",
-  "releases-current": "Releases · Current",
-  "releases-archive": "Releases · Archive",
+const pages: Record<string, string> = {
+  home: "Home",
+  team: "Team",
+  "reports-usage": "Usage",
+  "reports-billing": "Billing",
+  "inbox-unread": "Unread",
+  "inbox-archived": "Archived",
   settings: "Settings",
 };
 
-export const AppSidebarNav = () => {
-  const styles = useStyles();
-  const [selectedValue, setSelectedValue] = React.useState<string>("dashboard");
-  const [openCategories, setOpenCategories] = React.useState<string[]>(["work"]);
+export const AppShell: React.FC = () => {
+  const [selectedValue, setSelectedValue] = React.useState("home");
+  const [openCategories, setOpenCategories] = React.useState<string[]>(["reports"]);
+
+  const currentPage = pages[selectedValue] ?? "Home";
 
   return (
-    <div className={styles.root}>
-      <Nav
-        className={styles.nav}
-        aria-label="Main navigation"
-        selectedValue={selectedValue}
-        onNavItemSelect={(_ev, data) => setSelectedValue(data.value)}
-        openCategories={openCategories}
-        onNavCategoryItemToggle={(_ev, data) =>
-          setOpenCategories((current) =>
-            current.includes(data.value)
-              ? current.filter((value) => value !== data.value)
-              : [...current, data.value],
-          )
-        }
-        multiple
-        density="small"
-      >
-        <NavItem value="dashboard" icon={<DashboardIcon />}>
-          Dashboard
-        </NavItem>
-        <NavItem value="activity" icon={<ActivityIcon />}>
-          Activity
-        </NavItem>
+    <FluentProvider>
+      <div style={{ display: "flex", minHeight: "100vh" }}>
+        <NavDrawer
+          open
+          type="inline"
+          separator
+          selectedValue={selectedValue}
+          openCategories={openCategories}
+          onNavItemSelect={(_event, data) => setSelectedValue(String(data.value))}
+          onNavCategoryItemToggle={(_event, data) => {
+            const value = String(data.value);
+            setOpenCategories((current) =>
+              current.includes(value)
+                ? current.filter((item) => item !== value)
+                : [...current, value],
+            );
+          }}
+        >
+          <NavDrawerHeader>
+            <Text weight="semibold">Contoso Ops</Text>
+          </NavDrawerHeader>
 
-        <NavDivider />
+          <NavDrawerBody>
+            <AppItem href="/" icon={<LogoIcon />}>
+              Contoso Ops
+            </AppItem>
 
-        <NavSectionHeader>Work</NavSectionHeader>
-        <NavCategory value="work">
-          <NavCategoryItem icon={<FolderIcon />}>Work items</NavCategoryItem>
-          <NavSubItemGroup>
-            <NavSubItem value="work-assigned">Assigned to me</NavSubItem>
-            <NavSubItem value="work-recent">Recently updated</NavSubItem>
-            <NavSubItem value="work-backlog">Backlog</NavSubItem>
-          </NavSubItemGroup>
-        </NavCategory>
-        <NavCategory value="releases">
-          <NavCategoryItem icon={<FolderIcon />}>Releases</NavCategoryItem>
-          <NavSubItemGroup>
-            <NavSubItem value="releases-current">Current</NavSubItem>
-            <NavSubItem value="releases-archive">Archive</NavSubItem>
-          </NavSubItemGroup>
-        </NavCategory>
+            <NavItem value="home" href="/home" icon={<HomeIcon />}>
+              Home
+            </NavItem>
+            <NavItem value="team" href="/team" icon={<TeamIcon />}>
+              Team
+            </NavItem>
 
-        <NavDivider />
+            <NavSectionHeader>Analytics</NavSectionHeader>
 
-        <NavItem value="settings" icon={<SettingsIcon />}>
-          Settings
-        </NavItem>
-      </Nav>
+            <NavCategory value="reports">
+              <NavCategoryItem icon={<ReportsIcon />}>Reports</NavCategoryItem>
+              <NavSubItemGroup>
+                <NavSubItem value="reports-usage" href="/reports/usage">
+                  Usage
+                </NavSubItem>
+                <NavSubItem value="reports-billing" href="/reports/billing">
+                  Billing
+                </NavSubItem>
+              </NavSubItemGroup>
+            </NavCategory>
 
-      <main id="main-content" className={styles.page}>
-        <h1 className={styles.heading}>
-          <Text size={600} weight="semibold">
-            {pageTitles[selectedValue] ?? selectedValue}
+            <NavCategory value="inbox">
+              <NavCategoryItem icon={<InboxIcon />}>Inbox</NavCategoryItem>
+              <NavSubItemGroup>
+                <NavSubItem value="inbox-unread" href="/inbox/unread">
+                  Unread
+                </NavSubItem>
+                <NavSubItem value="inbox-archived" href="/inbox/archived">
+                  Archived
+                </NavSubItem>
+              </NavSubItemGroup>
+            </NavCategory>
+
+            <NavDivider />
+
+            <NavItem value="settings" href="/settings" icon={<SettingsIcon />}>
+              Settings
+            </NavItem>
+          </NavDrawerBody>
+
+          <NavDrawerFooter>
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>
+                <Button
+                  appearance="subtle"
+                  icon={<Avatar name="Ada Lovelace" size={24} />}
+                  style={{ width: "100%", justifyContent: "flex-start" }}
+                >
+                  Ada Lovelace
+                </Button>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  <MenuItem>Account settings</MenuItem>
+                  <MenuItem>Preferences</MenuItem>
+                  <MenuDivider />
+                  <MenuItem>Sign out</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+          </NavDrawerFooter>
+        </NavDrawer>
+
+        <main style={{ flex: 1, minWidth: 0, padding: 24 }}>
+          <Breadcrumb aria-label="Breadcrumb">
+            <BreadcrumbItem>
+              <BreadcrumbButton>Home</BreadcrumbButton>
+            </BreadcrumbItem>
+            <BreadcrumbDivider />
+            <BreadcrumbItem>
+              <BreadcrumbButton current>{currentPage}</BreadcrumbButton>
+            </BreadcrumbItem>
+          </Breadcrumb>
+
+          <h1 style={{ margin: "16px 0 8px", fontSize: 28 }}>{currentPage}</h1>
+          <Text block>
+            Selecting an entry in the rail updates <code>selectedValue</code>, which drives both
+            the highlighted navigation entry and the breadcrumb on this page.
           </Text>
-        </h1>
-      </main>
-    </div>
+        </main>
+      </div>
+    </FluentProvider>
   );
 };
 ```
 
-### AppHeaderWithAccountMenu — brand, search, actions, breadcrumb
+### Responsive overlay navigation for narrow screens
 
-A top header that composes Text (brand), a search Input with a contentBefore icon, icon-only Buttons labelled by Tooltip with relationship="label", an account Menu whose trigger is an Avatar, and a Breadcrumb bar underneath the header.
+Mobile pattern: a compact app bar with a Hamburger (labelled via Tooltip) opens an overlay NavDrawer that closes automatically after a selection, plus an explicit close button and a static AppItemStatic brand header.
 
 ```tsx
 import * as React from "react";
-import { Avatar, Breadcrumb, BreadcrumbButton, BreadcrumbDivider, BreadcrumbItem, Button, Input, Menu, MenuDivider, MenuItem, MenuList, MenuPopover, MenuTrigger, Text, Tooltip, makeStyles, tokens } from "@fluentui/react-components";
+import {
+  AppItemStatic,
+  Avatar,
+  Button,
+  FluentProvider,
+  Hamburger,
+  NavDivider,
+  NavDrawer,
+  NavDrawerBody,
+  NavDrawerFooter,
+  NavDrawerHeader,
+  NavItem,
+  Text,
+  Tooltip,
+} from "@fluentui/react-components";
 
-const SearchIcon = () => (
-  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
-    <circle cx="8.5" cy="8.5" r="4.75" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    <path d="M12.2 12.2 17 17" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+const iconProps = {
+  width: 20,
+  height: 20,
+  viewBox: "0 0 20 20",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.5,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  "aria-hidden": "true",
+  focusable: "false",
+} as const;
+
+const LogoIcon = () => (
+  <svg {...iconProps}>
+    <rect x="2.5" y="2.5" width="15" height="15" rx="4" />
   </svg>
 );
 
-const BellIcon = () => (
-  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
-    <path
-      d="M10 2.5a1 1 0 0 1 1 1v.6a5 5 0 0 1 4 4.9v3.1l1.2 1.7a.8.8 0 0 1-.65 1.2H4.45a.8.8 0 0 1-.65-1.2L5 12.1V9a5 5 0 0 1 4-4.9v-.6a1 1 0 0 1 1-1Z"
-      fill="currentColor"
-    />
+const DismissIcon = () => (
+  <svg {...iconProps}>
+    <path d="M5 5l10 10M15 5 5 15" />
   </svg>
 );
 
-const SettingsIcon = () => (
-  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
-    <circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    <circle cx="10" cy="10" r="2.25" fill="currentColor" />
+const InboxIcon = () => (
+  <svg {...iconProps}>
+    <path d="M3 4h14v12H3V4Z" />
+    <path d="M3 11h4l1 2h4l1-2h4" />
   </svg>
 );
 
-const useStyles = makeStyles({
-  shell: {
-    display: "flex",
-    flexDirection: "column",
-    minHeight: "340px",
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: tokens.borderRadiusMedium,
-    overflow: "hidden",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    columnGap: tokens.spacingHorizontalM,
-    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
-  brand: {
-    color: tokens.colorBrandForeground1,
-  },
-  search: {
-    flexGrow: 1,
-    maxWidth: "420px",
-    marginLeft: "auto",
-  },
-  breadcrumbBar: {
-    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
-    backgroundColor: tokens.colorNeutralBackground2,
-  },
-  content: {
-    flexGrow: 1,
-    padding: tokens.spacingHorizontalXL,
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
-});
+const DraftsIcon = () => (
+  <svg {...iconProps}>
+    <path d="M4 3h8l4 4v10H4V3Z" />
+    <path d="M12 3v4h4" />
+  </svg>
+);
 
-export const AppHeaderWithAccountMenu = () => {
-  const styles = useStyles();
-  const [query, setQuery] = React.useState("");
+const SentIcon = () => (
+  <svg {...iconProps}>
+    <path d="M2.5 10 17.5 3l-4 14-3.5-5.5L2.5 10Z" />
+  </svg>
+);
+
+const ArchiveIcon = () => (
+  <svg {...iconProps}>
+    <path d="M3 4h14v4H3V4Z" />
+    <path d="M4.5 8v8h11V8" />
+    <path d="M8 11h4" />
+  </svg>
+);
+
+const folderPages: Record<string, string> = {
+  inbox: "Inbox",
+  drafts: "Drafts",
+  sent: "Sent items",
+  archive: "Archive",
+};
+
+export const NarrowScreenNavigation: React.FC = () => {
+  const [isNavOpen, setIsNavOpen] = React.useState(false);
+  const [selectedValue, setSelectedValue] = React.useState("inbox");
+
+  const closeNavigation = React.useCallback(() => setIsNavOpen(false), []);
+  const currentFolder = folderPages[selectedValue] ?? "Inbox";
 
   return (
-    <div className={styles.shell}>
-      <header className={styles.header}>
-        <Text className={styles.brand} size={400} weight="semibold">
-          Contoso Ops
+    <FluentProvider>
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "8px 16px",
+          borderBottom: "1px solid #e0e0e0",
+        }}
+      >
+        <Tooltip content="Open navigation" relationship="label">
+          <Hamburger onClick={() => setIsNavOpen(true)} />
+        </Tooltip>
+
+        <Text weight="semibold">Contoso Mail</Text>
+
+        <div style={{ marginInlineStart: "auto" }}>
+          <Tooltip content="Account" relationship="label">
+            <Button
+              appearance="transparent"
+              shape="circular"
+              icon={<Avatar name="Ada Lovelace" size={28} />}
+            />
+          </Tooltip>
+        </div>
+      </header>
+
+      <NavDrawer
+        type="overlay"
+        open={isNavOpen}
+        selectedValue={selectedValue}
+        onNavItemSelect={(_event, data) => {
+          setSelectedValue(String(data.value));
+          closeNavigation();
+        }}
+      >
+        <NavDrawerHeader
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+          }}
+        >
+          <AppItemStatic icon={<LogoIcon />}>Contoso Mail</AppItemStatic>
+          <Tooltip content="Close navigation" relationship="label">
+            <Button appearance="subtle" icon={<DismissIcon />} onClick={closeNavigation} />
+          </Tooltip>
+        </NavDrawerHeader>
+
+        <NavDrawerBody>
+          <NavItem value="inbox" icon={<InboxIcon />}>
+            Inbox
+          </NavItem>
+          <NavItem value="drafts" icon={<DraftsIcon />}>
+            Drafts
+          </NavItem>
+          <NavItem value="sent" icon={<SentIcon />}>
+            Sent items
+          </NavItem>
+          <NavDivider />
+          <NavItem value="archive" icon={<ArchiveIcon />}>
+            Archive
+          </NavItem>
+        </NavDrawerBody>
+
+        <NavDrawerFooter>
+          <Text size={200}>Signed in as ada@contoso.com</Text>
+        </NavDrawerFooter>
+      </NavDrawer>
+
+      <main style={{ padding: 24 }}>
+        <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>{currentFolder}</h1>
+        <Text block>
+          The drawer closes automatically after a selection because the controlled <code>open</code>{" "}
+          state is updated inside the <code>onNavItemSelect</code> handler.
         </Text>
+      </main>
+    </FluentProvider>
+  );
+};
+```
 
-        <Input
-          className={styles.search}
-          type="search"
-          aria-label="Search projects, people, and work items"
-          placeholder="Search projects, people, and work items"
-          contentBefore={<SearchIcon />}
-          onChange={(_ev, data) => setQuery(data.value)}
-        />
+### Menu-bar navigation with nested submenus and breadcrumbs
 
-        <Tooltip content="Notifications" relationship="label">
-          <Button appearance="subtle" icon={<BellIcon />} />
-        </Tooltip>
+Command-style, document-centric navigation: a top Menu bar built from Menu, MenuTrigger, MenuPopover, MenuList and MenuItem, including a nested Menu exposed through a MenuItem with hasSubmenu, plus a Breadcrumb that shows the active page.
 
-        <Tooltip content="Settings" relationship="label">
-          <Button appearance="subtle" icon={<SettingsIcon />} />
-        </Tooltip>
+```tsx
+import * as React from "react";
+import {
+  Breadcrumb,
+  BreadcrumbButton,
+  BreadcrumbDivider,
+  BreadcrumbItem,
+  Button,
+  FluentProvider,
+  Menu,
+  MenuDivider,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+  Text,
+} from "@fluentui/react-components";
+
+export const MenuBarNavigation: React.FC = () => {
+  const [page, setPage] = React.useState("Dashboard");
+
+  return (
+    <FluentProvider>
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          padding: "8px 16px",
+          borderBottom: "1px solid #e0e0e0",
+        }}
+      >
+        <Text weight="semibold" style={{ marginRight: 16 }}>
+          Contoso Studio
+        </Text>
 
         <Menu>
           <MenuTrigger disableButtonEnhancement>
-            <Button
-              appearance="subtle"
-              aria-label="Account: Adele Vance"
-              icon={<Avatar name="Adele Vance" badge={{ status: "available" }} size={28} />}
-            />
+            <Button appearance="subtle">File</Button>
           </MenuTrigger>
           <MenuPopover>
             <MenuList>
-              <MenuItem>View profile</MenuItem>
-              <MenuItem>Preferences</MenuItem>
+              <MenuItem onClick={() => setPage("Untitled document")}>New document</MenuItem>
+              <Menu>
+                <MenuTrigger disableButtonEnhancement>
+                  <MenuItem hasSubmenu>Open recent</MenuItem>
+                </MenuTrigger>
+                <MenuPopover>
+                  <MenuList>
+                    <MenuItem onClick={() => setPage("quarterly-report.docx")}>
+                      quarterly-report.docx
+                    </MenuItem>
+                    <MenuItem onClick={() => setPage("roadmap.pptx")}>roadmap.pptx</MenuItem>
+                  </MenuList>
+                </MenuPopover>
+              </Menu>
               <MenuDivider />
               <MenuItem>Sign out</MenuItem>
             </MenuList>
           </MenuPopover>
         </Menu>
+
+        <Menu>
+          <MenuTrigger disableButtonEnhancement>
+            <Button appearance="subtle">View</Button>
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              <MenuItem onClick={() => setPage("Dashboard")}>Dashboard</MenuItem>
+              <MenuItem onClick={() => setPage("Reports")}>Reports</MenuItem>
+              <MenuItem onClick={() => setPage("Settings")}>Settings</MenuItem>
+            </MenuList>
+          </MenuPopover>
+        </Menu>
       </header>
 
-      <div className={styles.breadcrumbBar}>
-        <Breadcrumb aria-label="Breadcrumb" size="small" focusMode="arrow">
+      <div style={{ padding: "12px 16px" }}>
+        <Breadcrumb aria-label="Breadcrumb">
           <BreadcrumbItem>
             <BreadcrumbButton>Home</BreadcrumbButton>
           </BreadcrumbItem>
           <BreadcrumbDivider />
           <BreadcrumbItem>
-            <BreadcrumbButton>Contoso Ops</BreadcrumbButton>
-          </BreadcrumbItem>
-          <BreadcrumbDivider />
-          <BreadcrumbItem>
-            <BreadcrumbButton current>Dashboard</BreadcrumbButton>
+            <BreadcrumbButton current>{page}</BreadcrumbButton>
           </BreadcrumbItem>
         </Breadcrumb>
       </div>
 
-      <main id="main-content" className={styles.content}>
-        <Text size={300}>
-          {query
-            ? `Filtering the current view for "${query}".`
-            : "Type in the header search box to filter the current view."}
-        </Text>
+      <main style={{ padding: 24 }}>
+        <h1 style={{ margin: 0, fontSize: 24 }}>{page}</h1>
       </main>
-    </div>
-  );
-};
-```
-
-### ResponsiveNavDrawer — the same Nav inside a Drawer
-
-A narrow-viewport pattern: a hamburger Button opens a Drawer (type="overlay") that hosts the primary Nav, a Persona header, a close button, and footer Links. Selecting a destination closes the drawer.
-
-```tsx
-import * as React from "react";
-import { Button, Divider, Drawer, Link, Nav, NavCategory, NavCategoryItem, NavItem, NavSectionHeader, NavSubItem, NavSubItemGroup, Persona, Text, Tooltip, makeStyles, tokens } from "@fluentui/react-components";
-
-const MenuIcon = () => (
-  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
-    <path d="M3 5.5h14M3 10h14M3 14.5h14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-  </svg>
-);
-
-const DismissIcon = () => (
-  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
-    <path d="M5 5l10 10M15 5 5 15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-  </svg>
-);
-
-const HomeIcon = () => (
-  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
-    <path d="M10 2.5 3 8.5V17h5v-4h4v4h5V8.5z" fill="currentColor" />
-  </svg>
-);
-
-const FolderIcon = () => (
-  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
-    <path
-      d="M2.5 5.5a2 2 0 0 1 2-2h2.3c.42 0 .82.18 1.1.5l.94.94h6.16a2 2 0 0 1 2 2v7.56a2 2 0 0 1-2 2H4.5a2 2 0 0 1-2-2z"
-      fill="currentColor"
-    />
-  </svg>
-);
-
-const SettingsIcon = () => (
-  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
-    <circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    <circle cx="10" cy="10" r="2.25" fill="currentColor" />
-  </svg>
-);
-
-const useStyles = makeStyles({
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    rowGap: tokens.spacingVerticalM,
-    minHeight: "320px",
-    padding: tokens.spacingHorizontalL,
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderRadius: tokens.borderRadiusMedium,
-  },
-  drawerSurface: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    width: "300px",
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
-  drawerHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    columnGap: tokens.spacingHorizontalS,
-    padding: tokens.spacingVerticalM,
-  },
-  nav: {
-    flexGrow: 1,
-    overflowY: "auto",
-    padding: tokens.spacingVerticalXS,
-  },
-  drawerFooter: {
-    display: "flex",
-    flexDirection: "column",
-    rowGap: tokens.spacingVerticalXS,
-    padding: tokens.spacingVerticalM,
-  },
-  content: {
-    flexGrow: 1,
-    padding: tokens.spacingHorizontalXL,
-    backgroundColor: tokens.colorNeutralBackground1,
-    borderRadius: tokens.borderRadiusMedium,
-  },
-});
-
-export const ResponsiveNavDrawer = () => {
-  const styles = useStyles();
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [selectedValue, setSelectedValue] = React.useState("home");
-
-  return (
-    <div className={styles.root}>
-      <Tooltip content="Open navigation" relationship="label">
-        <Button appearance="subtle" icon={<MenuIcon />} onClick={() => setIsOpen(true)} />
-      </Tooltip>
-
-      <Drawer
-        type="overlay"
-        separator
-        open={isOpen}
-        onOpenChange={(_ev, data) => setIsOpen(data.open)}
-      >
-        <div className={styles.drawerSurface}>
-          <div className={styles.drawerHeader}>
-            <Persona name="Adele Vance" secondaryText="Engineering" />
-            <Tooltip content="Close navigation" relationship="label">
-              <Button appearance="subtle" icon={<DismissIcon />} onClick={() => setIsOpen(false)} />
-            </Tooltip>
-          </div>
-
-          <Divider />
-
-          <Nav
-            className={styles.nav}
-            aria-label="Main navigation"
-            selectedValue={selectedValue}
-            onNavItemSelect={(_ev, data) => {
-              setSelectedValue(data.value);
-              setIsOpen(false);
-            }}
-            defaultOpenCategories={["projects"]}
-            density="medium"
-          >
-            <NavItem value="home" icon={<HomeIcon />}>
-              Home
-            </NavItem>
-
-            <NavSectionHeader>Workspace</NavSectionHeader>
-            <NavCategory value="projects">
-              <NavCategoryItem icon={<FolderIcon />}>Projects</NavCategoryItem>
-              <NavSubItemGroup>
-                <NavSubItem value="projects-active">Active</NavSubItem>
-                <NavSubItem value="projects-archived">Archived</NavSubItem>
-              </NavSubItemGroup>
-            </NavCategory>
-
-            <NavItem value="settings" icon={<SettingsIcon />}>
-              Settings
-            </NavItem>
-          </Nav>
-
-          <Divider />
-
-          <div className={styles.drawerFooter}>
-            <Link href="https://example.com/docs">Documentation</Link>
-            <Link href="https://example.com/support">Contact support</Link>
-          </div>
-        </div>
-      </Drawer>
-
-      <main id="main-content" className={styles.content}>
-        <Text size={400} weight="semibold">
-          Current route: {selectedValue}
-        </Text>
-      </main>
-    </div>
-  );
-};
-```
-
-### SectionTabsNavigation — secondary navigation with TabList
-
-A controlled TabList for peer views of the current page, with a matching tabpanel region and a disabled destination rendered declaratively.
-
-```tsx
-import * as React from "react";
-import { Tab, TabList, Text, makeStyles, tokens } from "@fluentui/react-components";
-
-const useStyles = makeStyles({
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    rowGap: tokens.spacingVerticalM,
-    padding: tokens.spacingHorizontalL,
-  },
-  panel: {
-    padding: tokens.spacingHorizontalL,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground1,
-  },
-});
-
-const sections: Record<string, string> = {
-  overview: "Overview — health, recent activity, and open work items for this project.",
-  activity: "Activity — a chronological feed of changes made to this project.",
-  members: "Members — everyone with access, grouped by role.",
-  settings: "Settings are available to project owners only.",
-};
-
-export const SectionTabsNavigation = () => {
-  const styles = useStyles();
-  const [selectedTab, setSelectedTab] = React.useState<string>("overview");
-
-  return (
-    <div className={styles.root}>
-      <TabList
-        selectedValue={selectedTab}
-        onTabSelect={(_ev, data) => setSelectedTab(data.value as string)}
-        appearance="subtle"
-        size="medium"
-      >
-        <Tab value="overview">Overview</Tab>
-        <Tab value="activity">Activity</Tab>
-        <Tab value="members">Members</Tab>
-        <Tab value="settings" disabled>
-          Settings
-        </Tab>
-      </TabList>
-
-      <div
-        role="tabpanel"
-        aria-label={sections[selectedTab]}
-        className={styles.panel}
-      >
-        <Text size={300}>{sections[selectedTab]}</Text>
-      </div>
-    </div>
+    </FluentProvider>
   );
 };
 ```
 
 ## Pitfalls
 
-- Passing `selectedValue` to `Nav` or `TabList` without handling `onNavItemSelect` / `onTabSelect`: the component becomes read-only, clicks appear to do nothing, and the rendered selection stops matching the route. Always control the pair together (or use `defaultSelectedValue` fully uncontrolled).
-- Duplicating navigation state — one `useState` for the rail, another for the breadcrumb, another for tabs. Derive all of them from a single route id (or from the router location) so deep links highlight the right item and so `aria-current` never lies.
-- Putting an icon-only `Button` in the header without an accessible name, or supplying both a `Tooltip` with `relationship="label"` and an `aria-label`. Do exactly one of the two; the tooltip alone is the recommended pattern because it also gives a visual label.
-- Rendering the desktop rail and the mobile drawer navigation at the same time (for example hiding one with CSS). Users get duplicate navigation landmarks and duplicate ids. Switch the single instance between a persistent rail and an overlay drawer based on a breakpoint, or keep the drawer content mounted only on small screens.
-- Using `NavCategoryItem` as a link or expecting it to have a `value` — the value belongs to the enclosing `NavCategory`, and the item itself only toggles its `NavSubItemGroup`. Putting a value on the wrong level makes `selectedValue`/`openCategories` never match.
-- Using plain `<a href>` for in-app destinations and losing the SPA transition, or the reverse: styling buttons to look like links so users cannot open destinations in a new tab. Use `href` on `NavItem`/`BreadcrumbButton` for real URLs and intercept clicks only when you actually handle routing client-side.
-- Forgetting to close the navigation `Drawer` when a destination is picked. The route changes but the overlay stays open with focus trapped inside it, which strands keyboard and screen reader users; call `setOpen(false)` in the same select handler.
-- Relying on placeholder text as the only label for the header search `Input`. Placeholders disappear on input and are not reliable labels — provide an `aria-label` or a `Field` label, and keep `type="search"` for the correct semantics.
+- Mixing controlled and uncontrolled selection: passing `defaultSelectedValue` together with `selectedValue` (or `defaultOpenCategories` with `openCategories`) makes the default silently ignored. Use the `default*` props only for prototypes, and switch entirely to controlled props when selection must drive routing, the page heading, or the breadcrumb.
+- Missing or duplicated `value`s: `value` is the key that links a `NavItem`/`NavSubItem` to `selectedValue`, to the `onNavItemSelect` payload and to the open-category bookkeeping. Duplicate or missing values cause the wrong row to highlight or categories that refuse to collapse — keep the list of destinations in one typed array and derive both the JSX and the state from it.
+- Passing your own `value` to `NavCategoryItem`, or using `NavSubItem` outside a `NavSubItemGroup`: the category item inherits its identity from the enclosing `NavCategory` (whose `value` is what the toggle handler reports), and sub items only render inside a `NavSubItemGroup` within that category.
+- Rendering a second interactive element inside a nav entry: `NavItem`, `NavSubItem` and `AppItem` already render a button/anchor when `href` is set. Do not nest another `Button` or `Link` inside them for navigation; put actions in the footer, in a `Menu`, or in the page content instead.
+- Leaving the overlay drawer open after navigation: on narrow screens, close the drawer from `onNavItemSelect` (and provide an explicit close button in `NavDrawerHeader`). With a fully controlled `open` state there is no automatic dismissal, so users can end up staring at a drawer over the page they just opened.
+- Full-page reloads for client-side routes: `href` renders a plain anchor. Wire the value through your router (intercept the click, or render your router's link element inside the nav item) so the `selectedValue` state and the URL stay in sync without a document reload.
+- Icon-only triggers without accessible names: `Hamburger` and icon-only `Button`s in the drawer header are unlabelled by default. Wrap them in `<Tooltip relationship="label">` or add `aria-label`, and mark decorative SVGs with `aria-hidden="false"`-free semantics (`aria-hidden="true"` / `focusable="false"`).
+- Hard-coding text labels separate from `value`s: keeping a second `Record<value, label>` map that drifts from the JSX is a common source of mismatched breadcrumbs and headings. Derive labels from the same destination model that produces the nav items.
 
 ## Accessibility
 
-Landmarks and labels: `Nav` and `Breadcrumb` both render navigation landmarks, so every instance needs a unique, descriptive `aria-label` ("Main navigation", "Breadcrumb") — especially when a sidebar, a breadcrumb trail, and a tab list are on screen together. Wrap the main content in `<main id="main-content">` and put a "Skip to main content" `Link` as the first focusable element in the header so keyboard users can bypass the rail. Names for icon-only controls: use `Tooltip` with `relationship="label"` (or an explicit `aria-label` on the control) — never both, because the control would then be announced twice. Tooltips are shown on focus as well as hover, so they are keyboard-reachable. Nav semantics: `NavItem`, `NavCategoryItem`, and `NavSubItem` render real buttons or anchors and implement roving focus; keep `NavSectionHeader` and `NavDivider` for grouping only and never make them focusable. Because `Nav` is controlled, always update `selectedValue` in `onNavItemSelect`, otherwise the visual selection and the actual route diverge for assistive technology. Breadcrumbs: mark the last crumb with `current` on `BreadcrumbButton` so it exposes `aria-current="page"`; `focusMode="arrow"` keeps the trail to a single tab stop. Tabs: `TabList` handles arrow-key navigation and roving tabindex; give each panel `role="tabpanel"`, associate it with `aria-labelledby`/`aria-controls` when you control ids, and never put interactive content inside the `Tab` label itself. Drawer: it traps focus while open, closes on Escape, and returns focus to the trigger on close, so always keep a visible close `Button` inside it; when a navigation item is activated, close the drawer in the same callback so focus does not remain in hidden content. Finally, verify contrast for the selected nav item and tab indicator in both light and dark themes — do not rely on color alone to communicate selection; Fluent adds a shape indicator for both.
+Navigation landmarks: `NavDrawer` renders a navigation landmark and the breadcrumb is a second one, so make each region recognisable — give the breadcrumb an accessible name (`<Breadcrumb aria-label="Breadcrumb">`) and keep a visible title in `NavDrawerHeader` so the rail region is identifiable. Never nest a `Nav` inside a `NavDrawer`; add breadcrumbs, menus and toolbars as siblings instead. Selection vs. route: the state that highlights a `NavItem` / `NavSubItem` (`selectedValue`) and the crumb marked `current` must be derived from the same value, otherwise assistive technology announces a location that is not the page actually shown. The `current` crumb is exposed as the current page, so never make it a link. Icon-only controls: `Hamburger` and the drawer close button have no visible text, so label them with `<Tooltip content="…" relationship="label">` (or `aria-label`) so they announce a name. Decorative graphics: mark inline SVG icons `aria-hidden="true"` and `focusable="false"` so they are skipped by screen readers and cannot receive focus in older browsers. Keyboard behaviour: `Hamburger`, close and footer triggers are real buttons and therefore tabbable; the nav entries render anchors when `href` is provided, so Enter follows the link. Focus management on small screens: when the overlay drawer closes after a selection, move focus to the page heading (a focusable heading or a skip target) so keyboard and screen-reader users are not dropped back at the top of the document. Announcement of state: rely on the components' built-in ARIA reporting for expanded categories and the selected entry rather than adding your own `aria-selected`.
 
 ## Components used
 
+- [AppItem](../../components/app-item.md)
+- [AppItemStatic](../../components/app-item-static.md)
 - [Avatar](../../components/avatar.md)
 - [Breadcrumb](../../components/breadcrumb.md)
+- [BreadcrumbButton](../../components/breadcrumb-button.md)
+- [BreadcrumbDivider](../../components/breadcrumb-divider.md)
+- [BreadcrumbItem](../../components/breadcrumb-item.md)
 - [Button](../../components/button.md)
-- [Divider](../../components/divider.md)
-- [Drawer](../../components/drawer.md)
-- [Input](../../components/input.md)
-- [Link](../../components/link.md)
+- [FluentProvider](../../components/fluent-provider.md)
+- [Hamburger](../../components/hamburger.md)
 - [Menu](../../components/menu.md)
-- [Nav](../../components/nav.md)
-- [Persona](../../components/persona.md)
+- [MenuDivider](../../components/menu-divider.md)
+- [MenuItem](../../components/menu-item.md)
+- [MenuList](../../components/menu-list.md)
+- [MenuPopover](../../components/menu-popover.md)
+- [MenuTrigger](../../components/menu-trigger.md)
+- [NavCategory](../../components/nav-category.md)
+- [NavCategoryItem](../../components/nav-category-item.md)
+- [NavDivider](../../components/nav-divider.md)
+- [NavDrawer](../../components/nav-drawer.md)
+- [NavDrawerBody](../../components/nav-drawer-body.md)
+- [NavDrawerFooter](../../components/nav-drawer-footer.md)
+- [NavDrawerHeader](../../components/nav-drawer-header.md)
+- [NavItem](../../components/nav-item.md)
+- [NavSectionHeader](../../components/nav-section-header.md)
+- [NavSubItem](../../components/nav-sub-item.md)
+- [NavSubItemGroup](../../components/nav-sub-item-group.md)
 - [Text](../../components/text.md)
 - [Tooltip](../../components/tooltip.md)
 
