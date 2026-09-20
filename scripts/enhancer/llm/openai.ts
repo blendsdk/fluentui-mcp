@@ -15,7 +15,11 @@ import type {
   LLMChatOptions,
   ProviderConfig,
 } from './provider.js';
-import { LLMError, isRetryableStatus } from './provider.js';
+import {
+  LLMError,
+  isRetryableStatus,
+  readResponseBody,
+} from './provider.js';
 import {
   resolveMaxTokens,
   usesMaxCompletionTokens,
@@ -136,7 +140,7 @@ export class OpenAIProvider implements LLMProvider {
     }
 
     if (!response.ok) {
-      const detail = await safeReadText(response);
+      const detail = await readResponseBody(response);
       throw new LLMError(
         `OpenAI API error ${response.status}: ${detail}`,
         this.name,
@@ -161,14 +165,4 @@ export class OpenAIProvider implements LLMProvider {
   }
 }
 
-/**
- * Read a Response body as text without throwing.
- * Used to surface error details safely in LLMError messages.
- */
-async function safeReadText(response: Response): Promise<string> {
-  try {
-    return await response.text();
-  } catch {
-    return '<unreadable response body>';
-  }
-}
+

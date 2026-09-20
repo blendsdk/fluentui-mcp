@@ -305,6 +305,9 @@ export interface EnhancerCliOptions {
   /** Show diff without calling LLM */
   dryRun: boolean;
 
+  /** Skip the interactive cost-confirmation prompt */
+  yes?: boolean;
+
   /** Input schema path */
   input?: string;
 
@@ -348,6 +351,12 @@ export interface LLMResponse {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
+    /**
+     * Tokens spent on internal reasoning (thinking), when the provider
+     * reports them. Included in `completionTokens`; exposed separately so
+     * runs can report reasoning cost.
+     */
+    reasoningTokens?: number;
   };
 }
 
@@ -383,4 +392,38 @@ export interface LLMChatOptions {
 
   /** Response format hint */
   responseFormat?: 'text' | 'json';
+}
+
+// ============================================================================
+// DeepSeek Provider Types
+// ============================================================================
+
+/**
+ * Reasoning-effort levels accepted by the DeepSeek provider.
+ *
+ * DeepSeek runs in "thinking" mode; this value controls how much internal
+ * reasoning the model may spend before answering. `none` disables thinking,
+ * `max` allows the deepest reasoning.
+ */
+export type DeepSeekReasoningEffort = 'none' | 'low' | 'high' | 'max';
+
+/**
+ * Resolved configuration for the DeepSeek provider.
+ *
+ * Mirrors the environment contract: the API key comes from `DEEPSEEK_API_KEY`,
+ * the endpoint from `DEEPSEEK_BASE_URL`, the model from `DEEPSEEK_MODEL`, and
+ * the reasoning effort from `DEEPSEEK_REASONING_EFFORT`.
+ */
+export interface DeepSeekConfig {
+  /** DeepSeek API credential (`DEEPSEEK_API_KEY`); never logged or committed. */
+  apiKey: string;
+
+  /** OpenAI-compatible endpoint base URL (no trailing slash). */
+  baseUrl: string;
+
+  /** Model id to request. */
+  model: string;
+
+  /** Thinking-mode reasoning effort. */
+  reasoningEffort: DeepSeekReasoningEffort;
 }

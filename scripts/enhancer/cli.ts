@@ -20,6 +20,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 
 import type { FluentUISchema } from '../../src/types/schema.js';
 import { validateSchema } from '../../src/schema/schema-validator.js';
@@ -27,9 +28,28 @@ import type { EnhancerCliOptions } from './types.js';
 import { diffSchemas, formatDiffReport } from './diff.js';
 
 import { computeComponentHash, computeUtilityHash } from './hasher.js';
-import { resolveEnhancerConfig } from './config.js';
+import {
+  CATEGORY_GUIDES,
+  DEFAULT_DEEPSEEK_MODEL,
+  FOUNDATION_GUIDES,
+  QUICK_REFERENCE_GUIDES,
+  RECIPE_GUIDES,
+  resolveEnhancerConfig,
+} from './config.js';
 import { runEnhancement } from './enhancer.js';
 import { createProviderFromEnv } from './llm/index.js';
+import {
+  estimateEnhancementCost,
+  estimateTokens,
+  formatEnhancementCostReport,
+  type EnhancementCostEstimate,
+} from './cost-estimator.js';
+
+/**
+ * Rough input-token size of a guide-generation prompt (system + user).
+ * Used for the upfront cost estimate; the exact size varies per guide.
+ */
+const AVG_GUIDE_INPUT_TOKENS = 8_000;
 
 // ============================================================================
 // Argument Parsing
@@ -50,6 +70,7 @@ export function parseArgs(args: string[]): EnhancerCliOptions {
     componentsOnly: false,
     guidesOnly: false,
     dryRun: false,
+    yes: false,
     concurrency: 3,
     verbose: false,
   };
@@ -74,6 +95,9 @@ export function parseArgs(args: string[]): EnhancerCliOptions {
         break;
       case '--dry-run':
         options.dryRun = true;
+        break;
+      case '--yes':
+        options.yes = true;
         break;
       case '--input':
         options.input = next;
@@ -204,6 +228,93 @@ function buildPreviousHashIndex(
 }
 
 // ============================================================================
+// Cost Estimation & Confirmation
+// ============================================================================
+
+/**
+ * Estimate the paid-run cost for a set of options.
+ *
+ * Counts the calls that the run will make (components/utilities selected by
+ * the diff plus guide generation, narrowed by `--components-only` /
+ * `--guides-only`) and estimates input tokens from the serialized entries.
+ * No LLM calls are made.
+ *
+ * @param rawSchema - The freshly scraped raw schema
+ * @param previousSchema - The previous enhanced schema (null for first run)
+ * @param options - Parsed CLI options
+ * @returns A cost estimate for the planned run
+ */
+export function estimateRunCost(
+  rawSchema: FluentUISchema,
+  previousSchema: FluentUISchema | null,
+  options: EnhancerCliOptions,
+): EnhancementCostEstimate {
+  const model =
+    options.model ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_DEEPSEEK_MODEL;
+
+  const diff = options.full
+    ? null
+    : diffSchemas(rawSchema, previousSchema, buildPreviousHashIndex(previousSchema));
+
+  const components = options.full
+    ? rawSchema.components
+    : [...(diff?.newComponents ?? []), ...(diff?.changedComponents ?? [])];
+  const utilities = options.full
+    ? rawSchema.utilities
+    : [...(diff?.newUtilities ?? []), ...(diff?.changedUtilities ?? [])];
+
+  let callCount = 0;
+  let inputTokens = 0;
+
+  if (!options.guidesOnly) {
+    callCount += components.length + utilities.length;
+    for (const component of components) {
+      inputTokens += estimateTokens(JSON.stringify(component));
+    }
+    for (const utility of utilities) {
+      inputTokens += estimateTokens(JSON.stringify(utility));
+    }
+  }
+
+  if (!options.componentsOnly) {
+    const guideCount =
+      FOUNDATION_GUIDES.length +
+      QUICK_REFERENCE_GUIDES.length +
+      CATEGORY_GUIDES.length +
+      RECIPE_GUIDES.length;
+    callCount += guideCount;
+    inputTokens += guideCount * AVG_GUIDE_INPUT_TOKENS;
+  }
+
+  return estimateEnhancementCost({ model, callCount, inputTokens });
+}
+
+/**
+ * Ask the user to confirm a paid run.
+ *
+ * In a non-interactive session there is no way to prompt, so the run proceeds
+ * with a warning; callers can silence this by passing `--yes`.
+ *
+ * @returns True when the run should proceed
+ */
+async function confirmPaidRun(): Promise<boolean> {
+  if (!process.stdin.isTTY) {
+    console.error(
+      '[enhancer] non-interactive session — skipping confirmation (pass --yes to silence)',
+    );
+    return true;
+  }
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = await rl.question('Proceed with the paid LLM run? [y/N] ');
+    return /^y(es)?$/i.test(answer.trim());
+  } finally {
+    rl.close();
+  }
+}
+
+// ============================================================================
 // Pipeline Runner
 // ============================================================================
 
@@ -239,8 +350,10 @@ export async function runEnhancer(options: EnhancerCliOptions): Promise<void> {
   }
 
   // --------------------------------------------------------------------------
-  // Dry run: print the diff report and exit without calling the LLM.
+  // Dry run: print the diff and cost report, then exit without calling the LLM.
   // --------------------------------------------------------------------------
+  const estimate = estimateRunCost(rawSchema, previousSchema, options);
+
   if (options.dryRun) {
     const diff = diffSchemas(
       rawSchema,
@@ -248,8 +361,21 @@ export async function runEnhancer(options: EnhancerCliOptions): Promise<void> {
       buildPreviousHashIndex(previousSchema),
     );
     console.log(formatDiffReport(diff, version));
+    console.log(`\n${formatEnhancementCostReport(estimate)}`);
     console.log('\n(dry run — no LLM calls made, no output written)');
     return;
+  }
+
+  // --------------------------------------------------------------------------
+  // Cost gate: show the estimate and require confirmation before any paid call.
+  // --------------------------------------------------------------------------
+  console.log(`\n${formatEnhancementCostReport(estimate)}`);
+  if (!options.yes) {
+    const confirmed = await confirmPaidRun();
+    if (!confirmed) {
+      console.log('Aborted — no LLM calls made, no output written.');
+      return;
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -281,6 +407,15 @@ export async function runEnhancer(options: EnhancerCliOptions): Promise<void> {
     config,
   );
 
+  // Fail-fast: any failed item (for example a truncated DeepSeek response)
+  // aborts the run before a partial schema is written.
+  if (stats.failures > 0) {
+    const detail = stats.failureDetails[0] ?? 'unknown error';
+    throw new Error(
+      `Enhancement failed with ${stats.failures} error(s): ${detail}`,
+    );
+  }
+
   writeSchema(outputPath, schema);
 
   // Validate the freshly written schema so a `--full` run that produces a
@@ -297,7 +432,10 @@ export async function runEnhancer(options: EnhancerCliOptions): Promise<void> {
   console.log(`  Utilities enhanced:         ${stats.utilitiesEnhanced}`);
   console.log(`  Utilities carried forward:  ${stats.utilitiesCarriedForward}`);
   console.log(`  Guides generated:           ${stats.guidesGenerated}`);
-  console.log(`  Patterns generated:         ${stats.patternsGenerated}`);
+  console.log(
+    `  Category guidance generated:${String(stats.categoryGuidanceGenerated).padStart(3)}`,
+  );
+  console.log(`  Recipes generated:          ${stats.recipesGenerated}`);
   console.log(`  Failures:                   ${stats.failures}`);
   console.log(`  Validation errors:          ${validationErrors.length}`);
   console.log(`  Validation warnings:        ${validationWarnings.length}`);
@@ -340,7 +478,9 @@ async function main(): Promise<void> {
     for (const error of errors) {
       console.error(`  - ${error}`);
     }
-    console.error('\nUsage: yarn enhance --version v9 [--full] [--dry-run]');
+    console.error(
+      '\nUsage: yarn enhance --version v9 [--full] [--dry-run] [--yes]',
+    );
     process.exit(1);
   }
 

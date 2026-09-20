@@ -2,19 +2,16 @@
  * Schema validation for the FluentUI Enhanced Schema format.
  *
  * Validates that a parsed JSON object conforms to the {@link FluentUISchema}
- * shape before it is handed to the {@link SchemaStore}. Validation is
- * intentionally lenient: it reports problems as a list of {@link ValidationError}
- * entries (with a severity) rather than throwing, so the server can choose to
- * load partial data and warn rather than crash.
- *
- * This mirrors the "Schema validation fails → load partial data, skip invalid
- * entries, warn" strategy from the MCP server refactor design doc.
+ * shape before the pipeline consumes it. Validation is intentionally lenient:
+ * it reports problems as a list of {@link ValidationError} entries (with a
+ * severity) rather than throwing, so callers can choose to continue with
+ * partial data and warn rather than stop.
  *
  * @module schema/schema-validator
  */
 
-import type { FluentUISchema } from '../types/index.js';
-import { KNOWN_COMPONENT_CATEGORIES } from '../types/index.js';
+import type { FluentUISchema } from '../types/schema.js';
+import { KNOWN_COMPONENT_CATEGORIES } from '../types/schema.js';
 
 /**
  * The set of valid stability values a component or utility may declare.
@@ -77,7 +74,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * 2. `schemaVersion` must be present and equal to `'1.0'`.
  * 3. `version` must be a non-empty string.
  * 4. `sources.fluentui` must be present.
- * 5. The five content arrays must each be arrays.
+ * 5. The content arrays must each be arrays.
  * 6. Each component must have a `name`, a valid `stability`, and (warning) a
  *    known `category`.
  * 7. Duplicate component IDs produce warnings.
@@ -170,7 +167,7 @@ function validateTopLevelFields(
 }
 
 /**
- * The five content array fields every schema must declare.
+ * The content array fields every schema must declare.
  * Kept as a constant so the same list drives both presence checks and the
  * stats cross-check.
  */
@@ -178,8 +175,8 @@ const CONTENT_ARRAY_FIELDS = [
   'components',
   'utilities',
   'foundation',
-  'patterns',
-  'enterprise',
+  'categoryGuidance',
+  'recipes',
   'quickReference',
 ] as const;
 

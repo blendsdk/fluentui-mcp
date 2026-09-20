@@ -13,6 +13,23 @@ import type { DiscoveredPackage } from '../types.js';
 import type { ComponentEntry, UtilityEntry } from '../../../src/types/schema.js';
 
 // ============================================================================
+// Adapter Options
+// ============================================================================
+
+/**
+ * Options controlling component discovery for a package.
+ */
+export interface ComponentDiscoveryOptions {
+  /**
+   * Value identifiers the package exports publicly. When the property is
+   * defined, discovery is restricted to these names rather than scanning every
+   * `.types.ts` file; an empty array therefore means the package contributes no
+   * components. Omitting the property entirely selects the scanning fallback.
+   */
+  exportedNames?: readonly string[];
+}
+
+// ============================================================================
 // Adapter Interface
 // ============================================================================
 
@@ -36,6 +53,23 @@ export interface ScraperAdapter {
    *          cannot be parsed (e.g., missing types file, parse errors)
    */
   extractComponent(pkg: DiscoveredPackage): ComponentEntry | null;
+
+  /**
+   * Extract every component exported by a discovered component package.
+   *
+   * Some v9 packages export more than one component (for example
+   * `@fluentui/react-button` exports the Button family). This method finds all
+   * of them; `extractComponent` remains for callers that only want the
+   * package's primary component.
+   *
+   * @param pkg - The discovered package to extract from
+   * @param options - Optional exported names to restrict discovery to
+   * @returns Array of extracted components, sorted by component name
+   */
+  extractComponents(
+    pkg: DiscoveredPackage,
+    options?: ComponentDiscoveryOptions,
+  ): ComponentEntry[];
 
   /**
    * Extract utility data from a discovered utility package.
@@ -68,9 +102,15 @@ export interface ScraperAdapter {
    *
    * @param pkg - The package to search in
    * @param componentName - PascalCase component name (e.g., 'Button')
+   * @param allowFallback - When true, fall back to all stories in the package
+   *                        if no component-specific story directory exists
    * @returns Array of absolute paths to story files
    */
-  findStoryFiles(pkg: DiscoveredPackage, componentName: string): string[];
+  findStoryFiles(
+    pkg: DiscoveredPackage,
+    componentName: string,
+    allowFallback?: boolean,
+  ): string[];
 
   /**
    * Find the hook file (use<Name>.ts) for default value extraction.

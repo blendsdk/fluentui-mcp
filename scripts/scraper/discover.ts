@@ -14,6 +14,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, basename, resolve } from 'node:path';
 
+import { compareStrings } from './order.js';
 import type { DiscoveredPackage, VersionConfig } from './types.js';
 
 // ============================================================================
@@ -21,19 +22,56 @@ import type { DiscoveredPackage, VersionConfig } from './types.js';
 // ============================================================================
 
 /**
+ * Options controlling package discovery.
+ */
+export interface DiscoverOptions {
+  /**
+   * Include packages that are normally excluded (the umbrella re-export
+   * package and any package on the skip list). Used by coverage reporting so
+   * skipped packages can be shown with a reason.
+   */
+  includeSkipped?: boolean;
+}
+
+/**
+ * Check whether a package is excluded from extraction.
+ *
+ * The umbrella `react-components` package only re-exports other packages, and
+ * the version config's skip list holds tooling and compat packages. Both are
+ * discovered but not scraped as components.
+ *
+ * @param pkg - The discovered package
+ * @param config - Version configuration holding the skip list
+ * @returns True when the package should not be treated as a component package
+ */
+export function isExcludedPackage(
+  pkg: DiscoveredPackage,
+  config: VersionConfig,
+): boolean {
+  return (
+    pkg.dirName === 'react-components' ||
+    config.skipPackages.includes(pkg.dirName)
+  );
+}
+
+/**
  * Discover all FluentUI packages in the given source directory.
  *
  * Scans the source directory using the version config's glob patterns,
  * reads package.json files, checks export indices, and classifies each
- * package as component, utility, or internal.
+ * package as component, utility, or internal. By default the umbrella and
+ * skip-listed packages are omitted; pass `includeSkipped` to keep them so
+ * coverage can report them.
  *
  * @param sourcePath - Absolute path to the FluentUI monorepo checkout
  * @param config - Version-specific configuration with path patterns
+ * @param options - Discovery options
  * @returns Array of discovered packages, sorted by directory name
  */
 export function discoverPackages(
   sourcePath: string,
   config: VersionConfig,
+  options: DiscoverOptions = {},
 ): DiscoveredPackage[] {
   const resolvedSource = resolve(sourcePath);
 
@@ -64,17 +102,6 @@ export function discoverPackages(
   for (const dir of packageDirs) {
     const dirName = basename(dir);
 
-    // Skip packages on the skip list
-    if (config.skipPackages.includes(dirName)) {
-      continue;
-    }
-
-    // Skip the umbrella re-export package (e.g., react-components itself)
-    // which is NOT a component package — it's the aggregator
-    if (dirName === 'react-components') {
-      continue;
-    }
-
     // Read package.json
     const pkgInfo = readPackageJson(dir);
     if (!pkgInfo) {
@@ -100,8 +127,12 @@ export function discoverPackages(
     });
   }
 
-  // Sort alphabetically by directory name for deterministic output
-  return packages.sort((a, b) => a.dirName.localeCompare(b.dirName));
+  // Sort by directory name for deterministic output.
+  packages.sort((a, b) => compareStrings(a.dirName, b.dirName));
+
+  return options.includeSkipped
+    ? packages
+    : packages.filter((pkg) => !isExcludedPackage(pkg, config));
 }
 
 /**
@@ -155,7 +186,63 @@ export function discoverContribPackages(
     });
   }
 
-  return packages.sort((a, b) => a.dirName.localeCompare(b.dirName));
+  return packages.sort((a, b) => compareStrings(a.dirName, b.dirName));
+}
+
+/**
+ * Read an exports index and group the exported value identifiers by package.
+ *
+ * Unlike {@link readExportsIndex}, which returns only the package names, this
+ * returns the individual identifiers each package contributes to the stable
+ * public API. Type-only exports are ignored. This is the authoritative source
+ * for which component names a package actually exports.
+ *
+ * @param indexPath - Path to the exports index file
+ * @returns Map from npm package name to its exported value identifiers
+ *
+ * @example
+ * // For `export { Button, CompoundButton } from '@fluentui/react-button';`
+ * // the map contains '@fluentui/react-button' → ['Button', 'CompoundButton'].
+ */
+export function readExportsIndexByPackage(
+  indexPath: string,
+): Map<string, string[]> {
+  const byPackage = new Map<string, string[]>();
+
+  if (!existsSync(indexPath)) {
+    return byPackage;
+  }
+
+  try {
+    // Match value exports across newlines. Real FluentUI indices format these
+    // as multi-line blocks, so a line-by-line parse would miss them. `[^}]*`
+    // spans newlines; `export type {` does not match because `type` sits
+    // between `export` and `{`.
+    const source = readFileSync(indexPath, 'utf-8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      '',
+    );
+    const exportPattern =
+      /export\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
+
+    let match: RegExpExecArray | null;
+    while ((match = exportPattern.exec(source)) !== null) {
+      const packageName = match[2];
+      const names = match[1]
+        .split(',')
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0);
+
+      byPackage.set(packageName, [
+        ...(byPackage.get(packageName) ?? []),
+        ...names,
+      ]);
+    }
+  } catch {
+    // Unreadable file — return whatever was collected.
+  }
+
+  return byPackage;
 }
 
 // ============================================================================

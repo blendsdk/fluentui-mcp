@@ -13,7 +13,9 @@ export type {
   LLMResponse,
   LLMChatOptions,
   ProviderConfig,
+  DeepSeekReasoningEffort,
 } from './provider.js';
+export type { DeepSeekConfig } from '../types.js';
 export {
   LLMError,
   isRetryableStatus,
@@ -24,6 +26,18 @@ export {
 
 export { OpenAIProvider, DEFAULT_OPENAI_MODEL } from './openai.js';
 export { AnthropicProvider, DEFAULT_ANTHROPIC_MODEL } from './anthropic.js';
+export {
+  DeepSeekProvider,
+  toDeepSeekConfig,
+  DEFAULT_DEEPSEEK_MODEL,
+  DEFAULT_DEEPSEEK_BASE_URL,
+} from './deepseek.js';
+export {
+  DEEPSEEK_MAX_OUTPUT_TOKENS,
+  DEEPSEEK_REQUEST_TIMEOUT_MS,
+  DEEPSEEK_REASONING_EFFORTS,
+  DEFAULT_DEEPSEEK_REASONING_EFFORT,
+} from '../config.js';
 
 export {
   MODEL_OUTPUT_CEILINGS,

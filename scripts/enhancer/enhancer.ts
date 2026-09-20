@@ -20,20 +20,21 @@ import type {
   UtilityEntry,
   UtilityEnhanced,
   GuideEntry,
-  PatternEntry,
+  CategoryGuidanceEntry,
+  RecipeEntry,
 } from '../../src/types/schema.js';
 import type { LLMProvider } from './llm/provider.js';
 import { runBatch } from './llm/batch.js';
 import { chatComplete } from './llm/complete.js';
 import { diffSchemas } from './diff.js';
 import { buildHashIndex, computeComponentHash, computeUtilityHash } from './hasher.js';
-import { parseJsonResponse } from './parse.js';
+import { parseJsonResponse, ResponseParseError } from './parse.js';
 import {
   buildComponentEnhanceMessages,
   buildUtilityEnhanceMessages,
   buildFoundationGuideMessages,
-  buildPatternGuideMessages,
-  buildEnterpriseGuideMessages,
+  buildCategoryGuidanceMessages,
+  buildRecipeMessages,
   buildQuickReferenceMessages,
   buildComponentSummaries,
   resolveTargetComponents,
@@ -41,12 +42,35 @@ import {
 
 import type { ComponentSummary, GuideSpec } from './types.js';
 import {
+  CATEGORY_GUIDES,
   FOUNDATION_GUIDES,
-  PATTERN_GUIDES,
-  ENTERPRISE_GUIDES,
   QUICK_REFERENCE_GUIDES,
+  RECIPE_GUIDES,
   type EnhancerConfig,
 } from './config.js';
+
+// ============================================================================
+// Failure Reporting
+// ============================================================================
+
+/**
+ * Describe a failed enhancement item for the run report.
+ *
+ * A parse failure carries the raw model output, which is the most useful clue
+ * when a response could not be decoded. The snippet is whitespace-collapsed
+ * and truncated so the report stays readable.
+ *
+ * @param error - The error the batch recorded, when any
+ * @param fallback - Message to use when the error has no message
+ * @returns A one-line description
+ */
+function describeFailure(error: Error | undefined, fallback: string): string {
+  if (error instanceof ResponseParseError) {
+    const snippet = error.rawContent.replace(/\s+/g, ' ').trim().slice(0, 200);
+    return `${error.message}: ${snippet}`;
+  }
+  return error?.message ?? fallback;
+}
 
 // ============================================================================
 // Raw LLM Response Shapes
@@ -63,7 +87,6 @@ interface RawComponentEnhancement {
     ariaAttributes?: string[];
     screenReaderBehavior?: string;
   };
-  commonPatterns?: { name: string; description: string; code: string }[];
   stylingTips?: string;
   migrationNotes?: string;
   propGuidance?: { prop: string; guidance: string; example?: string }[];
@@ -71,12 +94,10 @@ interface RawComponentEnhancement {
     title: string;
     problem: string;
     solution: string;
-    code?: string;
   }[];
   performanceNotes?: string;
   themingNotes?: string;
-  compositionExamples?: { name: string; description: string; code: string }[];
-  relatedPatterns?: string[];
+  relatedRecipes?: string[];
   edgeCases?: string[];
 }
 
@@ -105,18 +126,28 @@ interface RawGuide {
   accessibilityNotes?: string;
 }
 
-/** Raw JSON shape returned by the pattern-guide prompt. */
-interface RawPattern {
+/** Raw JSON shape returned by the category-guidance prompt. */
+interface RawCategoryGuidance {
+  overview?: string;
+  whenToUse?: string;
+  bestPractices?: { dos?: string[]; donts?: string[] };
+  accessibility?: string;
+  antiPatterns?: { title: string; problem: string; solution: string }[];
+}
+
+/** Raw JSON shape returned by the recipe prompt. */
+interface RawRecipe {
+  goal?: string;
+  whenToUse?: string;
+  whenNotToUse?: string;
   content?: string;
   examples?: {
     name: string;
     description: string;
     code: string;
-    components: string[];
+    language?: string;
   }[];
   referencedComponents?: string[];
-  whenToUse?: string;
-  whenNotToUse?: string;
   accessibilityNotes?: string;
   pitfalls?: string[];
 }
@@ -135,8 +166,16 @@ export interface EnhancementRunStats {
   utilitiesEnhanced: number;
   utilitiesCarriedForward: number;
   guidesGenerated: number;
-  patternsGenerated: number;
+  categoryGuidanceGenerated: number;
+  recipesGenerated: number;
   failures: number;
+
+  /**
+   * Human-readable messages for each failed item, in the order the batches
+   * settled. Populated so callers can fail-fast with the underlying cause
+   * (for example a truncated provider response) instead of a bare count.
+   */
+  failureDetails: string[];
 }
 
 /**
@@ -179,8 +218,10 @@ export async function runEnhancement(
     utilitiesEnhanced: 0,
     utilitiesCarriedForward: 0,
     guidesGenerated: 0,
-    patternsGenerated: 0,
+    categoryGuidanceGenerated: 0,
+    recipesGenerated: 0,
     failures: 0,
+    failureDetails: [],
   };
 
   const hashIndex = buildHashIndex(rawSchema.components, rawSchema.utilities);
@@ -252,6 +293,11 @@ export async function runEnhancement(
       }
     }
     stats.failures += componentResults.failed.length;
+    stats.failureDetails.push(
+      ...componentResults.failed.map((item) =>
+        describeFailure(item.error, `component #${item.index} failed`),
+      ),
+    );
 
     for (let i = 0; i < enhancedComponents.length; i += 1) {
       const comp = enhancedComponents[i];
@@ -329,6 +375,11 @@ export async function runEnhancement(
       }
     }
     stats.failures += utilityResults.failed.length;
+    stats.failureDetails.push(
+      ...utilityResults.failed.map((item) =>
+        describeFailure(item.error, `utility #${item.index} failed`),
+      ),
+    );
 
     for (let i = 0; i < enhancedUtilities.length; i += 1) {
       const util = enhancedUtilities[i];
@@ -358,17 +409,17 @@ export async function runEnhancement(
   }
 
   // --------------------------------------------------------------------------
-  // Pass 2: Guides
+  // Pass 2: Guides, category guidance, and recipes
   // --------------------------------------------------------------------------
   let foundation = previousSchema?.foundation ?? [];
-  let patterns = previousSchema?.patterns ?? [];
-  let enterprise = previousSchema?.enterprise ?? [];
   let quickReference = previousSchema?.quickReference ?? [];
+  let categoryGuidance = previousSchema?.categoryGuidance ?? [];
+  let recipes = previousSchema?.recipes ?? [];
 
   if (config.generateGuides) {
-    log('Pass 2: generating guides');
+    log('Pass 2: generating guides, category guidance, and recipes');
 
-    foundation = await generateGuides(
+    const foundationBatch = await generateGuides(
       FOUNDATION_GUIDES,
       provider,
       config,
@@ -378,17 +429,7 @@ export async function runEnhancement(
       log,
       'foundation',
     );
-    enterprise = await generateGuides(
-      ENTERPRISE_GUIDES,
-      provider,
-      config,
-      rawSchema.components,
-      summaries,
-      buildEnterpriseGuideMessages,
-      log,
-      'enterprise',
-    );
-    quickReference = await generateGuides(
+    const quickReferenceBatch = await generateGuides(
       QUICK_REFERENCE_GUIDES,
       provider,
       config,
@@ -398,8 +439,14 @@ export async function runEnhancement(
       log,
       'quick-ref',
     );
-    patterns = await generatePatterns(
-      PATTERN_GUIDES,
+    const categoryBatch = await generateCategoryGuidance(
+      provider,
+      config,
+      rawSchema.components,
+      summaries,
+      log,
+    );
+    const recipeBatch = await generateRecipes(
       provider,
       config,
       rawSchema.components,
@@ -407,11 +454,23 @@ export async function runEnhancement(
       log,
     );
 
+    foundation = foundationBatch.entries;
+    quickReference = quickReferenceBatch.entries;
+    categoryGuidance = categoryBatch.entries;
+    recipes = recipeBatch.entries;
 
+    // Surface Pass-2 failures so the caller's fail-fast gate aborts the run
+    // before a partial schema is written.
+    recordBatchFailures(stats, [
+      ...foundationBatch.failures,
+      ...quickReferenceBatch.failures,
+      ...categoryBatch.failures,
+      ...recipeBatch.failures,
+    ]);
 
-    stats.guidesGenerated =
-      foundation.length + enterprise.length + quickReference.length;
-    stats.patternsGenerated = patterns.length;
+    stats.guidesGenerated = foundation.length + quickReference.length;
+    stats.categoryGuidanceGenerated = categoryGuidance.length;
+    stats.recipesGenerated = recipes.length;
   }
 
   const schema: FluentUISchema = {
@@ -419,8 +478,8 @@ export async function runEnhancement(
     components: enhancedComponents,
     utilities: enhancedUtilities,
     foundation,
-    patterns,
-    enterprise,
+    categoryGuidance,
+    recipes,
     quickReference,
     generatedAt: new Date().toISOString(),
   };
@@ -440,6 +499,20 @@ type GuideMessageBuilder = (context: {
   version: string;
 }) => Parameters<LLMProvider['chat']>[0];
 
+/**
+ * Result of generating a catalog of guides/categories/recipes.
+ *
+ * Failures are surfaced explicitly so the orchestrator can fail-fast instead
+ * of silently dropping an entry and writing a partial schema.
+ */
+interface GeneratedBatch<T> {
+  /** Successfully generated entries, in catalog order. */
+  entries: T[];
+
+  /** Human-readable messages for each failed entry. */
+  failures: string[];
+}
+
 
 /**
  * Generate a set of GuideEntry items for a catalog using a message builder.
@@ -457,7 +530,7 @@ async function generateGuides(
   buildMessages: GuideMessageBuilder,
   log?: (msg: string) => void,
   label = 'guide',
-): Promise<GuideEntry[]> {
+): Promise<GeneratedBatch<GuideEntry>> {
   const allComponentNames = summaries.map((s) => s.name);
   const total = specs.length;
 
@@ -493,36 +566,101 @@ async function generateGuides(
     },
   );
 
-  return results.items
-    .filter((item) => item.ok && item.result)
-    .map((item) => item.result as GuideEntry);
+  return {
+    entries: results.items
+      .filter((item) => item.ok && item.result)
+      .map((item) => item.result as GuideEntry),
+    failures: results.failed.map((item) =>
+      describeFailure(item.error, `${label} #${item.index} failed`),
+    ),
+  };
 }
 
 
 
 /**
- * Generate PatternEntry items for the pattern catalog.
+ * Generate one {@link CategoryGuidanceEntry} per schema category.
  *
- * Resolves each spec's `targetComponentIds` to full component data and routes
- * LLM calls through {@link chatComplete} so large patterns are never truncated.
+ * Each guide's target components are the components whose `category` matches
+ * the guide id, so the prompt is grounded in exactly that slice of the
+ * inventory. LLM calls go through {@link chatComplete} so large guides are
+ * never truncated.
  */
-async function generatePatterns(
-  specs: GuideSpec[],
+async function generateCategoryGuidance(
   provider: LLMProvider,
   config: EnhancerConfig,
   components: ComponentEntry[],
   summaries: ComponentSummary[],
   log?: (msg: string) => void,
-): Promise<PatternEntry[]> {
+): Promise<GeneratedBatch<CategoryGuidanceEntry>> {
   const allComponentNames = summaries.map((s) => s.name);
+  const specs = CATEGORY_GUIDES;
   const total = specs.length;
 
   let started = 0;
   const results = await runBatch(
     specs.map((spec) => async () => {
       const n = (started += 1);
-      log?.(`  [${n}/${total}] pattern → ${spec.title}`);
-      const messages = buildPatternGuideMessages({
+      log?.(`  [${n}/${total}] category → ${spec.title}`);
+      const targets = components.filter((c) => c.category === spec.id);
+      const messages = buildCategoryGuidanceMessages({
+        spec,
+        allComponentNames,
+        componentSummaries: summaries,
+        targetComponents: targets,
+        version: config.version,
+      });
+
+      const response = await chatComplete(provider, messages, {
+        temperature: config.temperature,
+        maxTokens: config.maxTokens,
+        responseFormat: 'json',
+        log,
+      });
+      const raw = parseJsonResponse<RawCategoryGuidance>(response.content);
+      return mapCategoryGuidance(spec, raw, targets.map((c) => c.id));
+    }),
+    {
+      ...batchOptions(config),
+      onProgress: (completed, t) =>
+        log?.(`  ✓ category ${completed}/${t} done`),
+    },
+  );
+
+  return {
+    entries: results.items
+      .filter((item) => item.ok && item.result)
+      .map((item) => item.result as CategoryGuidanceEntry),
+    failures: results.failed.map((item) =>
+      describeFailure(item.error, `category #${item.index} failed`),
+    ),
+  };
+}
+
+/**
+ * Generate the {@link RecipeEntry} catalog.
+ *
+ * Each recipe receives the full component inventory at full fidelity so its
+ * examples reference only real APIs. LLM calls go through {@link chatComplete}
+ * so large recipes are never truncated.
+ */
+async function generateRecipes(
+  provider: LLMProvider,
+  config: EnhancerConfig,
+  components: ComponentEntry[],
+  summaries: ComponentSummary[],
+  log?: (msg: string) => void,
+): Promise<GeneratedBatch<RecipeEntry>> {
+  const allComponentNames = summaries.map((s) => s.name);
+  const specs = RECIPE_GUIDES;
+  const total = specs.length;
+
+  let started = 0;
+  const results = await runBatch(
+    specs.map((spec) => async () => {
+      const n = (started += 1);
+      log?.(`  [${n}/${total}] recipe → ${spec.title}`);
+      const messages = buildRecipeMessages({
         spec,
         allComponentNames,
         componentSummaries: summaries,
@@ -539,20 +677,24 @@ async function generatePatterns(
         responseFormat: 'json',
         log,
       });
-      const raw = parseJsonResponse<RawPattern>(response.content);
-      return mapPatternEntry(spec, raw);
+      const raw = parseJsonResponse<RawRecipe>(response.content);
+      return mapRecipeEntry(spec, raw);
     }),
-
     {
       ...batchOptions(config),
       onProgress: (completed, t) =>
-        log?.(`  ✓ pattern ${completed}/${t} done`),
+        log?.(`  ✓ recipe ${completed}/${t} done`),
     },
   );
 
-  return results.items
-    .filter((item) => item.ok && item.result)
-    .map((item) => item.result as PatternEntry);
+  return {
+    entries: results.items
+      .filter((item) => item.ok && item.result)
+      .map((item) => item.result as RecipeEntry),
+    failures: results.failed.map((item) =>
+      describeFailure(item.error, `recipe #${item.index} failed`),
+    ),
+  };
 }
 
 
@@ -568,28 +710,39 @@ export function mapComponentEnhanced(
   sourceHash: string,
 ): ComponentEnhanced {
   return {
-    description: raw.description ?? '',
-    whenToUse: raw.whenToUse ?? '',
+    description: cleanText(raw.description ?? ''),
+    whenToUse: cleanText(raw.whenToUse ?? ''),
     bestPractices: {
-      dos: raw.bestPractices?.dos ?? [],
-      donts: raw.bestPractices?.donts ?? [],
+      dos: cleanTextArray(raw.bestPractices?.dos ?? []),
+      donts: cleanTextArray(raw.bestPractices?.donts ?? []),
     },
     accessibility: {
-      requirements: raw.accessibility?.requirements ?? '',
-      keyboardSupport: raw.accessibility?.keyboardSupport ?? [],
-      ariaAttributes: raw.accessibility?.ariaAttributes ?? [],
-      screenReaderBehavior: raw.accessibility?.screenReaderBehavior ?? '',
+      requirements: cleanText(raw.accessibility?.requirements ?? ''),
+      keyboardSupport: (raw.accessibility?.keyboardSupport ?? []).map((k) => ({
+        key: cleanText(k.key),
+        action: cleanText(k.action),
+      })),
+      ariaAttributes: cleanTextArray(raw.accessibility?.ariaAttributes ?? []),
+      screenReaderBehavior: cleanText(
+        raw.accessibility?.screenReaderBehavior ?? '',
+      ),
     },
-    commonPatterns: raw.commonPatterns ?? [],
-    stylingTips: raw.stylingTips ?? '',
-    migrationNotes: raw.migrationNotes,
-    propGuidance: raw.propGuidance,
-    antiPatterns: raw.antiPatterns,
-    performanceNotes: raw.performanceNotes,
-    themingNotes: raw.themingNotes,
-    compositionExamples: raw.compositionExamples,
-    relatedPatterns: raw.relatedPatterns,
-    edgeCases: raw.edgeCases,
+    stylingTips: cleanText(raw.stylingTips ?? ''),
+    migrationNotes: cleanOptionalText(raw.migrationNotes),
+    propGuidance: raw.propGuidance?.map((entry) => ({
+      prop: entry.prop,
+      guidance: cleanText(entry.guidance),
+      example: cleanOptionalText(entry.example),
+    })),
+    antiPatterns: raw.antiPatterns?.map((entry) => ({
+      title: cleanText(entry.title),
+      problem: cleanText(entry.problem),
+      solution: cleanText(entry.solution),
+    })),
+    performanceNotes: cleanOptionalText(raw.performanceNotes),
+    themingNotes: cleanOptionalText(raw.themingNotes),
+    relatedRecipes: raw.relatedRecipes,
+    edgeCases: raw.edgeCases ? cleanTextArray(raw.edgeCases) : undefined,
     sourceHash,
     enhancedAt: new Date().toISOString(),
   };
@@ -635,21 +788,64 @@ export function mapGuideEntry(spec: GuideSpec, raw: RawGuide): GuideEntry {
 }
 
 /**
- * Map a raw pattern response into a {@link PatternEntry}.
+ * Map a raw category-guidance response into a {@link CategoryGuidanceEntry}.
+ *
+ * @param spec - The category spec being generated (spec.id is the category)
+ * @param raw - The parsed LLM response
+ * @param componentIds - IDs of the components that belong to the category
  */
-export function mapPatternEntry(spec: GuideSpec, raw: RawPattern): PatternEntry {
+export function mapCategoryGuidance(
+  spec: GuideSpec,
+  raw: RawCategoryGuidance,
+  componentIds: string[],
+): CategoryGuidanceEntry {
+  const overview = cleanText(raw.overview ?? '');
+  return {
+    id: spec.id,
+    category: spec.id,
+    overview,
+    whenToUse: cleanText(raw.whenToUse ?? ''),
+    bestPractices: {
+      dos: cleanTextArray(raw.bestPractices?.dos ?? []),
+      donts: cleanTextArray(raw.bestPractices?.donts ?? []),
+    },
+    accessibility: cleanText(raw.accessibility ?? ''),
+    antiPatterns: (raw.antiPatterns ?? []).map((entry) => ({
+      title: cleanText(entry.title),
+      problem: cleanText(entry.problem),
+      solution: cleanText(entry.solution),
+    })),
+    componentIds,
+    sourceHash: hashString(overview),
+    enhancedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Map a raw recipe response into a {@link RecipeEntry}.
+ *
+ * @param spec - The recipe spec being generated
+ * @param raw - The parsed LLM response
+ */
+export function mapRecipeEntry(spec: GuideSpec, raw: RawRecipe): RecipeEntry {
   const content = raw.content ?? '';
   return {
     id: spec.id,
     title: spec.title,
     group: spec.group,
+    goal: raw.goal ?? '',
+    whenToUse: raw.whenToUse ?? '',
+    whenNotToUse: raw.whenNotToUse ?? '',
     content,
-    examples: raw.examples ?? [],
+    examples: (raw.examples ?? []).map((example) => ({
+      name: example.name,
+      description: example.description,
+      code: example.code,
+      language: example.language,
+    })),
     referencedComponents: raw.referencedComponents ?? [],
-    whenToUse: raw.whenToUse,
-    whenNotToUse: raw.whenNotToUse,
-    accessibilityNotes: raw.accessibilityNotes,
-    pitfalls: raw.pitfalls,
+    accessibilityNotes: raw.accessibilityNotes ?? '',
+    pitfalls: raw.pitfalls ?? [],
     sourceHash: hashString(content),
     enhancedAt: new Date().toISOString(),
   };
@@ -657,8 +853,78 @@ export function mapPatternEntry(spec: GuideSpec, raw: RawPattern): PatternEntry 
 
 
 // ============================================================================
+// Prose Sanitization
+// ============================================================================
+
+/**
+ * Remove fenced code blocks and stray fences from a piece of prose.
+ *
+ * The enhancer is prose-only by contract; code examples come from the scraped
+ * stories. This is a defensive backstop in case a model emits a fenced block
+ * anyway, so the persisted prose never contains code.
+ *
+ * @param text - The text to sanitize
+ * @returns The text with fenced code removed and surrounding whitespace trimmed
+ */
+function stripFencedCodeBlocks(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/```/g, '')
+    .trim();
+}
+
+/**
+ * Sanitize a required prose string.
+ *
+ * @param text - The text to sanitize
+ * @returns The sanitized text
+ */
+function cleanText(text: string): string {
+  return stripFencedCodeBlocks(text);
+}
+
+/**
+ * Sanitize an optional prose string, preserving `undefined`.
+ *
+ * @param text - The text to sanitize, or undefined
+ * @returns The sanitized text, or undefined when input was undefined
+ */
+function cleanOptionalText(text: string | undefined): string | undefined {
+  return text === undefined ? undefined : stripFencedCodeBlocks(text);
+}
+
+/**
+ * Sanitize an array of prose strings.
+ *
+ * @param values - The strings to sanitize
+ * @returns A new array with fenced code removed from each entry
+ */
+function cleanTextArray(values: string[]): string[] {
+  return values.map(stripFencedCodeBlocks);
+}
+
+// ============================================================================
 // Internal Utilities
 // ============================================================================
+
+/**
+ * Record guide/category/recipe generation failures on the run statistics.
+ *
+ * Kept separate from {@link EnhancementRunStats.failures} increments in Pass 1
+ * so both passes report through one place and `failures` always equals the
+ * number of entries in `failureDetails`.
+ *
+ * @param stats - The run statistics accumulator
+ * @param failures - Failure messages from a generation batch
+ */
+function recordBatchFailures(
+  stats: EnhancementRunStats,
+  failures: string[],
+): void {
+  if (failures.length === 0) return;
+  stats.failures += failures.length;
+  stats.failureDetails.push(...failures);
+}
 
 /** Build batch options from the enhancer config. */
 function batchOptions(config: EnhancerConfig): {

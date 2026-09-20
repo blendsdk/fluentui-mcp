@@ -25,8 +25,9 @@ import {
   createUtilityEnhanced,
   createUtilityEntry,
   createGuideEntry,
-  createPatternEntryExample,
-  createPatternEntry,
+  createRecipeExample,
+  createRecipeEntry,
+  createCategoryGuidanceEntry,
   createComponentEntry,
   createFluentUISchema,
   createMinimalTestSchema,
@@ -198,7 +199,6 @@ describe('createComponentEnhanced', () => {
     expect(enhanced.bestPractices.donts.length).toBeGreaterThan(0);
     expect(enhanced.accessibility.keyboardSupport.length).toBeGreaterThan(0);
     expect(enhanced.accessibility.ariaAttributes.length).toBeGreaterThan(0);
-    expect(enhanced.commonPatterns.length).toBeGreaterThan(0);
     expect(enhanced.sourceHash).toBeTruthy();
     expect(enhanced.enhancedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
@@ -255,27 +255,41 @@ describe('createGuideEntry', () => {
   });
 });
 
-describe('createPatternEntryExample', () => {
-  it('should create with default components', () => {
-    const example = createPatternEntryExample();
+describe('createRecipeExample', () => {
+  it('should create with default data', () => {
+    const example = createRecipeExample();
     expect(example.name).toBe('Basic Example');
-    expect(example.components).toContain('Input');
-    expect(example.components).toContain('Button');
+    expect(example.code).toContain('Input');
   });
 });
 
-describe('createPatternEntry', () => {
+describe('createRecipeEntry', () => {
   it('should create with defaults', () => {
-    const pattern = createPatternEntry();
-    expect(pattern.id).toBe('basic-form');
-    expect(pattern.group).toBe('forms');
-    expect(pattern.examples).toHaveLength(1);
-    expect(pattern.referencedComponents).toContain('Input');
+    const recipe = createRecipeEntry();
+    expect(recipe.id).toBe('login-form');
+    expect(recipe.group).toBe('forms');
+    expect(recipe.examples).toHaveLength(1);
+    expect(recipe.referencedComponents).toContain('Input');
   });
 
   it('should accept a custom id', () => {
-    const pattern = createPatternEntry('sidebar-nav');
-    expect(pattern.id).toBe('sidebar-nav');
+    const recipe = createRecipeEntry('data-table');
+    expect(recipe.id).toBe('data-table');
+  });
+});
+
+describe('createCategoryGuidanceEntry', () => {
+  it('should create with defaults', () => {
+    const guidance = createCategoryGuidanceEntry();
+    expect(guidance.id).toBe('buttons');
+    expect(guidance.category).toBe('buttons');
+    expect(guidance.bestPractices.dos.length).toBeGreaterThan(0);
+    expect(guidance.antiPatterns.length).toBeGreaterThan(0);
+  });
+
+  it('should accept a custom category', () => {
+    const guidance = createCategoryGuidanceEntry('forms');
+    expect(guidance.category).toBe('forms');
   });
 });
 
@@ -317,8 +331,8 @@ describe('createFluentUISchema', () => {
     expect(schema.components).toEqual([]);
     expect(schema.utilities).toEqual([]);
     expect(schema.foundation).toEqual([]);
-    expect(schema.patterns).toEqual([]);
-    expect(schema.enterprise).toEqual([]);
+    expect(schema.categoryGuidance).toEqual([]);
+    expect(schema.recipes).toEqual([]);
     expect(schema.quickReference).toEqual([]);
     expect(schema.stats.totalComponents).toBe(0);
   });
@@ -377,12 +391,12 @@ describe('createMinimalTestSchema', () => {
     );
   });
 
-  it('should have no utilities, guides, patterns, or enterprise', () => {
+  it('should have no utilities, guides, category guidance, or recipes', () => {
     const schema = createMinimalTestSchema();
     expect(schema.utilities).toHaveLength(0);
     expect(schema.foundation).toHaveLength(0);
-    expect(schema.patterns).toHaveLength(0);
-    expect(schema.enterprise).toHaveLength(0);
+    expect(schema.categoryGuidance).toHaveLength(0);
+    expect(schema.recipes).toHaveLength(0);
     expect(schema.quickReference).toHaveLength(0);
   });
 });
@@ -412,17 +426,17 @@ describe('createEnhancedTestSchema', () => {
     expect(schema.foundation[0].id).toBe('getting-started');
   });
 
-  it('should have a pattern', () => {
+  it('should have a recipe', () => {
     const schema = createEnhancedTestSchema();
-    expect(schema.patterns).toHaveLength(1);
-    expect(schema.patterns[0].id).toBe('login-form');
-    expect(schema.patterns[0].examples.length).toBeGreaterThan(0);
+    expect(schema.recipes).toHaveLength(1);
+    expect(schema.recipes[0].id).toBe('login-form');
+    expect(schema.recipes[0].examples.length).toBeGreaterThan(0);
   });
 
-  it('should have an enterprise guide', () => {
+  it('should have category guidance', () => {
     const schema = createEnhancedTestSchema();
-    expect(schema.enterprise).toHaveLength(1);
-    expect(schema.enterprise[0].id).toBe('app-shell');
+    expect(schema.categoryGuidance).toHaveLength(1);
+    expect(schema.categoryGuidance[0].category).toBe('forms');
   });
 
   it('should have a quick reference guide', () => {
@@ -466,8 +480,8 @@ describe('JSON fixture files', () => {
     }
     expect(schema.utilities).toHaveLength(1);
     expect(schema.foundation).toHaveLength(1);
-    expect(schema.patterns).toHaveLength(1);
-    expect(schema.enterprise).toHaveLength(1);
+    expect(schema.categoryGuidance).toHaveLength(1);
+    expect(schema.recipes).toHaveLength(1);
     expect(schema.quickReference).toHaveLength(1);
   });
 

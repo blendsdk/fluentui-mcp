@@ -1,0 +1,52 @@
+# OverflowItem
+
+> **Package**: `@fluentui/react-overflow` v9.8.0
+> **Import**: `import { OverflowItem } from '@fluentui/react-components';`
+> **Category**: utilities
+> **Stability**: stable
+
+## Overview
+
+OverflowItem is a non-visual utility component that marks a single child element as a participant in an overflow container's responsive layout management. It renders no DOM node of its own: instead it attaches overflow item behavior to the one child passed to it, and registers that child with the overflow manager using the required id. When the container runs out of horizontal space, the manager uses the registered ids (and optional groups declared through groupId) to decide which items remain visible inline and which are relocated into an overflow menu. Because it is purely behavioral, OverflowItem has no slots, no styling of its own, and no rendering surface — everything users see, focus, and click comes from the wrapped child, typically an interactive element such as a ToolbarButton, Button, Menu, or a menu item.
+
+**When to use**: Use OverflowItem when you need a horizontal set of commands, actions, or links to adapt to the available width instead of wrapping, clipping, or forcing horizontal scrolling — for example a responsive Toolbar, a command bar, or a breadcrumb-like strip of actions. It is the correct choice when the set of items is dynamic or the container width is variable, because the overflow manager recalculates visibility as space changes. Do not use it for static lists where every item always fits; a plain layout with ordinary components is simpler and cheaper. Do not use it as a prioritization mechanism either — OverflowItem only declares that an item participates in overflow. Ordering determines what stays visible, so sort children by importance rather than expecting the component to rank them. If you only need a separator between clusters of overflowable items, pair OverflowItem with OverflowDivider.
+
+## Props Reference
+
+| Prop | Type | Default | Required | Description |
+| --- | --- | --- | --- | --- |
+| `children` | `React.ReactElement<unknown, string \| React.JSXElementConstructor<any>>` | — | Yes | The single child that has overflow item behavior attached. |
+| `groupId` | `string \| undefined` | — | No | Assigns the item to a group, group visibility can be watched. |
+| `id` | `string` | — | Yes | The unique identifier for the item used by the overflow manager. |
+
+## Best Practices
+
+### Do's
+
+- Give every OverflowItem a stable, unique id derived from your data (for example a command key or route name) so the manager can reliably recognize the same item across renders.
+- Wrap exactly one child element, and make that child the real interactive component users will click or focus, such as a ToolbarButton, Button, Menu, or Link.
+- Order items by priority: the manager keeps the items that fit first, so place the most important commands earliest in the children order.
+- Assign a groupId when several items should be treated as a cluster whose visibility can be watched together, for example a set of related formatting commands.
+- Make the overflowed representation equally usable: the same command rendered in the overflow menu must keep an accessible name, an enabled/disabled state, and its click handler.
+- Use OverflowDivider alongside OverflowItem to separate logically distinct clusters so the collapsed menu stays readable.
+- Keep each child as light as possible, since every registered item participates in layout measurement performed by the overflow manager.
+- Keep ids and groupId values stable for the lifetime of the render tree, avoiding values that change on every render.
+
+### Don'ts
+
+- Do not pass multiple children, fragments, or bare text as children — OverflowItem supports a single child element only.
+- Do not reuse the same id for two items in the same container; the overflow manager relies on id uniqueness to track visibility and grouping.
+- Do not generate ids from array indexes or random values, because reordering or re-rendering will make the manager treat the same visual item as a different one.
+- Do not apply className, style, or token-based styling to OverflowItem expecting a DOM element to style — there is no rendered node, so style the wrapped child instead.
+- Do not rely on OverflowItem to provide keyboard handling, focus management, or ARIA semantics; the wrapped child must supply all of them.
+- Do not change a groupId dynamically during interaction, since that changes group membership and forces the manager to re-evaluate layout.
+- Do not place purely decorative, non-interactive content in an OverflowItem, since it has no meaningful representation once collapsed into the overflow menu.
+- Do not nest an entire overflow container inside the child of a single OverflowItem; keep overflow management at one level.
+
+## Accessibility
+
+## See Also
+
+- [utilities category](../categories/utilities.md)
+
+<!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

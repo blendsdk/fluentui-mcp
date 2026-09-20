@@ -4,7 +4,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/__tests__/**/*.test.ts'],
+    // Several suites build TypeScript programs with ts-morph, which is CPU
+    // heavy. Under parallel execution those tests can starve each other, so
+    // the default 5s timeout is too tight for the slower integration cases.
+    testTimeout: 15000,
+    include: ['src/__tests__/**/*.test.ts', 'scripts/**/tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

@@ -1,25 +1,49 @@
 # =============================================================================
-# FluentUI MCP Server — NPM Publish Workflow
+# FluentUI Agent Skill — NPM Publish Workflow
 # =============================================================================
 #
-# This workflow builds, tests, and publishes the package to npm.
+# Publishes the package to npm with trusted publishing (GitHub OIDC), so no
+# long-lived NPM_TOKEN is required. See
+# https://docs.npmjs.com/trusted-publishers.
 #
-# STATUS: INACTIVE — Currently using workflow_dispatch (manual trigger only).
-# To activate automatic publishing on release:
-#   1. Uncomment the "on.release" trigger below
-#   2. Remove or keep the "workflow_dispatch" trigger
-#   3. Add NPM_TOKEN to repository secrets
+# This file is the MANUAL publisher (dry run / emergency release). Automated
+# version bumps and releases are handled by release-please.yml together with
+# release-please-config.json and .release-please-manifest.json.
 #
-# To publish manually:
-#   1. Go to Actions tab → "Publish to npm" → "Run workflow"
-#   2. Select branch and click "Run workflow"
+# One-time setup:
+#   1. Publish the first version by hand (`npm login` then `npm publish`). The
+#      trusted-publisher settings live on the package's npm page, which exists
+#      only after the first publish.
+#   2. On npmjs.com: Package -> Settings -> Trusted publishing -> Add ->
+#      GitHub Actions. Add one connection for the automated publisher
+#      (`release-please.yml`) and, if you want to publish manually as well, a
+#      second for this workflow (`publish.yml`):
+#        - Organization or user: blendsdk
+#        - Repository:           fluentui-mcp
+#        - Workflow filename:    release-please.yml  (and/or publish.yml)
+#        - Environment name:     (leave blank)
+#        - Allowed actions:      tick "npm publish" (connections created after
+#          2026-09-03 default to `npm stage publish` only).
+#      To use staged publishing instead, change the publish step to
+#      `npm stage publish` and approve each release by hand before it is public.
+#   3. After the first OIDC publish succeeds, optionally set the package's
+#      Publishing access to "Require 2FA and disallow tokens" and revoke any
+#      token that is no longer needed.
 #
-# Prerequisites:
-#   - NPM_TOKEN secret must be set in repository settings
-#     (npm → Access Tokens → Generate New Token → Automation)
+# To publish manually: Actions -> "Publish to npm" -> Run workflow. `dry_run`
+# defaults to true; set it to false to publish.
+#
+# Requirements verified by this workflow:
+#   - `id-token: write` on the publishing job.
+#   - Node.js >= 22.14 and npm CLI >= 11.5.1 for OIDC.
+#   - No NODE_AUTH_TOKEN; npm exchanges the GitHub OIDC token automatically.
+#   - `repository.url` in package.json matches this GitHub repository.
 # =============================================================================
 
 name: Publish to npm
+
+permissions:
+    contents: read
 
 on:
     # Manual trigger only (inactive by default)
@@ -34,13 +58,13 @@ on:
                     - "true"
                     - "false"
 
-    # UNCOMMENT TO ACTIVATE: Publish on GitHub release
-    # release:
-    #   types: [published]
+    # Automated releases are handled by release-please.yml, which publishes in
+    # the same workflow that tags the release. Do not add a `release:` trigger
+    # here, or every release would be published twice.
 
 jobs:
     # ===========================================================================
-    # Job 1: Build and Test
+    # Job 1: Build, test, and run the skill integrity gates
     # ===========================================================================
     build-and-test:
         name: Build & Test
@@ -69,61 +93,78 @@ jobs:
             - name: Run tests
               run: yarn test
 
+            - name: Check skill drift and coverage
+              run: yarn skill:check
+
+            - name: Validate skill examples
+              run: yarn skill:validate
+
     # ===========================================================================
-    # Job 2: Publish to npm
+    # Job 2: Publish to npm with trusted publishing (OIDC)
     # ===========================================================================
     publish:
         name: Publish to npm
         runs-on: ubuntu-latest
         needs: build-and-test
+        # Required for trusted publishing. Job-level permissions replace the
+        # workflow-level set, so `contents: read` is repeated here.
+        permissions:
+            contents: read
+            id-token: write
 
-        # Publish on Node 20 after the build-and-test job passes.
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
 
-            - name: Setup Node.js 20
+            - name: Setup Node.js 24
               uses: actions/setup-node@v4
               with:
-                  node-version: 20
+                  node-version: 24
                   registry-url: "https://registry.npmjs.org"
-                  cache: "yarn"
+                  # Never cache in a release build.
+                  package-manager-cache: false
 
             - name: Install dependencies
               run: yarn install --frozen-lockfile
 
-            - name: Build
-              run: yarn build
+            # Node 24 ships npm 11, but pin the floor the OIDC exchange needs.
+            - name: Upgrade npm for trusted publishing
+              run: npm install -g npm@^11.5.1
 
-            - name: Run tests
-              run: yarn test
+            - name: Build the published artifacts
+              run: yarn build && yarn assemble
 
-            - name: Verify schema data is present
-              run: |
-                  echo "Verifying data/ schema files are included in the package..."
-                  test -d data || { echo "::error::data/ directory is missing"; exit 1; }
-                  SCHEMA=$(find data -name 'fluentui-schema-enhanced.json' | head -n1)
-                  test -n "$SCHEMA" || { echo "::error::No enhanced schema found under data/"; exit 1; }
-                  node -e "JSON.parse(require('fs').readFileSync('$SCHEMA','utf-8')); console.log('Valid JSON schema:', '$SCHEMA')"
-
+            # Read the pack file list as JSON so the checks match exact paths.
+            # A plain `grep "data/"` would also match the generated
+            # `skills/fluentui/references/recipes/data/` pages and always fail.
             - name: Verify package contents
               run: |
-                  npm pack --dry-run 2>&1 | tee pack-output.txt
-                  grep -q "data/" pack-output.txt || { echo "::error::data/ not included in npm package"; exit 1; }
-                  grep -q "dist/index.js" pack-output.txt || { echo "::error::dist/index.js (bin entry) not included in npm package — build did not emit"; exit 1; }
-
+                  npm pack --dry-run --ignore-scripts --json > pack-output.json
+                  node -e '
+                    const files = require("./pack-output.json")[0].files.map((f) => f.path);
+                    const required = ["skills/fluentui/SKILL.md", "dist/bin.js"];
+                    for (const path of required) {
+                      if (!files.includes(path)) {
+                        console.error("::error::" + path + " not included in npm package");
+                        process.exit(1);
+                      }
+                    }
+                    if (files.some((p) => p.startsWith("data/"))) {
+                      console.error("::error::data/ must not be included in npm package");
+                      process.exit(1);
+                    }
+                    console.log("Package contents verified: " + files.length + " files");
+                  '
 
             - name: Publish to npm (dry run)
               if: ${{ github.event.inputs.dry_run == 'true' || github.event.inputs.dry_run == '' }}
               run: npm publish --dry-run
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+            # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a
+            # short-lived registry token. Provenance is generated automatically.
             - name: Publish to npm
               if: ${{ github.event.inputs.dry_run == 'false' || github.event_name == 'release' }}
               run: npm publish
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     # ===========================================================================
     # Job 3: Verify published package (optional)
@@ -135,19 +176,19 @@ jobs:
         if: ${{ github.event.inputs.dry_run == 'false' || github.event_name == 'release' }}
 
         steps:
-            - name: Setup Node.js 20
+            - name: Setup Node.js 24
               uses: actions/setup-node@v4
               with:
-                  node-version: 20
+                  node-version: 24
 
             - name: Wait for npm propagation
               run: sleep 30
 
             - name: Install published package globally
-              run: npm install -g fluentui-mcp
+              run: npm install -g fluentui-skill
 
             - name: Verify binary exists
-              run: which fluentui-mcp
+              run: which fluentui
 
-            - name: Verify version
-              run: fluentui-mcp --version || echo "Version flag not implemented yet"
+            - name: Verify CLI runs
+              run: fluentui --help

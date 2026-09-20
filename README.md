@@ -1,411 +1,194 @@
-# FluentUI MCP Server
+# FluentUI Agent Skill
 
-[![npm version](https://badge.fury.io/js/fluentui-mcp.svg)](https://www.npmjs.com/package/fluentui-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org/)
 
-> **Model Context Protocol (MCP) server** providing AI assistants with intelligent, context-efficient access to
-> Microsoft FluentUI documentation.
+> An **Agent Skill** that teaches a coding assistant to build user interfaces with
+> [Microsoft FluentUI React v9](https://react.fluentui.dev/) from verified, offline reference
+> material.
 
-Build production-grade React UIs with FluentUI — powered by AI that actually knows the component library.
+The skill replaces the earlier documentation server. It ships a complete knowledge base — component
+pages, category guides, foundations, and task recipes — as plain Markdown plus a manifest, so an
+agent can read it with no network, no package install, and no running process.
 
 ---
 
 ## What is this?
 
-This is an MCP server that gives AI assistants (Claude, Cline, Cursor, etc.) deep knowledge of the
-[Microsoft FluentUI](https://react.fluentui.dev/) component library. Instead of the AI guessing at component APIs or
-hallucinating props, it queries **real documentation** through specialized tools.
+A coding agent that only knows the FluentUI name tends to guess. It invents props that do not exist,
+mixes v8 patterns into v9 code, and skips accessibility. This skill fixes that: before writing
+component code, the agent reads the relevant reference page and copies a pattern that was checked
+against the real `@fluentui/react-components` package.
 
-### The Problem
+The content covers:
 
-AI assistants often:
+- **Foundations** — setup and imports, `FluentProvider`, theming and tokens, Griffel styling,
+  component architecture, and accessibility.
+- **Components** — one page per component with props, slots, and examples taken from FluentUI's own
+  Storybook source.
+- **Categories** — shared guidance for each of the eight component groups (buttons, forms,
+  navigation, data display, feedback, overlays, layout, utilities).
+- **Recipes** — nineteen task-oriented walkthroughs such as a login form, a data table, a
+  confirmation dialog, and a dashboard shell.
+- **Quick reference** — short checklists and a component cheat sheet.
+- **Templates** — copy-ready starting points under `assets/templates/`.
 
--   ❌ Hallucinate FluentUI component props that don't exist
--   ❌ Use outdated v8 patterns when you need v9
--   ❌ Load entire documentation sets, wasting context window
--   ❌ Miss best practices, accessibility requirements, and patterns
-
-### The Solution
-
-This MCP server provides **12 specialized tools** that give AI assistants:
-
--   ✅ Accurate, up-to-date component documentation
--   ✅ Smart search across 100+ documentation pages
--   ✅ Props references, code examples, and patterns on demand
--   ✅ Component suggestions based on UI descriptions
--   ✅ Implementation guides combining docs + patterns + examples
--   ✅ ~90% context window reduction vs loading all docs
+The full index is generated into `references/index.md`. The skill entry point is `SKILL.md`, which
+tells the agent how to route a task to the right reference.
 
 ---
 
-## Quick Start
+## Install
 
-### Install
+Install the skill into your agent's skills directory:
 
 ```bash
-npm install -g fluentui-mcp
+npx -y fluentui-skill skill install
 ```
 
-### Configure Cline (VS Code)
+The installer detects common agent skill directories and copies the skill into place. Options:
 
-Add to your Cline MCP settings:
+```text
+fluentui skill install [options]
 
-```json
-{
-    "mcpServers": {
-        "fluentui-docs": {
-            "command": "fluentui-mcp"
-        }
-    }
-}
+  --all                 Install into every detected client
+  --target <dir>        Install into a specific skills directory (repeatable)
+  --project             Use project-level skill directories
+  --link                Symlink to the source instead of copying
+  --dry-run             Show what would happen without writing
+  -h, --help            Show this help
 ```
 
-**Settings file location:**
-
--   macOS:
-    `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
--   Windows: `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json`
-
-### Configure Claude Desktop
-
-Add to `claude_desktop_config.json`:
-
-```json
-{
-    "mcpServers": {
-        "fluentui-docs": {
-            "command": "fluentui-mcp"
-        }
-    }
-}
-```
-
-### That's it! 🎉
-
-Restart your AI assistant and you'll have access to all FluentUI documentation tools.
+Other commands are `fluentui skill status` to show the installed version and
+`fluentui skill uninstall` to remove it.
 
 ---
 
-## Multi-Version Support
+## Contents and routing
 
-The server supports multiple FluentUI versions. Pass the version as an argument:
+The agent reads `SKILL.md` first. That file maps a task to a reference:
 
-```json
-{
-    "mcpServers": {
-        "fluentui-v9": {
-            "command": "fluentui-mcp",
-            "args": ["v9"]
-        }
-    }
-}
-```
-
-You can even run multiple versions simultaneously:
-
-```json
-{
-    "mcpServers": {
-        "fluentui-v9": {
-            "command": "fluentui-mcp",
-            "args": ["v9"]
-        },
-        "fluentui-v10": {
-            "command": "fluentui-mcp",
-            "args": ["v10"]
-        }
-    }
-}
-```
-
-### Custom Schema Path
-
-Point to your own enhanced schema file:
-
-```json
-{
-    "mcpServers": {
-        "fluentui-docs": {
-            "command": "fluentui-mcp",
-            "env": {
-                "FLUENTUI_SCHEMA_PATH": "/path/to/your/fluentui-schema-enhanced.json"
-            }
-        }
-    }
-}
-```
-
+| If the task is about…                                  | Read                                             |
+| ------------------------------------------------------ | ------------------------------------------------ |
+| Project setup, imports, or the provider                | `references/foundation/getting-started.md`       |
+| Theming, dark mode, design tokens, or right-to-left    | `references/foundation/theming.md`               |
+| Writing styles with Griffel                            | `references/foundation/styling-griffel.md`       |
+| A specific component's props or examples               | `references/components/<component>.md`           |
+| A whole class of controls (all buttons, all inputs)    | `references/categories/<category>.md`            |
+| A concrete job such as a login form or a data table    | `references/recipes/<group>/<recipe>.md`         |
+| A short cheat sheet or checklist                       | `references/quick-reference/<topic>.md`          |
+| An overview of everything available                    | `references/index.md`                            |
 
 ---
 
-## Available Tools (12)
+## How it is generated
 
-### Core Documentation Tools
+The repository is a small pipeline. The skill is **generated**, never hand-edited:
 
-| Tool                   | Description                                                                                 |
-| ---------------------- | ------------------------------------------------------------------------------------------- |
-| **`query_component`**  | Get complete documentation for a specific component. Supports fuzzy name matching.          |
-| **`search_docs`**      | Search across ALL documentation (components, patterns, enterprise). Returns ranked results. |
-| **`list_by_category`** | List all components in a category (buttons, forms, navigation, etc.).                       |
-| **`get_foundation`**   | Get setup, theming, styling, and architecture documentation.                                |
-| **`get_pattern`**      | Get UI pattern documentation (forms, layout, navigation, modals, state management).         |
-| **`get_enterprise`**   | Get enterprise-grade patterns (dashboards, admin UIs, data-heavy apps, accessibility).      |
+```text
+┌───────────┐   ┌───────────┐   ┌──────────────────────────┐   ┌──────────┐
+│  Scraper  │ → │ Enhancer  │ → │  Enhanced schema (JSON)  │ → │ Generator │
+│ (ts-morph)│   │  (LLM)    │   │  deterministic API data  │   │ Markdown │
+└───────────┘   └───────────┘   └──────────────────────────┘   └──────────┘
+   props,          prose:          single source of truth         skill tree
+   slots,          descriptions,                                   + manifest
+   stories         guidance
+```
 
-### Intelligence Tools
+1. **Scrape** — `ts-morph` reads FluentUI's TypeScript source and extracts props, slots, and
+   stories. The scraper pins the latest stable release tag and records the commit in the schema.
+2. **Enhance** — an LLM adds prose (descriptions, best practices, accessibility notes, prop
+   guidance) on top of the deterministic API data. The step is incremental: unchanged entries are
+   skipped.
+3. **Generate** — a deterministic generator renders the enhanced schema into the Markdown tree and
+   writes `.fluentui-skill-manifest.json`.
 
-| Tool                           | Description                                                                            |
-| ------------------------------ | -------------------------------------------------------------------------------------- |
-| **`suggest_components`**       | Given a UI description, suggests which FluentUI components to use and why.             |
-| **`get_implementation_guide`** | Combines relevant docs + patterns + examples into a step-by-step implementation guide. |
-| **`get_component_examples`**   | Extracts only code examples from a component's docs (minimal context usage).           |
-| **`get_props_reference`**      | Extracts only the props table from a component's docs (quick lookup).                  |
-
-### Utility Tools
-
-| Tool                | Description                                                      |
-| ------------------- | ---------------------------------------------------------------- |
-| **`list_all_docs`** | Lists all available documentation with descriptions.             |
-| **`reindex`**       | Re-scans the documentation folder and rebuilds the search index. |
+The separation matters: API facts (names, props, imports) come only from the scraper, so they are
+grounded in the real package. The LLM contributes prose, never invented APIs.
 
 ---
 
-## How It Works
+## Regeneration workflow
 
-The server is powered by a **schema-driven pipeline**. Instead of parsing
-markdown at runtime, a single pre-built JSON schema bundles all FluentUI
-documentation. That schema is generated offline by a two-stage pipeline:
+Run the pipeline from a checkout:
 
-```
-┌─────────────┐   ┌──────────────┐   ┌─────────────────────────┐
-│   Scraper   │ → │   Enhancer   │ → │  fluentui-schema-       │
-│ (ts-morph)  │   │  (LLM-based) │   │  enhanced.json (bundled)│
-└─────────────┘   └──────────────┘   └─────────────────────────┘
-   Extracts          Adds AI            Single source of truth
-   props/slots/      descriptions,      shipped with the package
-   stories from      best practices,
-   FluentUI source   a11y, patterns
-```
+```bash
+# 1. Scrape the pinned FluentUI release (clones the upstream repository)
+yarn scrape --version v9 --clone
 
-At runtime the MCP server simply loads and serves that schema:
+# 2. Add or refresh the LLM prose for changed entries
+yarn enhance --version v9 --full
 
-```
-┌──────────────────────────────────────────────────┐
-│               MCP Server (stdio)                 │
-│    Receives tool calls from AI assistants        │
-├──────────────────────────────────────────────────┤
-│            12 Specialized Tools                  │
-│   query │ search │ suggest │ guide │ ...         │
-├──────────────────────────────────────────────────┤
-│              Formatters Layer                    │
-│  component │ guide │ pattern │ props │ list │ …  │
-├──────────────────────────────────────────────────┤
-│          In-Memory Schema Store + Search         │
-│   ┌────────────┐ ┌────────────┐ ┌──────────┐     │
-│   │   Schema   │ │ Categories │ │  Search  │     │
-│   │   Store    │ │   Index    │ │  Index   │     │
-│   └────────────┘ └────────────┘ └──────────┘     │
-├──────────────────────────────────────────────────┤
-│      Schema Loader │ Validator │ Search Engine    │
-├──────────────────────────────────────────────────┤
-│      Bundled Schema (fluentui-schema-enhanced)   │
-│   Components │ Utilities │ Guides │ Patterns      │
-└──────────────────────────────────────────────────┘
+# 3. Render the skill tree and its manifest
+yarn skill:generate
+
+# 4. Check that the committed tree matches a fresh generation
+yarn skill:check
+
+# 5. Validate every example against the real package
+yarn skill:validate
+
+# 6. Confirm the committed tree matches the current enhanced schema, and that
+#    no secret leaked
+yarn skill:freshness
+yarn skill:secrets
 ```
 
-### Loading Strategy
+`yarn pipeline:full` chains scrape, enhance, build, and test in one command. Enhancement needs an
+LLM provider configured in a local `.env` (see `.env.example`); the other steps are offline.
 
-1. **Startup**: Server loads the bundled enhanced schema JSON (< 1 second)
-2. **Validate**: Schema is validated; any structural issues are reported to stderr
-3. **Index**: Builds an in-memory search index with TF-IDF scoring
-4. **Serve**: All tool calls served from memory (instant, no disk I/O)
-5. **Reindex**: The `reindex` tool can rebuild the index on demand
+### Gates and manifest
 
-### Schema Coverage (FluentUI v9)
+Generation is guarded by gates, and the manifest records enough to verify a tree:
 
-| Section        | Content                                                              | Count |
-| -------------- | -------------------------------------------------------------------- | ----- |
-| **Components** | Props, slots, stories, AI descriptions, best practices, a11y, prop guidance, anti-patterns, composition examples, performance/theming notes, edge cases | 62    |
-| **Utilities**  | Hooks and helper exports with parameter references + performance notes | 4     |
-| **Guides**     | Foundation, enterprise, and quick-reference guides (with key takeaways, pitfalls, a11y notes) | 16    |
-| **Patterns**   | Form, layout, navigation, modal, and state-management patterns (with when-to-use / when-not-to-use, pitfalls) | 15    |
+| Gate              | Command             | What it checks                                                                 |
+| ----------------- | ------------------- | ------------------------------------------------------------------------------ |
+| Drift             | `yarn skill:check`  | Regenerating from the same schema reproduces the committed files byte-for-byte. |
+| Example           | `yarn skill:validate` | Every TypeScript example imports real exports and uses real props and members. |
+| Freshness         | `yarn skill:freshness` | The committed tree matches the current enhanced schema (manifest hash).      |
+| Secrets           | `yarn skill:secrets` | No API key or credential is embedded in the generated content.                 |
 
+`.fluentui-skill-manifest.json` contains:
 
+- `schemaHash` — hash of the enhanced schema the tree was generated from.
+- `generatorVersion` — version of the renderer that produced the tree.
+- `generatedAt` — timestamp carried over from the schema, so regeneration is reproducible.
+- `files` — a SHA-256 hash per generated file, used by the drift gate.
+
+The generated tree is committed under `.agents/skills/fluentui/` and published inside the
+`fluentui-skill` package. The source `data/` directory is not shipped.
 
 ---
 
-## Usage Examples
+## Decisions
 
-### AI Workflow: Building a Login Form
-
-```
-User: "Create a login form with email and password"
-
-AI uses tools:
-1. suggest_components({ uiDescription: "login form with email and password" })
-   → Suggests: Input, Field, Button, Card
-
-2. get_implementation_guide({ goal: "login form" })
-   → Returns combined docs + form patterns + code examples
-
-3. AI implements the form with accurate props and patterns
-```
-
-### AI Workflow: Building a Data Table
-
-```
-User: "Create a sortable data table with selection"
-
-AI uses tools:
-1. search_docs({ query: "table sorting selection" })
-   → Finds: Table, DataGrid, sorting patterns
-
-2. query_component({ componentName: "DataGrid" })
-   → Full DataGrid documentation
-
-3. get_component_examples({ componentName: "DataGrid" })
-   → Just the code examples for reference
-
-4. AI implements with correct DataGrid API
-```
+Architecture decision records live under [`requirements/decisions/`](requirements/decisions/). They
+explain why the project moved from a documentation server to an Agent Skill, how the three-layer
+content model works, why generation is deterministic, how the LLM step is bounded, and why example
+validation is the trust guarantee.
 
 ---
 
 ## Development
 
-### Setup
-
 ```bash
 git clone https://github.com/blendsdk/fluentui-mcp.git
 cd fluentui-mcp
 yarn install
-```
 
-### Build
-
-```bash
 yarn build          # Compile TypeScript
-yarn watch          # Watch mode
-```
-
-### Test
-
-```bash
-yarn test           # Run tests
-yarn test:watch     # Watch mode
+yarn test           # Run the test suite
 yarn test:coverage  # Coverage report
+
+yarn scrape         # Run the scraper
+yarn enhance        # Run the enhancer
+yarn skill:generate # Render the skill
+yarn skill:check    # Drift gate
+yarn skill:validate # Example gate
 ```
-
-### Project Structure
-
-```
-fluentui-mcp/
-├── src/                        # MCP server (runtime)
-│   ├── index.ts                # stdio transport entry point
-│   ├── server.ts               # Tool definitions, state, dispatch
-│   ├── config.ts               # Configuration resolver
-│   ├── types/                  # Schema + shared TypeScript types
-│   ├── schema/
-│   │   ├── schema-loader.ts    # Resolves & loads the bundled schema
-│   │   ├── schema-store.ts     # In-memory schema store + indexes
-│   │   └── schema-validator.ts # Structural schema validation
-│   ├── search/
-│   │   ├── search-engine.ts    # TF-IDF search engine
-│   │   └── search-index.ts     # In-memory search index
-│   ├── formatters/             # Render schema entries → markdown
-│   └── tools/                  # 12 MCP tool implementations
-├── scripts/                    # Offline schema pipeline (build-time)
-│   ├── scraper/                # ts-morph extraction from FluentUI source
-│   └── enhancer/               # LLM enrichment + guide/pattern generation
-├── data/
-│   └── v9/
-│       ├── fluentui-schema.json          # Raw scraped schema
-│       └── fluentui-schema-enhanced.json # Enhanced schema (shipped)
-├── package.json
-├── tsconfig.json
-└── vitest.config.ts
-```
-
----
-
-## Configuration
-
-| Source                         | Priority                     | Example                                |
-| ------------------------------ | ---------------------------- | -------------------------------------- |
-| CLI argument                   | Medium (version)             | `fluentui-mcp v9`                      |
-| `FLUENTUI_VERSION` env var     | Medium                       | `FLUENTUI_VERSION=v9`                  |
-| `FLUENTUI_SCHEMA_PATH` env var | Highest (overrides version)  | `FLUENTUI_SCHEMA_PATH=/my/schema.json` |
-| Default                        | Lowest                       | Bundled v9 enhanced schema             |
-
----
-
-## Regenerating the Schema
-
-The bundled schema is generated offline by the scraper + enhancer pipeline.
-Enrichment requires an LLM provider — set `LLM_PROVIDER` (`openai` or
-`anthropic`) and the matching API key in a local `.env` file (see
-`.env.example`).
-
-```bash
-# 1. Scrape props/slots/stories from FluentUI source (clones the repo)
-yarn scrape --version v9 --clone
-
-# 2. Enhance with AI descriptions, best practices, a11y, and guides
-yarn enhance --version v9 --full
-
-# Or run the whole pipeline (scrape → enhance → build → test) in one step:
-yarn pipeline:full
-```
-
-The enhancer is incremental: it hashes each source entry and only re-runs the
-LLM for entries that changed. Use `--dry-run` to preview a diff without making
-any LLM calls.
-
----
-
-## Troubleshooting
-
-### Server Not Loading
-
-1. Verify installation: `which fluentui-mcp`
-2. Test manually: `fluentui-mcp` (should output to stderr: "FluentUI MCP Server running on stdio")
-3. Check MCP settings JSON syntax
-4. Restart VS Code / AI assistant
-
-### Tool Errors
-
-1. **"Schema not found"**: Check the version exists under `data/` or set `FLUENTUI_SCHEMA_PATH`
-2. **"Component not found"**: Try `search_docs` with broader terms
-3. **Search returning no results**: Try `reindex` to rebuild the search index
-
-### Performance
-
--   First query: < 100ms (served from memory after startup load)
--   Search queries: < 50ms (pre-built TF-IDF index)
--   Startup: < 1 second to load and index the bundled schema
-
-
----
-
-## Contributing
-
-Contributions welcome! Especially:
-
--   Documentation for new FluentUI versions
--   Additional tools and intelligence features
--   Search engine improvements
--   Bug reports and fixes
 
 ---
 
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
-
----
-
-## See Also
-
--   [FluentUI React Components](https://react.fluentui.dev/) — Official documentation
--   [Model Context Protocol](https://modelcontextprotocol.io/) — MCP specification
--   [Cline](https://github.com/saoudrizwan/claude-dev) — VS Code AI assistant

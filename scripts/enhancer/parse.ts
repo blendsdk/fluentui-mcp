@@ -193,11 +193,85 @@ export function repairJson(content: string): string {
 
 
 /**
+ * Repair JSON that is balanced but not strictly valid.
+ *
+ * A response can have matching braces and still fail `JSON.parse`, most often
+ * because the model emitted a trailing comma or a raw control character inside
+ * a string. This pass is string-aware: it only edits outside string literals,
+ * and inside strings it escapes the control characters JSON forbids. It never
+ * changes a value that already parses.
+ *
+ * @param content - JSON-like text that may contain trailing commas or control characters
+ * @returns The sanitized text
+ */
+export function sanitizeJson(content: string): string {
+  let out = '';
+  let inStr = false;
+  let esc = false;
+
+  for (let i = 0; i < content.length; i += 1) {
+    const ch = content[i];
+
+    if (inStr) {
+      if (esc) {
+        out += ch;
+        esc = false;
+        continue;
+      }
+      if (ch === '\\') {
+        out += ch;
+        esc = true;
+        continue;
+      }
+      if (ch === '"') {
+        inStr = false;
+        out += ch;
+        continue;
+      }
+      // Control characters must be escaped inside a JSON string.
+      const code = ch.charCodeAt(0);
+      if (code < 0x20) {
+        if (ch === '\n') out += '\\n';
+        else if (ch === '\r') out += '\\r';
+        else if (ch === '\t') out += '\\t';
+        else out += `\\u${code.toString(16).padStart(4, '0')}`;
+        continue;
+      }
+      out += ch;
+      continue;
+    }
+
+    if (ch === '"') {
+      inStr = true;
+      out += ch;
+      continue;
+    }
+
+    // Drop a comma that is followed only by whitespace and a closing bracket.
+    if (ch === ',') {
+      let j = i + 1;
+      while (j < content.length && /\s/.test(content[j])) {
+        j += 1;
+      }
+      const next = content[j];
+      if (next === '}' || next === ']') {
+        continue;
+      }
+    }
+
+    out += ch;
+  }
+
+  return out;
+}
+
+/**
  * Parse an LLM response string into a typed JSON object.
  *
- * Tries, in order: direct parse, parse after stripping code fences, and
- * parse of the extracted `{…}` substring. Throws {@link ResponseParseError}
- * when all strategies fail.
+ * Tries, in order: direct parse, parse after stripping code fences, parse of
+ * the extracted `{…}` substring, and parse of a sanitized form that removes
+ * trailing commas and escapes raw control characters. Throws
+ * {@link ResponseParseError} when all strategies fail.
  *
  * @typeParam T - Expected shape of the parsed object
  * @param content - Raw LLM response content
@@ -205,12 +279,20 @@ export function repairJson(content: string): string {
  * @throws {ResponseParseError} When the content cannot be parsed
  */
 export function parseJsonResponse<T>(content: string): T {
-  const candidates: string[] = [];
   const stripped = stripCodeFences(content);
-  candidates.push(stripped);
+  const candidates: string[] = [stripped];
 
   const extracted = extractJsonObject(stripped);
   if (extracted) candidates.push(extracted);
+
+  // Balanced-but-invalid responses (trailing commas, raw control characters)
+  // are common enough that a sanitized candidate is worth trying too.
+  for (const candidate of [...candidates]) {
+    const sanitized = sanitizeJson(candidate);
+    if (sanitized !== candidate) {
+      candidates.push(sanitized);
+    }
+  }
 
   for (const candidate of candidates) {
     try {

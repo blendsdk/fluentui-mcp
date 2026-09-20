@@ -1,0 +1,48 @@
+# CarouselButton
+
+> **Package**: `@fluentui/react-carousel` v9.9.8
+> **Import**: `import { CarouselButton } from '@fluentui/react-components';`
+> **Category**: utilities
+> **Stability**: stable
+
+## Overview
+
+CarouselButton is a small, purpose-built navigation control in the Fluent UI React v9 Carousel family. It renders a button whose sole job is to move the surrounding carousel one step backward or forward: the navType prop declares whether the control is a "prev" (go to the previous slide) or a "next" (go to the next slide) button, and it defaults to "next" when omitted. Because direction is expressed as an explicit prop rather than being inferred from an icon, the same component can be reused for the backward and forward affordances of a carousel, for mirrored layouts, and inside Right-to-Left reading directions. Practically it is composed alongside Carousel, CarouselSlider, CarouselViewport, CarouselCard, CarouselNav, CarouselNavContainer, CarouselNavButton / CarouselNavImageButton (page-dot style navigation), and CarouselAutoplayButton within the same Carousel subtree, where it consumes the carousel context to drive slide transitions. Use it when you want clean, framework-provided previous/next stepping instead of wiring your own click handlers to the carousel's imperative API.
+
+**When to use**: Use CarouselButton whenever a carousel needs a discrete previous/next affordance — the classic edge arrow or header-row chevron pattern. It is the right choice when the interaction you want is "step one slide at a time" and you want Fluent's focus, hover, pressed, and disabled visuals for free. Prefer CarouselNavButton or CarouselNavImageButton instead when the requirement is direct page/slide selection (dots or thumbnail navigation), and prefer CarouselAutoplayButton when the requirement is starting, stopping, or toggling automatic rotation. Avoid CarouselButton for actions that are not slide stepping (for example "open full screen" or "share"), and avoid it when the carousel is purely decorative — a non-interactive presentation should not expose stepping controls to keyboard and screen-reader users.
+
+## Props Reference
+
+| Prop | Type | Default | Required | Description |
+| --- | --- | --- | --- | --- |
+| `navType` | `"prev" \| "next" \| undefined` | — | No | Dictates whether button will be of type go next or go previous Default: 'next' |
+
+## Best Practices
+
+### Do's
+
+- Set navType explicitly on every instance ("prev" on the backward control and "next" on the forward control) so direction is unambiguous in code review and refactors, even though the default is "next".
+- Render the backward and forward controls as a matched pair inside the same CarouselNav or CarouselNavContainer so the control set reads as one navigation region and tab order is predictable.
+- Use logical direction semantics: navType="prev" means "earlier slide in the content order", which stays correct in Right-to-Left layouts where the rendered arrow may point the other way.
+- Give icon-only instances an accessible name (visible text, an accessible label, or an accompanying Tooltip) so screen-reader users hear "Go to previous slide" rather than just "button".
+- Keep stepping controls near the carousel they control — typically in the nav bar or overlaid at the leading and trailing edges — so their relationship to the slides is visually obvious.
+- Verify the boundary behavior (first slide for "prev", last slide for "next") against the surrounding Carousel configuration, and decide deliberately whether the control should become inert, loop, or remain active.
+- Use CarouselButton for step navigation and delegate autoplay control to CarouselAutoplayButton, keeping each control's behavior single-purpose.
+
+### Don'ts
+
+- Do not render two CarouselButtons without thinking: the second one will also default to "next" and advance the carousel instead of going back.
+- Do not use CarouselButton outside of a Carousel subtree — there is no carousel context to drive, so the control has nothing to navigate.
+- Do not overload the button with unrelated actions such as opening a detail view, downloading a slide, or pausing autoplay; those belong to other controls or application code.
+- Do not rely on the arrow glyph alone to convey meaning to assistive technology; direction must be communicated through the accessible name as well.
+- Do not remove stepping controls from the tab order or hide them when they are still functional — keyboard users must be able to reach them.
+- Do not use CarouselButton as a substitute for page-dot navigation when users need to jump to a specific slide; consecutive clicking is a poor substitute for direct selection.
+- Do not assume the button is automatically disabled at the first or last slide; validate the actual behavior of the configured Carousel rather than designing around an assumed state.
+
+## Accessibility
+
+## See Also
+
+- [utilities category](../categories/utilities.md)
+
+<!-- Generated by scripts/skill/generate.ts — do not edit by hand. -->

@@ -1,12 +1,16 @@
 # =============================================================================
-# FluentUI MCP Server — Continuous Integration
+# FluentUI Agent Skill — Continuous Integration
 # =============================================================================
 #
-# Builds and tests the package on every push to master and on every pull
-# request targeting master. Runs against the supported Node.js LTS versions.
+# Builds and tests the package, then runs the skill integrity gates, on every
+# push to master and on every pull request targeting master. Runs against the
+# supported Node.js LTS versions.
 # =============================================================================
 
 name: CI
+
+permissions:
+    contents: read
 
 on:
     push:
@@ -42,3 +46,9 @@ jobs:
 
             - name: Run tests
               run: yarn test
+
+            - name: Check skill drift and coverage
+              run: yarn skill:check
+
+            - name: Validate skill examples
+              run: yarn skill:validate

@@ -24,6 +24,8 @@ import {
   createComponentEntry,
   createPropEntry,
   createGuideEntry,
+  createCategoryGuidanceEntry,
+  createRecipeEntry,
 } from '../fixtures/helpers.js';
 import type { ComponentEnhancementResult } from '../../../scripts/enhancer/types.js';
 
@@ -245,14 +247,16 @@ describe('mergeEnhancements', () => {
     expect(result.components[0]!.id).toBe(button.id);
   });
 
-  it('should carry forward guides from previous schema when raw has none', () => {
+  it('should carry forward generated sections from previous schema when raw has none', () => {
     const rawSchema = createFluentUISchema({
       foundation: [],
-      patterns: [],
+      categoryGuidance: [],
+      recipes: [],
     });
     const previousSchema = createFluentUISchema({
       foundation: [createGuideEntry('theming', { title: 'Theming' })],
-      patterns: [createGuideEntry('forms', { title: 'Forms' })],
+      categoryGuidance: [createCategoryGuidanceEntry('forms')],
+      recipes: [createRecipeEntry('login-form')],
     });
 
     const diff = diffSchemas(rawSchema, previousSchema, {});
@@ -269,8 +273,10 @@ describe('mergeEnhancements', () => {
 
     expect(result.foundation).toHaveLength(1);
     expect(result.foundation[0]!.id).toBe('theming');
-    expect(result.patterns).toHaveLength(1);
-    expect(result.patterns[0]!.id).toBe('forms');
+    expect(result.categoryGuidance).toHaveLength(1);
+    expect(result.categoryGuidance[0]!.category).toBe('forms');
+    expect(result.recipes).toHaveLength(1);
+    expect(result.recipes[0]!.id).toBe('login-form');
   });
 
   it('should use raw guides when present (overriding previous)', () => {

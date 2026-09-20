@@ -14,8 +14,8 @@ import {
   buildComponentEnhanceMessages,
   buildUtilityEnhanceMessages,
   buildFoundationGuideMessages,
-  buildPatternGuideMessages,
-  buildEnterpriseGuideMessages,
+  buildCategoryGuidanceMessages,
+  buildRecipeMessages,
   buildQuickReferenceMessages,
   buildComponentSummaries,
   toComponentSummary,
@@ -30,8 +30,8 @@ import {
 import {
   resolveEnhancerConfig,
   FOUNDATION_GUIDES,
-  PATTERN_GUIDES,
-  ENTERPRISE_GUIDES,
+  CATEGORY_GUIDES,
+  RECIPE_GUIDES,
   QUICK_REFERENCE_GUIDES,
 } from '../../../scripts/enhancer/config.js';
 import type {
@@ -127,17 +127,20 @@ describe('guide prompt builders', () => {
     expect(messages[1].content).toContain('Button');
   });
 
-  it('pattern guide includes the pattern group', () => {
+  it('recipe prompt includes the recipe group', () => {
     const ctx = makeGuideContext();
     ctx.spec = { id: 'login-form', title: 'Login Form', group: 'forms' };
-    const messages = buildPatternGuideMessages(ctx);
+    const messages = buildRecipeMessages(ctx);
     expect(messages[1].content).toContain('forms');
     expect(messages[1].content).toContain('login-form');
   });
 
-  it('enterprise guide builds a system + user pair', () => {
-    const messages = buildEnterpriseGuideMessages(makeGuideContext());
+  it('category guidance builds a grounded system + user pair', () => {
+    const ctx = makeGuideContext();
+    ctx.spec = { id: 'buttons', title: 'Buttons', group: 'category-guidance' };
+    const messages = buildCategoryGuidanceMessages(ctx);
     expect(messages).toHaveLength(2);
+    expect(messages[1].content).toContain('buttons');
     expect(messages[1].content).toContain('Button');
   });
 
@@ -261,13 +264,13 @@ describe('resolveEnhancerConfig', () => {
 
   it('guide catalogs are non-empty and well-formed', () => {
     expect(FOUNDATION_GUIDES.length).toBeGreaterThan(0);
-    expect(PATTERN_GUIDES.length).toBeGreaterThan(0);
-    expect(ENTERPRISE_GUIDES.length).toBeGreaterThan(0);
+    expect(CATEGORY_GUIDES).toHaveLength(8);
+    expect(RECIPE_GUIDES).toHaveLength(19);
     expect(QUICK_REFERENCE_GUIDES.length).toBeGreaterThan(0);
     for (const spec of [
       ...FOUNDATION_GUIDES,
-      ...PATTERN_GUIDES,
-      ...ENTERPRISE_GUIDES,
+      ...CATEGORY_GUIDES,
+      ...RECIPE_GUIDES,
       ...QUICK_REFERENCE_GUIDES,
     ]) {
       expect(spec.id).toBeTruthy();

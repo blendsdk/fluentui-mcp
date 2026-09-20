@@ -71,8 +71,8 @@ export function writeSchema(options: SchemaOutputOptions): FluentUISchema {
     utilities: options.utilities,
     // Enhancer-populated fields — empty in scraper output
     foundation: [],
-    patterns: [],
-    enterprise: [],
+    categoryGuidance: [],
+    recipes: [],
     quickReference: [],
     stats: computeStats(options.components, options.utilities),
   };

@@ -12,21 +12,20 @@
  * @module scraper/cli
  */
 
-import { resolve } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 
 import { getVersionConfig } from './config.js';
-import { cloneRepo, resolveCommit } from './clone.js';
-import { discoverPackages, discoverContribPackages } from './discover.js';
-import { V9Adapter } from './adapters/v9-adapter.js';
-import { writeSchema } from './output.js';
+import { cloneRepo } from './clone.js';
+import { createAdapter } from './adapters/factory.js';
+import { resolveLatestStableTagFromRemote } from './git-ref.js';
+import { scrape } from './pipeline.js';
 
-import type { ScraperCliOptions, DiscoveredPackage } from './types.js';
-import type {
-  ComponentEntry,
-  UtilityEntry,
-  SourceInfo,
-} from '../../src/types/schema.js';
-import type { ScraperAdapter } from './adapters/adapter.js';
+import type { ScraperCliOptions } from './types.js';
+
+// Re-exported so tests and other callers can build adapters without reaching
+// into the adapters directory.
+export { createAdapter };
 
 // ============================================================================
 // Argument Parsing
@@ -117,57 +116,48 @@ export function validateOptions(options: ScraperCliOptions): string[] {
 }
 
 // ============================================================================
-// Adapter Factory
-// ============================================================================
-
-/**
- * Create the appropriate scraper adapter for a version config.
- *
- * @param adapterType - Adapter type from version config ('v9', 'v8')
- * @returns Instantiated scraper adapter
- * @throws Error if the adapter type is unsupported
- */
-export function createAdapter(adapterType: string): ScraperAdapter {
-  switch (adapterType) {
-    case 'v9':
-      return new V9Adapter();
-    case 'v8':
-      throw new Error(
-        'V8 adapter is not yet implemented (deferred to future phase)',
-      );
-    default:
-      throw new Error(`Unknown adapter type: '${adapterType}'`);
-  }
-}
-
-// ============================================================================
 // Pipeline Runner
 // ============================================================================
 
 /**
- * Run the full scraper pipeline: discover → extract → write.
+ * Run the full scraper pipeline and write the schema to disk.
+ *
+ * Resolves the source (cloning when requested), delegates the discovery and
+ * extraction work to {@link scrape}, writes the resulting schema, and logs a
+ * summary. User-supplied source paths are checked against the current working
+ * directory so a traversal value is rejected.
  *
  * @param options - Validated CLI options
+ * @throws Error when no source is discoverable or the source path is unsafe
  */
 export function runScraper(options: ScraperCliOptions): void {
   const config = getVersionConfig(options.version);
 
   // Resolve the source path. With --clone we shallow-clone the FluentUI repo
   // (cached under .cache/) and treat the result like a --source checkout.
-  // With --source we use the provided local path directly.
-  let sourcePath: string;
-  let contribPath: string | undefined;
+  // With --source we pass the provided local path through to the pipeline.
+  // Pin the clone to the newest stable release tag unless the caller named a
+  // ref explicitly. Cloning at the tag keeps the recorded ref and the checkout
+  // commit aligned.
+  const pinnedRef =
+    options.ref ??
+    (options.clone
+      ? resolveLatestStableTagFromRemote(config.fluentui.repo) ?? undefined
+      : undefined);
+
+  let source: string;
+  let contrib: string | undefined;
   if (options.clone) {
-    sourcePath = cloneRepo({
+    source = cloneRepo({
       repo: config.fluentui,
       dirName: `fluentui-${config.version}`,
-      ref: options.ref,
+      ref: pinnedRef,
       reuse: options.reuse,
       verbose: options.verbose,
     });
     // Clone the contrib repo too when a contrib ref is explicitly requested.
     if (options.contribRef) {
-      contribPath = cloneRepo({
+      contrib = cloneRepo({
         repo: config.contrib,
         dirName: `fluentui-contrib-${config.version}`,
         ref: options.contribRef,
@@ -175,113 +165,59 @@ export function runScraper(options: ScraperCliOptions): void {
         verbose: options.verbose,
       });
     }
-
   } else {
-    sourcePath = resolve(options.source!);
-    contribPath = options.contrib ? resolve(options.contrib) : undefined;
+    source = options.source!;
+    contrib = options.contrib;
   }
-
-  const outputPath =
-    options.output ?? `data/${config.version}/fluentui-schema.json`;
 
   if (options.verbose) {
-    console.log(`Scraping FluentUI ${config.version} from ${sourcePath}`);
+    console.log(`Scraping FluentUI ${config.version} from ${source}`);
   }
 
-
-  // Step 1: Discover packages in the main repo
-  const packages = discoverPackages(sourcePath, config);
-  if (options.verbose) {
-    console.log(`Discovered ${packages.length} packages`);
-  }
-
-  // Step 1b: Discover contrib packages (optional)
-  let contribPackages: DiscoveredPackage[] = [];
-  if (contribPath) {
-    contribPackages = discoverContribPackages(contribPath);
-    if (options.verbose) {
-      console.log(`Discovered ${contribPackages.length} contrib packages`);
-    }
-  }
-
-
-  const allPackages = [...packages, ...contribPackages];
-
-  if (allPackages.length === 0) {
-    console.error(
-      'No packages discovered. Check --source path and version config.',
-    );
-    process.exit(1);
-  }
-
-  // Step 2: Create the version-specific adapter
-  const adapter = createAdapter(config.adapter);
-
-  // Step 3: Extract components and utilities
-  const components: ComponentEntry[] = [];
-  const utilities: UtilityEntry[] = [];
-
-  for (const pkg of allPackages) {
-    if (pkg.type === 'component') {
-      const entry = adapter.extractComponent(pkg);
-      if (entry) {
-        components.push(entry);
-        if (options.verbose) {
-          console.log(
-            `  ✓ ${entry.name} (${entry.props.length} props, ${entry.stories.length} stories)`,
-          );
-        }
-      }
-    } else if (pkg.type === 'utility') {
-      const entry = adapter.extractUtility(pkg);
-      if (entry) {
-        utilities.push(entry);
-        if (options.verbose) {
-          console.log(
-            `  ✓ ${entry.name} utility (${entry.exports.length} exports)`,
-          );
-        }
-      }
-    }
-    // Skip 'internal' packages silently
-  }
-
-  // Step 4: Build source info metadata. When the checkout came from a git
-  // clone we can resolve the real commit SHA; otherwise fall back to 'unknown'.
-  const sourceInfo: SourceInfo = {
-    repo: config.fluentui.repo,
-    ref: options.ref ?? config.fluentui.defaultRef,
-    commit: resolveCommit(sourcePath),
-    scrapedAt: new Date().toISOString(),
-  };
-
-  // Step 5: Write schema to disk
-  const schema = writeSchema({
-    version: config.version,
-    outputPath: resolve(outputPath),
-    components,
-    utilities,
-    sources: {
-      fluentui: sourceInfo,
-      contrib: contribPath
-        ? {
-            repo: config.contrib.repo,
-            ref: options.contribRef ?? config.contrib.defaultRef,
-            commit: resolveCommit(contribPath),
-            scrapedAt: new Date().toISOString(),
-          }
-        : undefined,
-    },
+  // Only pass an explicit ref through. When none was given, the pipeline
+  // derives the ref from the actual checkout, so a reused cache cannot record
+  // a ref that differs from its commit.
+  const { schema, coverage } = scrape({
+    version: options.version,
+    source,
+    contrib,
+    fluentuiRef: options.ref,
+    contribRef: options.contribRef,
+    allowedRoot: process.cwd(),
   });
 
+  if (schema.components.length === 0 && schema.utilities.length === 0) {
+    throw new Error(
+      'No components or utilities discovered. Check --source path and version config.',
+    );
+  }
 
-  // Step 6: Report results
+  const outputPath = resolve(
+    options.output ?? `data/${config.version}/fluentui-schema.json`,
+  );
+  mkdirSync(dirname(outputPath), { recursive: true });
+  writeFileSync(outputPath, JSON.stringify(schema, null, 2), 'utf-8');
+
+  if (options.verbose) {
+    console.log(`Discovered ${coverage.scraped.length} components`);
+    for (const entry of coverage.scraped) {
+      console.log(`  ✓ ${entry.name}`);
+    }
+    for (const entry of coverage.excluded) {
+      console.log(`  – ${entry.dirName}: ${entry.reason}`);
+    }
+  }
+
   console.log('\nScraping complete!');
   console.log(`  Components: ${schema.stats.totalComponents}`);
   console.log(`  Utilities:  ${schema.stats.totalUtilities}`);
   console.log(`  Props:      ${schema.stats.totalProps}`);
   console.log(`  Stories:    ${schema.stats.totalStories}`);
-  console.log(`  Output:     ${resolve(outputPath)}`);
+  console.log(
+    `  Coverage:   ${coverage.scraped.length} scraped, ` +
+      `${coverage.excluded.length} excluded`,
+  );
+  console.log(`  Output:     ${outputPath}`);
 }
 
 // ============================================================================

@@ -8,7 +8,51 @@
  * @module enhancer/config
  */
 
-import type { GuideSpec } from './types.js';
+import type { DeepSeekReasoningEffort, GuideSpec } from './types.js';
+
+// ============================================================================
+// DeepSeek Limits & Defaults
+// ============================================================================
+
+/**
+ * Output-token ceiling requested from DeepSeek.
+ *
+ * DeepSeek's reasoning models expose a 128K output window; the enhancer always
+ * asks for the maximum so large enriched JSON is never silently cut short. A
+ * response that still ends with `finish_reason === 'length'` is treated as
+ * truncated and aborts the item.
+ */
+export const DEEPSEEK_MAX_OUTPUT_TOKENS = 131_072;
+
+/**
+ * Per-request timeout in milliseconds for DeepSeek calls.
+ *
+ * Thinking-mode responses can take a long time, so the timeout is generous
+ * (10 minutes) rather than the typical request timeout.
+ */
+export const DEEPSEEK_REQUEST_TIMEOUT_MS = 600_000;
+
+/** Default DeepSeek model id when `DEEPSEEK_MODEL` is unset. */
+export const DEFAULT_DEEPSEEK_MODEL = 'deepseek-flash';
+
+/** Default DeepSeek OpenAI-compatible base URL when `DEEPSEEK_BASE_URL` is unset. */
+export const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
+
+/**
+ * Reasoning-effort levels DeepSeek accepts.
+ *
+ * Used both as the validation allowlist for `DEEPSEEK_REASONING_EFFORT` and as
+ * the default (`max`) when the variable is unset.
+ */
+export const DEEPSEEK_REASONING_EFFORTS: readonly DeepSeekReasoningEffort[] = [
+  'none',
+  'low',
+  'high',
+  'max',
+];
+
+/** Default reasoning effort when `DEEPSEEK_REASONING_EFFORT` is unset. */
+export const DEFAULT_DEEPSEEK_REASONING_EFFORT: DeepSeekReasoningEffort = 'max';
 
 // ============================================================================
 // Guide Catalogs
@@ -27,37 +71,46 @@ export const FOUNDATION_GUIDES: GuideSpec[] = [
 ];
 
 /**
- * Pattern guides composing components for real-world use cases.
- * The `group` field is the pattern group (forms, navigation, layout…).
+ * Category guidance documents: one per schema category.
+ *
+ * The `id` is the category name, so the orchestrator can resolve each guide's
+ * target components by matching `component.category`.
  */
-export const PATTERN_GUIDES: GuideSpec[] = [
-  { id: 'basic-forms', title: 'Basic Form Patterns', group: 'forms', targetComponentIds: ['input', 'field', 'button', 'textarea'] },
-  { id: 'form-validation', title: 'Form Validation', group: 'forms', targetComponentIds: ['field', 'input', 'button'] },
-  { id: 'login-form', title: 'Login Form Pattern', group: 'forms', targetComponentIds: ['input', 'button', 'field', 'checkbox'] },
-  { id: 'sidebar-navigation', title: 'Sidebar Navigation', group: 'navigation', targetComponentIds: ['nav', 'tree'] },
-  { id: 'tab-navigation', title: 'Tab Navigation', group: 'navigation', targetComponentIds: ['tablist', 'tab'] },
-  { id: 'breadcrumb-patterns', title: 'Breadcrumb Patterns', group: 'navigation', targetComponentIds: ['breadcrumb'] },
-  { id: 'page-structure', title: 'Page Structure', group: 'layout' },
-  { id: 'responsive-design', title: 'Responsive Design', group: 'layout' },
-  { id: 'dashboard-layout', title: 'Dashboard Layout', group: 'layout', targetComponentIds: ['card'] },
-  { id: 'dialog-patterns', title: 'Dialog Patterns', group: 'modals', targetComponentIds: ['dialog', 'button'] },
-  { id: 'drawer-patterns', title: 'Drawer Patterns', group: 'modals', targetComponentIds: ['drawer'] },
-  { id: 'controlled-uncontrolled', title: 'Controlled vs Uncontrolled', group: 'state', targetComponentIds: ['input'] },
-  { id: 'form-state', title: 'Form State Management', group: 'state', targetComponentIds: ['field', 'input'] },
-  { id: 'loading-states', title: 'Loading States', group: 'data', targetComponentIds: ['spinner', 'skeleton'] },
-  { id: 'error-handling', title: 'Error Handling Patterns', group: 'data', targetComponentIds: ['messagebar', 'field'] },
+export const CATEGORY_GUIDES: GuideSpec[] = [
+  { id: 'buttons', title: 'Buttons', group: 'category-guidance' },
+  { id: 'forms', title: 'Forms', group: 'category-guidance' },
+  { id: 'navigation', title: 'Navigation', group: 'category-guidance' },
+  { id: 'data-display', title: 'Data Display', group: 'category-guidance' },
+  { id: 'feedback', title: 'Feedback', group: 'category-guidance' },
+  { id: 'overlays', title: 'Overlays', group: 'category-guidance' },
+  { id: 'layout', title: 'Layout', group: 'category-guidance' },
+  { id: 'utilities', title: 'Utilities', group: 'category-guidance' },
 ];
 
-
 /**
- * Enterprise guides covering production-grade application patterns.
+ * Task recipes: goal-oriented walkthroughs that compose components.
+ * The `group` field is the recipe group (forms, data, navigation, …).
  */
-export const ENTERPRISE_GUIDES: GuideSpec[] = [
-  { id: 'app-shell', title: 'Application Shell', group: 'enterprise' },
-  { id: 'dashboard-patterns', title: 'Dashboard Patterns', group: 'enterprise' },
-  { id: 'admin-crud', title: 'Admin CRUD Patterns', group: 'enterprise' },
-  { id: 'data-tables', title: 'Data Table Patterns', group: 'enterprise' },
-  { id: 'accessibility-enterprise', title: 'Enterprise Accessibility', group: 'enterprise' },
+export const RECIPE_GUIDES: GuideSpec[] = [
+  { id: 'login-form', title: 'Login Form', group: 'forms' },
+  { id: 'settings-form', title: 'Settings Form', group: 'forms' },
+  { id: 'multi-step-form', title: 'Multi-Step Form', group: 'forms' },
+  { id: 'form-validation', title: 'Form Validation', group: 'forms' },
+  { id: 'data-table', title: 'Data Table', group: 'data' },
+  { id: 'async-data-states', title: 'Async Data States', group: 'data' },
+  { id: 'virtualization', title: 'Virtualization', group: 'data' },
+  { id: 'app-navigation', title: 'Application Navigation', group: 'navigation' },
+  { id: 'tabs', title: 'Tabs', group: 'navigation' },
+  { id: 'breadcrumb', title: 'Breadcrumb', group: 'navigation' },
+  { id: 'pagination', title: 'Pagination', group: 'navigation' },
+  { id: 'confirm-dialog', title: 'Confirm Dialog', group: 'modals' },
+  { id: 'form-dialog', title: 'Form Dialog', group: 'modals' },
+  { id: 'drawer', title: 'Drawer', group: 'modals' },
+  { id: 'dashboard-shell', title: 'Dashboard Shell', group: 'layout' },
+  { id: 'responsive-layout', title: 'Responsive Layout', group: 'layout' },
+  { id: 'controlled-uncontrolled', title: 'Controlled vs Uncontrolled', group: 'state' },
+  { id: 'server-state', title: 'Server State', group: 'state' },
+  { id: 'accessibility-basics', title: 'Accessibility Basics', group: 'accessibility' },
 ];
 
 /**
