@@ -114,39 +114,39 @@ Run the pipeline from a checkout:
 
 ```bash
 # 1. Scrape the pinned FluentUI release (clones the upstream repository)
-yarn scrape --version v9 --clone
+npm run scrape -- --version v9 --clone
 
 # 2. Add or refresh the LLM prose for changed entries
-yarn enhance --version v9 --full
+npm run enhance -- --version v9 --full
 
 # 3. Render the skill tree and its manifest
-yarn skill:generate
+npm run skill:generate
 
 # 4. Check that the committed tree matches a fresh generation
-yarn skill:check
+npm run skill:check
 
 # 5. Validate every example against the real package
-yarn skill:validate
+npm run skill:validate
 
 # 6. Confirm the committed tree matches the current enhanced schema, and that
 #    no secret leaked
-yarn skill:freshness
-yarn skill:secrets
+npm run skill:freshness
+npm run skill:secrets
 ```
 
-`yarn pipeline:full` chains scrape, enhance, build, and test in one command. Enhancement needs an
+`npm run pipeline:full` chains scrape, enhance, build, and test in one command. Enhancement needs an
 LLM provider configured in a local `.env` (see `.env.example`); the other steps are offline.
 
 ### Gates and manifest
 
 Generation is guarded by gates, and the manifest records enough to verify a tree:
 
-| Gate              | Command             | What it checks                                                                 |
-| ----------------- | ------------------- | ------------------------------------------------------------------------------ |
-| Drift             | `yarn skill:check`  | Regenerating from the same schema reproduces the committed files byte-for-byte. |
-| Example           | `yarn skill:validate` | Every TypeScript example imports real exports and uses real props and members. |
-| Freshness         | `yarn skill:freshness` | The committed tree matches the current enhanced schema (manifest hash).      |
-| Secrets           | `yarn skill:secrets` | No API key or credential is embedded in the generated content.                 |
+| Gate              | Command                  | What it checks                                                                 |
+| ----------------- | ------------------------ | ------------------------------------------------------------------------------ |
+| Drift             | `npm run skill:check`    | Regenerating from the same schema reproduces the committed files byte-for-byte. |
+| Example           | `npm run skill:validate` | Every TypeScript example imports real exports and uses real props and members. |
+| Freshness         | `npm run skill:freshness` | The committed tree matches the current enhanced schema (manifest hash).      |
+| Secrets           | `npm run skill:secrets`  | No API key or credential is embedded in the generated content.                 |
 
 `.fluentui-skill-manifest.json` contains:
 
@@ -174,18 +174,26 @@ validation is the trust guarantee.
 ```bash
 git clone https://github.com/blendsdk/fluentui-mcp.git
 cd fluentui-mcp
-yarn install
+npm install
 
-yarn build          # Compile TypeScript
-yarn test           # Run the test suite
-yarn test:coverage  # Coverage report
+npm run build          # Compile TypeScript
+npm test               # Run the test suite
+npm run test:coverage  # Coverage report
 
-yarn scrape         # Run the scraper
-yarn enhance        # Run the enhancer
-yarn skill:generate # Render the skill
-yarn skill:check    # Drift gate
-yarn skill:validate # Example gate
+npm run scrape         # Run the scraper
+npm run enhance        # Run the enhancer
+npm run skill:generate # Render the skill
+npm run skill:check    # Drift gate
+npm run skill:validate # Example gate
 ```
+
+### Release
+
+Publishing is a manual GitHub Actions workflow (Actions → Release) that runs
+`node scripts/release.mjs release --type auto --tag latest --ci --git-push`. The same command works
+locally. Versions are derived from conventional commits, and `npm run check:version` guards the
+parity between `package.json` and `package-lock.json`. Publishing uses npm trusted publishing
+(OIDC), so the trusted publisher configured on npmjs.com must name the workflow file `release.yml`.
 
 ---
 

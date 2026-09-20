@@ -37,7 +37,7 @@ These rules are **mandatory** and must be consulted before every task.
 
 - **Language(s):** TypeScript
 - **Framework(s):** MCP SDK
-- **Package Manager:** yarn
+- **Package Manager:** npm
 - **Test Framework:** Vitest
 
 **Manifest files found:** package.json, tsconfig.json
@@ -56,34 +56,34 @@ All commands assume execution from the project root. Prefix all shell commands w
 ### Build
 
 ```bash
-clear && sleep 3 && yarn build
+clear && sleep 3 && npm run build
 ```
 
 ### Test
 
 ```bash
 # Run all tests
-clear && sleep 3 && yarn test
+clear && sleep 3 && npm test
 ```
 
 ### Verify (before commit)
 
 ```bash
 # Full verification — run this before any git commit
-clear && sleep 3 && yarn build && yarn test
+clear && sleep 3 && npm run verify
 ```
 
 ### Schema Pipeline (offline, build-time)
 
 ```bash
 # Scrape props/slots/stories from FluentUI source
-clear && sleep 3 && yarn scrape --version v9 --clone --verbose
+clear && sleep 3 && npm run scrape -- --version v9 --clone --verbose
 
 # Enhance with AI descriptions, best practices, a11y, guides/patterns
-clear && sleep 3 && yarn enhance --version v9 --full --verbose
+clear && sleep 3 && npm run enhance -- --version v9 --full --verbose
 
 # Whole pipeline (scrape → enhance → build → test)
-clear && sleep 3 && yarn pipeline:full
+clear && sleep 3 && npm run pipeline:full
 ```
 
 ## Project Structure

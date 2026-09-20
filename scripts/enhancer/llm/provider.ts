@@ -7,7 +7,7 @@
  * Design decision (recorded during exec_plan, Phase 7):
  * Providers are implemented with the Node.js global `fetch` API rather than
  * the official vendor SDKs. This keeps the dependency surface minimal (per
- * code.md rule 34 — minimize dependency surface), requires no `yarn install`
+ * code.md rule 34 — minimize dependency surface), requires no `npm install`
  * step to build/test the pipeline, and is fully testable offline via the
  * mock provider. Node >=20 guarantees global `fetch` is available.
  *

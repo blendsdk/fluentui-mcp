@@ -51,7 +51,7 @@ OPENAI_API_KEY=sk-...          # or ANTHROPIC_API_KEY=...
 # LLM_MAX_RETRIES=5
 ```
 
-The `yarn scrape` / `yarn enhance` scripts auto-load `.env` via
+The `npm run scrape` / `npm run enhance` scripts auto-load `.env` via
 `node --env-file-if-exists=.env`.
 
 ---
@@ -61,16 +61,16 @@ The `yarn scrape` / `yarn enhance` scripts auto-load `.env` via
 ### Regenerate everything (scrape + enhance + verify)
 
 ```bash
-yarn pipeline:full
+npm run pipeline:full
 ```
 
-This runs: `yarn scrape --version v9 --clone && yarn enhance --version v9 --full && yarn build && yarn test`.
+This runs: `npm run scrape -- --version v9 --clone && npm run enhance -- --version v9 --full && npm run build && npm test`.
 
 ### Re-scrape only (after a FluentUI version bump)
 
 ```bash
 # Clones/pulls the FluentUI repo and re-extracts the raw schema
-yarn scrape --version v9 --clone
+npm run scrape -- --version v9 --clone
 ```
 
 Output: `data/v9/fluentui-schema.json`.
@@ -78,7 +78,7 @@ Output: `data/v9/fluentui-schema.json`.
 ### Re-enhance only (incremental)
 
 ```bash
-yarn enhance --version v9
+npm run enhance -- --version v9
 ```
 
 The enhancer is **incremental**: it hashes each source entry (`sourceHash`) and
@@ -98,7 +98,7 @@ Output: `data/v9/fluentui-schema-enhanced.json`.
 ### Preview changes without spending tokens
 
 ```bash
-yarn enhance --version v9 --dry-run
+npm run enhance -- --version v9 --dry-run
 ```
 
 ---
@@ -110,8 +110,8 @@ yarn enhance --version v9 --dry-run
 2. Run the pipeline for the new version:
 
    ```bash
-   yarn scrape --version v10 --clone
-   yarn enhance --version v10 --full
+   npm run scrape -- --version v10 --clone
+   npm run enhance -- --version v10 --full
    ```
 
 3. The new `data/v10/fluentui-schema-enhanced.json` is produced. Ship it by
@@ -187,8 +187,8 @@ After regenerating or editing the schema:
 - [ ] Enhanced schema produced: `data/<version>/fluentui-schema-enhanced.json`
 - [ ] Enhanced schema is NOT gitignored and is committed (it ships with the package)
 - [ ] Schema validates with 0 errors (check stderr on server start)
-- [ ] Build passes: `yarn clean && yarn build`
-- [ ] Tests pass: `yarn test`
+- [ ] Build passes: `npm run clean && npm run build`
+- [ ] Tests pass: `npm test`
 - [ ] Spot-check a component via the `query_component` tool or by inspecting the
       JSON (e.g. `jq '.components[] | select(.name=="Button")'`)
 

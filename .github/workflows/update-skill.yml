@@ -19,143 +19,143 @@
 name: Update FluentUI Skill
 
 on:
-    workflow_dispatch:
-        inputs:
-            version:
-                description: "FluentUI version to update (v9)"
-                required: true
-                default: "v9"
-                type: choice
-                options: ["v9"]
-            contrib_ref:
-                description: "FluentUI-contrib git ref (empty to skip contrib)"
-                required: false
-                default: ""
-            ref:
-                description: "Override the FluentUI git ref (empty = latest stable tag)"
-                required: false
-                default: ""
-            full_enhance:
-                description: "Full LLM re-enhancement (ignore diff)"
-                required: false
-                default: "false"
-                type: choice
-                options: ["true", "false"]
-            dry_run:
-                description: "Dry run (scrape only, no enhance/generate/commit)"
-                required: false
-                default: "false"
-                type: choice
-                options: ["true", "false"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "FluentUI version to update (v9)"
+        required: true
+        default: "v9"
+        type: choice
+        options: ["v9"]
+      contrib_ref:
+        description: "FluentUI-contrib git ref (empty to skip contrib)"
+        required: false
+        default: ""
+      ref:
+        description: "Override the FluentUI git ref (empty = latest stable tag)"
+        required: false
+        default: ""
+      full_enhance:
+        description: "Full LLM re-enhancement (ignore diff)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["true", "false"]
+      dry_run:
+        description: "Dry run (scrape only, no enhance/generate/commit)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["true", "false"]
 
 env:
-    FLUENTUI_VERSION: ${{ github.event.inputs.version }}
+  FLUENTUI_VERSION: ${{ github.event.inputs.version }}
 
 jobs:
-    update:
-        name: Scrape, Enhance, Generate & Open PR
-        runs-on: ubuntu-latest
-        permissions:
-            contents: write
-            pull-requests: write
+  update:
+    name: Scrape, Enhance, Generate & Open PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
 
-        steps:
-            # --- Setup ---
-            - name: Checkout fluentui-mcp
-              uses: actions/checkout@v7
+    steps:
+      # --- Setup ---
+      - name: Checkout fluentui-mcp
+        uses: actions/checkout@v4
 
-            - name: Setup Node.js
-              uses: actions/setup-node@v7
-              with:
-                  node-version: 22
-                  cache: "yarn"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
 
-            - name: Install dependencies
-              run: yarn install --frozen-lockfile
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
 
-            # --- Stage 1: Scrape ---
-            # `--clone` lets the scraper pin the checkout to the newest stable
-            # release tag (or the explicit `ref` when one was provided). The
-            # free-text refs are passed through the environment and quoted into
-            # an argument array so they can never be interpreted as shell.
-            - name: Run scraper
-              env:
-                  FLUENTUI_REF: ${{ github.event.inputs.ref }}
-                  CONTRIB_REF: ${{ github.event.inputs.contrib_ref }}
-              run: |
-                  args=(scrape --version "$FLUENTUI_VERSION" --clone --verbose)
-                  if [ -n "$FLUENTUI_REF" ]; then
-                    args+=(--ref "$FLUENTUI_REF")
-                  fi
-                  if [ -n "$CONTRIB_REF" ]; then
-                    args+=(--contrib-ref "$CONTRIB_REF")
-                  fi
-                  yarn "${args[@]}"
+      # --- Stage 1: Scrape ---
+      # `--clone` lets the scraper pin the checkout to the newest stable
+      # release tag (or the explicit `ref` when one was provided). The
+      # free-text refs are passed through the environment and quoted into
+      # an argument array so they can never be interpreted as shell.
+      - name: Run scraper
+        env:
+          FLUENTUI_REF: ${{ github.event.inputs.ref }}
+          CONTRIB_REF: ${{ github.event.inputs.contrib_ref }}
+        run: |
+          args=(--version "$FLUENTUI_VERSION" --clone --verbose)
+          if [ -n "$FLUENTUI_REF" ]; then
+            args+=(--ref "$FLUENTUI_REF")
+          fi
+          if [ -n "$CONTRIB_REF" ]; then
+            args+=(--contrib-ref "$CONTRIB_REF")
+          fi
+          npm run scrape -- "${args[@]}"
 
-            # --- Stage 2: Enhance (skip on dry run) ---
-            - name: Run enhancer
-              if: ${{ github.event.inputs.dry_run != 'true' }}
-              env:
-                  LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
-                  DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-                  DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL }}
-                  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-                  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-                  LLM_MODEL: ${{ secrets.LLM_MODEL }}
-              run: |
-                  ENHANCE_FLAGS=""
-                  if [ "${{ github.event.inputs.full_enhance }}" = "true" ]; then
-                    ENHANCE_FLAGS="--full"
-                  fi
-                  yarn enhance --version ${{ env.FLUENTUI_VERSION }} $ENHANCE_FLAGS --verbose
+      # --- Stage 2: Enhance (skip on dry run) ---
+      - name: Run enhancer
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+        run: |
+          ENHANCE_FLAGS=""
+          if [ "${{ github.event.inputs.full_enhance }}" = "true" ]; then
+            ENHANCE_FLAGS="--full"
+          fi
+          npm run enhance -- --version ${{ env.FLUENTUI_VERSION }} $ENHANCE_FLAGS --verbose
 
-            # --- Stage 3: Generate the skill tree ---
-            - name: Generate the skill
-              if: ${{ github.event.inputs.dry_run != 'true' }}
-              run: yarn skill:generate
+      # --- Stage 3: Generate the skill tree ---
+      - name: Generate the skill
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: npm run skill:generate
 
-            # --- Stage 4: Build, test, and gates ---
-            - name: Build and test
-              run: yarn build && yarn test
+      # --- Stage 4: Build, test, and gates ---
+      - name: Build and test
+        run: npm run build && npm test
 
-            - name: Run skill integrity gates
-              run: |
-                  yarn skill:check
-                  yarn skill:validate
-                  yarn skill:freshness
+      - name: Run skill integrity gates
+        run: |
+          npm run skill:check
+          npm run skill:validate
+          npm run skill:freshness
 
-            # --- Stage 5: Commit & PR (skip on dry run) ---
-            - name: Create Pull Request
-              if: ${{ github.event.inputs.dry_run != 'true' }}
-              uses: peter-evans/create-pull-request@v8
-              with:
-                  token: ${{ secrets.GITHUB_TOKEN }}
-                  commit-message: "chore(${{ env.FLUENTUI_VERSION }}): update FluentUI skill"
-                  title: "chore(${{ env.FLUENTUI_VERSION }}): Update the FluentUI skill"
-                  body: |
-                      ## Automated FluentUI Skill Update
+      # --- Stage 5: Commit & PR (skip on dry run) ---
+      - name: Create Pull Request
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(${{ env.FLUENTUI_VERSION }}): update FluentUI skill"
+          title: "chore(${{ env.FLUENTUI_VERSION }}): Update the FluentUI skill"
+          body: |
+            ## Automated FluentUI Skill Update
 
-                      **Version**: ${{ env.FLUENTUI_VERSION }}
-                      **FluentUI ref**: ${{ github.event.inputs.ref || 'latest stable tag' }}
-                      **Contrib ref**: ${{ github.event.inputs.contrib_ref || 'skipped' }}
-                      **Full enhancement**: ${{ github.event.inputs.full_enhance }}
+            **Version**: ${{ env.FLUENTUI_VERSION }}
+            **FluentUI ref**: ${{ github.event.inputs.ref || 'latest stable tag' }}
+            **Contrib ref**: ${{ github.event.inputs.contrib_ref || 'skipped' }}
+            **Full enhancement**: ${{ github.event.inputs.full_enhance }}
 
-                      This PR was generated by the update-skill workflow. Review the schema
-                      changes in `data/${{ env.FLUENTUI_VERSION }}/` and the regenerated skill
-                      under `.agents/skills/fluentui/`.
-                  branch: "update-skill/${{ env.FLUENTUI_VERSION }}"
-                  delete-branch: true
-                  labels: |
-                      automated
-                      documentation
+            This PR was generated by the update-skill workflow. Review the schema
+            changes in `data/${{ env.FLUENTUI_VERSION }}/` and the regenerated skill
+            under `.agents/skills/fluentui/`.
+          branch: "update-skill/${{ env.FLUENTUI_VERSION }}"
+          delete-branch: true
+          labels: |
+            automated
+            documentation
 
-            # --- Summary ---
-            - name: Upload schema artifacts
-              if: always()
-              uses: actions/upload-artifact@v7
-              with:
-                  name: schema-${{ env.FLUENTUI_VERSION }}
-                  path: |
-                      data/${{ env.FLUENTUI_VERSION }}/fluentui-schema.json
-                      data/${{ env.FLUENTUI_VERSION }}/fluentui-schema-enhanced.json
-                  if-no-files-found: warn
+      # --- Summary ---
+      - name: Upload schema artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: schema-${{ env.FLUENTUI_VERSION }}
+          path: |
+            data/${{ env.FLUENTUI_VERSION }}/fluentui-schema.json
+            data/${{ env.FLUENTUI_VERSION }}/fluentui-schema-enhanced.json
+          if-no-files-found: warn

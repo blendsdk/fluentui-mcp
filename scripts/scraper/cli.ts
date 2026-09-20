@@ -5,9 +5,9 @@
  * scraping pipeline (discover → extract → write), and reports results.
  *
  * Usage:
- *   yarn scrape --version v9 --source /path/to/fluentui
- *   yarn scrape --version v9 --source /path/to/fluentui --contrib /path/to/contrib
- *   yarn scrape --version v9 --source /path/to/fluentui --output data/v9/schema.json
+ *   npm run scrape -- --version v9 --source /path/to/fluentui
+ *   npm run scrape -- --version v9 --source /path/to/fluentui --contrib /path/to/contrib
+ *   npm run scrape -- --version v9 --source /path/to/fluentui --output data/v9/schema.json
  *
  * @module scraper/cli
  */
@@ -227,7 +227,7 @@ export function runScraper(options: ScraperCliOptions): void {
 /**
  * Main entry point for the scraper CLI.
  *
- * Called when running: yarn scrape --version v9 --source /path/to/fluentui
+ * Called when running: npm run scrape -- --version v9 --source /path/to/fluentui
  */
 function main(): void {
   const args = process.argv.slice(2);
@@ -240,7 +240,7 @@ function main(): void {
       console.error(`  - ${error}`);
     }
     console.error(
-      '\nUsage: yarn scrape --version v9 --source /path/to/fluentui',
+      '\nUsage: npm run scrape -- --version v9 --source /path/to/fluentui',
     );
     process.exit(1);
   }

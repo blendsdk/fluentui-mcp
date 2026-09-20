@@ -7,13 +7,13 @@
  * `--dry-run` mode that prints the diff report without calling the LLM.
  *
  * Usage:
- *   yarn enhance --version v9
- *   yarn enhance --version v9 --full
- *   yarn enhance --version v9 --components-only
- *   yarn enhance --version v9 --guides-only
- *   yarn enhance --version v9 --dry-run
- *   yarn enhance --input data/v9/fluentui-schema.json \
- *                --output data/v9/fluentui-schema-enhanced.json
+ *   npm run enhance -- --version v9
+ *   npm run enhance -- --version v9 --full
+ *   npm run enhance -- --version v9 --components-only
+ *   npm run enhance -- --version v9 --guides-only
+ *   npm run enhance -- --version v9 --dry-run
+ *   npm run enhance -- --input data/v9/fluentui-schema.json \
+ *                     --output data/v9/fluentui-schema-enhanced.json
  *
  * @module enhancer/cli
  */
@@ -328,7 +328,7 @@ export async function runEnhancer(options: EnhancerCliOptions): Promise<void> {
 
   if (!existsSync(inputPath)) {
     console.error(`Raw schema not found: ${inputPath}`);
-    console.error('Run `yarn scrape --version <v>` first to generate it.');
+    console.error('Run `npm run scrape -- --version <v>` first to generate it.');
     process.exit(1);
   }
 
@@ -466,7 +466,7 @@ export async function runEnhancer(options: EnhancerCliOptions): Promise<void> {
 /**
  * Main entry point for the enhancer CLI.
  *
- * Called when running: yarn enhance --version v9
+ * Called when running: npm run enhance -- --version v9
  */
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -479,7 +479,7 @@ async function main(): Promise<void> {
       console.error(`  - ${error}`);
     }
     console.error(
-      '\nUsage: yarn enhance --version v9 [--full] [--dry-run] [--yes]',
+      '\nUsage: npm run enhance -- --version v9 [--full] [--dry-run] [--yes]',
     );
     process.exit(1);
   }

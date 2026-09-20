@@ -1,0 +1,115 @@
+# =============================================================================
+# FluentUI Agent Skill — Release & Publish
+# =============================================================================
+#
+# Manual release workflow. Dispatch it from Actions -> Release, choose the bump
+# type (or let `auto` derive it from the conventional commits written since the
+# last tag) and the npm dist-tag.
+#
+# The `release` job runs scripts/release.mjs, which:
+#   1. derives the next version and writes `package.json` + `package-lock.json`
+#   2. records the release in `CHANGELOG.md`
+#   3. commits and tags `vX.Y.Z`
+#   4. publishes to npm, then pushes the commit and tag
+#
+# Commit -> version mapping: `feat:` -> minor, `fix:` -> patch,
+# `feat!:`/`fix!:`/any `!` -> major.
+#
+# npm trusted publishing (OIDC): no long-lived token is used. Configure the
+# trusted publisher once on npmjs.com (Package -> Settings -> Trusted
+# publishing -> Add -> GitHub Actions) for:
+#   - Organization or user: blendsdk
+#   - Repository:           fluentui-mcp
+#   - Workflow filename:    release.yml
+#   - Allowed actions:      tick "npm publish"
+# Provenance attestations are generated automatically.
+# =============================================================================
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: "Version bump type (auto derives it from conventional commits)"
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+      dist_tag:
+        description: "npm dist-tag (latest = stable, next/beta = pre-release)"
+        required: true
+        default: latest
+        type: choice
+        options:
+          - latest
+          - next
+          - beta
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require master for the latest tag
+        if: inputs.dist_tag == 'latest' && github.ref != 'refs/heads/master'
+        run: |
+          echo "Publishing with the 'latest' tag is only allowed from master."
+          echo "Current ref: ${{ github.ref }}"
+          echo "Use the 'next' or 'beta' tag for other branches."
+          exit 1
+
+  release:
+    name: Version & Publish
+    needs: [validate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Node.js for trusted publishing
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install current npm
+        run: npm install --global npm@^11.15.0
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Verify
+        run: npm run verify
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump, tag, and publish
+        run: |
+          node scripts/release.mjs release \
+            --type "${{ inputs.version_type }}" \
+            --tag "${{ inputs.dist_tag }}" \
+            --ci \
+            --git-push
+
+      - name: Release summary
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Published fluentui-skill@${VERSION} with tag '${{ inputs.dist_tag }}'"
