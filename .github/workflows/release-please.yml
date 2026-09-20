@@ -77,11 +77,6 @@ jobs:
         permissions:
             contents: read
             id-token: write
-        # `setup-node` writes an `.npmrc` that references `${NODE_AUTH_TOKEN}`.
-        # Define it empty so Yarn classic can resolve it during `yarn install`;
-        # the publish itself authenticates with OIDC, never this variable.
-        env:
-            NODE_AUTH_TOKEN: ""
 
         steps:
             - name: Resolve tag
@@ -94,12 +89,14 @@ jobs:
               with:
                   ref: ${{ steps.target.outputs.ref }}
 
+            # No `registry-url`: it makes setup-node write an `.npmrc` with a
+            # `${NODE_AUTH_TOKEN}` placeholder, which Yarn classic rejects and
+            # which is unnecessary because the default registry is npmjs.org
+            # and npm authenticates with OIDC.
             - name: Setup Node.js 24
               uses: actions/setup-node@v7
               with:
                   node-version: 24
-                  registry-url: "https://registry.npmjs.org"
-                  # Never cache in a release build.
                   package-manager-cache: false
 
             - name: Install dependencies
