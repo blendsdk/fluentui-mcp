@@ -1,28 +1,28 @@
 # =============================================================================
-# FluentUI Agent Skill — Release Please
+# FluentUI Agent Skill — Release & Publish
 # =============================================================================
 #
-# Automatic semantic versioning from Conventional Commits. On every push to
-# `master`, release-please opens (or updates) a release PR that bumps
-# `package.json` and `CHANGELOG.md`. Merging that PR tags the commit
-# (`vX.Y.Z`) and creates the GitHub Release.
+# One workflow owns versioning and publishing.
 #
-# When a release is created, the `publish` job publishes it to npm with
-# trusted publishing (OIDC). Publishing is a separate job so a failed publish
-# can be retried on its own ("Re-run failed jobs") without re-running
-# release-please.
+# On every push to `master`, release-please opens (or updates) a release PR
+# that bumps `package.json` and `CHANGELOG.md`. Merging that PR tags the commit
+# (`vX.Y.Z`) and creates the GitHub Release; the `publish` job then publishes
+# that tag to npm with trusted publishing (OIDC). Publishing is a separate job
+# so a failed publish can be retried on its own.
 #
 # Commit -> version mapping: `feat:` -> minor, `fix:` -> patch,
 # `feat!:`/`fix!:`/any `!` -> major.
 #
+# Manual dispatch publishes an existing tag (for example to backfill a release
+# whose publish failed). Leave `tag` empty to do nothing.
+#
 # npm trusted publishing (OIDC):
-#   npm requires the package to exist before a trusted publisher can be set,
-#   so the very first version was published by hand (bootstrap). From then on
-#   every release is published here automatically. Configure the trusted
-#   publisher on npmjs.com (Package -> Settings -> Trusted publishing) for:
+#   Configure the trusted publisher on npmjs.com (Package -> Settings ->
+#   Trusted publishing -> Add -> GitHub Actions) for:
 #     - Organization or user: blendsdk
 #     - Repository:           fluentui-mcp
 #     - Workflow filename:    release-please.yml
+#     - Allowed actions:      tick "npm publish"
 #   Provenance attestations are generated automatically.
 # =============================================================================
 
@@ -31,6 +31,12 @@ name: Release Please
 on:
     push:
         branches: [master]
+    workflow_dispatch:
+        inputs:
+            tag:
+                description: "Existing tag to publish (for example v1.3.1). Leave empty to do nothing."
+                required: false
+                default: ""
 
 permissions:
     contents: write
@@ -40,6 +46,7 @@ permissions:
 jobs:
     release:
         name: Release Please
+        if: ${{ github.event_name == 'push' }}
         runs-on: ubuntu-latest
         outputs:
             release_created: ${{ steps.release.outputs.release_created }}
@@ -54,14 +61,17 @@ jobs:
                   manifest-file: .release-please-manifest.json
 
     # ---------------------------------------------------------------------------
-    # Publish the release with trusted publishing (OIDC). Runs only when
-    # release-please created a release. Kept separate from the release job so
-    # it can be re-run on its own after a transient publish failure.
+    # Publish a created release (push) or an explicitly requested tag (dispatch).
     # ---------------------------------------------------------------------------
     publish:
         name: Publish to npm
         needs: release
-        if: ${{ needs.release.outputs.release_created == 'true' }}
+        if: >-
+            ${{
+              always() &&
+              ((github.event_name == 'push' && needs.release.outputs.release_created == 'true') ||
+               (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != ''))
+            }}
         runs-on: ubuntu-latest
         # Required for trusted publishing.
         permissions:
@@ -74,10 +84,15 @@ jobs:
             NODE_AUTH_TOKEN: ""
 
         steps:
+            - name: Resolve tag
+              id: target
+              run: |
+                  echo "ref=${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.release.outputs.tag_name }}" >> "$GITHUB_OUTPUT"
+
             - name: Checkout release tag
               uses: actions/checkout@v7
               with:
-                  ref: ${{ needs.release.outputs.tag_name }}
+                  ref: ${{ steps.target.outputs.ref }}
 
             - name: Setup Node.js 24
               uses: actions/setup-node@v7
@@ -96,6 +111,28 @@ jobs:
 
             - name: Build the published artifacts
               run: yarn build && yarn assemble
+
+            # Read the pack file list as JSON so the checks match exact paths.
+            # A plain `grep "data/"` would also match the generated
+            # `skills/fluentui/references/recipes/data/` pages and always fail.
+            - name: Verify package contents
+              run: |
+                  npm pack --dry-run --ignore-scripts --json > pack-output.json
+                  node -e '
+                    const files = require("./pack-output.json")[0].files.map((f) => f.path);
+                    const required = ["skills/fluentui/SKILL.md", "dist/bin.js"];
+                    for (const path of required) {
+                      if (!files.includes(path)) {
+                        console.error("::error::" + path + " not included in npm package");
+                        process.exit(1);
+                      }
+                    }
+                    if (files.some((p) => p.startsWith("data/"))) {
+                      console.error("::error::data/ must not be included in npm package");
+                      process.exit(1);
+                    }
+                    console.log("Package contents verified: " + files.length + " files");
+                  '
 
             # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a
             # short-lived registry token. Provenance is generated automatically.
