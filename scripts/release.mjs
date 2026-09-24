@@ -498,7 +498,7 @@ export function main(argv) {
 
       console.log(`Version: ${current} -> ${next} (${type})`)
       if (options.dryRun) {
-        console.log(`[dry-run] would set ${next}, update CHANGELOG.md, commit and tag v${next}`)
+        console.log(`[dry-run] would set ${next}, regenerate the skill, update CHANGELOG.md, commit and tag v${next}`)
       } else {
         applyVersion(next)
         regenerateSkill()

@@ -1,6 +1,6 @@
 # Quality Review: Skill Provenance Disclosure
 
-> **Status**: 🔄 Fixes applied — re-review pending
+> **Status**: ✅ PASSED WITH NOTES — RV-101 resolved; 5 minors fixed; re-review found RV-601 (fixed)
 > **Reviewed**: 2026-09-24
 > **Profile**: strict CodeOps defaults (no `codeops/codeops.json`); base lenses correctness + maintainability + standards; no security/perf add-ons (local deterministic pipeline; no web/auth/money/concurrency surface)
 > **Scope mode**: strict
@@ -55,4 +55,14 @@ added instead.
 
 ## Re-review
 
-Scoped to the fix diff (`e80c311..HEAD`), single pass per the budget cap. _Pending._
+Scoped to the fix diff (`e80c311..1551b6c`), single pass per the budget cap. Verdict: **PASS WITH
+MINOR**. The reviewer independently recomputed the corpus (198 entries, 51 packages, 38 versions,
+0 packages with more than one version) and confirmed the committed `index.md:12` value and manifest
+hash.
+
+| ID | Sev | Location | Issue | Ruling |
+| -- | --- | -------- | ----- | ------ |
+| RV-601 | 🟡 MINOR | `scripts/release.mjs` | The `--dry-run` preview omitted the regeneration step. | Fixed: preview now names regeneration |
+
+No correctness, release-consistency, or regressions found in the fix diff. The new dedupe and
+`readSkillVersion` tests were confirmed to discriminate.
