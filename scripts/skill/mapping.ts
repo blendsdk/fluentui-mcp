@@ -433,23 +433,36 @@ function renderRecipeFile(
 }
 
 /**
- * Format the component package versions as a compact range and count.
+ * Format the package versions that the scraped components come from as a
+ * compact range and count.
  *
- * Only plain `x.y.z` versions are considered; prerelease or malformed values
- * are ignored so a single odd value cannot distort the range. Comparison is
- * numeric by major, then minor, then patch, so `9.10.0` sorts above `9.2.0`
- * rather than being compared as text.
+ * Counting is per package, not per component: many components share one package
+ * (the Button family, for example), so counting entries would overstate how many
+ * packages the snapshot covers. Only plain `x.y.z` versions are considered;
+ * prerelease or malformed values are ignored so a single odd value cannot
+ * distort the range. Comparison is numeric by major, then minor, then patch, so
+ * `9.10.0` sorts above `9.2.0` rather than being compared as text.
  *
- * @param components - Component entries carrying `packageVersion`
+ * @param components - Component entries carrying `packageName`/`packageVersion`
  * @returns For example `2 packages, 9.2.0–9.10.0`, or undefined when none
  */
 export function formatPackageVersionRange(
   components: readonly ComponentEntry[],
 ): string | undefined {
-  const versions = components
-    .map((component) => parsePlainVersion(component.packageVersion))
-    .filter((version): version is number[] => version !== undefined);
+  // Map each package to one parsed version. Taking the first valid version per
+  // package keeps the result deterministic for a given schema.
+  const versionByPackage = new Map<string, number[]>();
+  for (const component of components) {
+    if (versionByPackage.has(component.packageName)) {
+      continue;
+    }
+    const parsed = parsePlainVersion(component.packageVersion);
+    if (parsed) {
+      versionByPackage.set(component.packageName, parsed);
+    }
+  }
 
+  const versions = [...versionByPackage.values()];
   if (versions.length === 0) {
     return undefined;
   }

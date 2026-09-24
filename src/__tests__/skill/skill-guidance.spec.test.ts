@@ -32,8 +32,8 @@ function readSkill(): string {
 }
 
 describe('provenance disclosure rule', () => {
-  it('names the provenance section in references/index.md', () => {
-    expect(readSkill()).toContain('references/index.md');
+  it('points the reader at the provenance section in references/index.md', () => {
+    expect(readSkill()).toMatch(/`## Source & versions` in `references\/index\.md`/);
   });
 
   it('requires the agent to say when something is not covered', () => {

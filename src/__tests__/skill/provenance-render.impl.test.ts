@@ -20,7 +20,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { formatPackageVersionRange } from '../../../scripts/skill/mapping.js';
-import { generateSkill } from '../../../scripts/skill/generate.js';
+import {
+  generateSkill,
+  readSkillVersion,
+} from '../../../scripts/skill/generate.js';
 import type {
   ComponentEntry,
   FluentUISchema,
@@ -44,9 +47,9 @@ const SKILL_MD = [
   '',
 ].join('\n');
 
-/** Build a component carrying only the fields the range formatter reads. */
-function versionedComponent(version: string): ComponentEntry {
-  return createComponentEntry('Widget', { packageVersion: version });
+/** Build a component carrying the package name and version the formatter reads. */
+function versionedComponent(name: string, version: string): ComponentEntry {
+  return createComponentEntry(name, { packageVersion: version });
 }
 
 /** Generate a schema into a temp root and return the reference index text. */
@@ -76,26 +79,36 @@ function renderIndexFor(schema: FluentUISchema): string {
 
 describe('formatPackageVersionRange', () => {
   it('renders a single version without a range', () => {
-    expect(formatPackageVersionRange([versionedComponent('9.1.0')])).toBe(
-      '1 package, 9.1.0',
-    );
+    expect(
+      formatPackageVersionRange([versionedComponent('Alpha', '9.1.0')]),
+    ).toBe('1 package, 9.1.0');
   });
 
   it('collapses identical minimum and maximum', () => {
     expect(
       formatPackageVersionRange([
-        versionedComponent('9.5.0'),
-        versionedComponent('9.5.0'),
+        versionedComponent('Alpha', '9.5.0'),
+        versionedComponent('Beta', '9.5.0'),
       ]),
     ).toBe('2 packages, 9.5.0');
+  });
+
+  it('counts a package once even when several components share it', () => {
+    const shared = { packageName: '@fluentui/react-button', packageVersion: '9.1.0' };
+    expect(
+      formatPackageVersionRange([
+        createComponentEntry('Button', shared),
+        createComponentEntry('CompoundButton', shared),
+      ]),
+    ).toBe('1 package, 9.1.0');
   });
 
   it('ignores malformed versions', () => {
     expect(
       formatPackageVersionRange([
-        versionedComponent('9.1.0'),
-        versionedComponent('v9'),
-        versionedComponent('1.0'),
+        versionedComponent('Alpha', '9.1.0'),
+        versionedComponent('Beta', 'v9'),
+        versionedComponent('Gamma', '1.0'),
       ]),
     ).toBe('1 package, 9.1.0');
   });
@@ -103,14 +116,16 @@ describe('formatPackageVersionRange', () => {
   it('sorts numerically, not lexicographically', () => {
     expect(
       formatPackageVersionRange([
-        versionedComponent('9.10.0'),
-        versionedComponent('9.2.0'),
+        versionedComponent('Alpha', '9.10.0'),
+        versionedComponent('Beta', '9.2.0'),
       ]),
     ).toBe('2 packages, 9.2.0–9.10.0');
   });
 
   it('returns undefined when no component has a valid version', () => {
-    expect(formatPackageVersionRange([versionedComponent('next')])).toBeUndefined();
+    expect(
+      formatPackageVersionRange([versionedComponent('Alpha', 'next')]),
+    ).toBeUndefined();
     expect(formatPackageVersionRange([])).toBeUndefined();
   });
 });
@@ -146,5 +161,54 @@ describe('provenance section escaping', () => {
 
     expect(index).toContain('`release\\|v9`');
     expect(index).toContain('9.0.0\\|x');
+  });
+});
+
+describe('readSkillVersion', () => {
+  /** Run a callback with a temporary directory that is removed afterwards. */
+  function withTempDir(run: (dir: string) => void): void {
+    const dir = mkdtempSync(join(tmpdir(), 'fluentui-skill-version-'));
+    try {
+      run(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('returns the version field', () => {
+    withTempDir((dir) => {
+      const path = join(dir, 'package.json');
+      writeFileSync(path, JSON.stringify({ name: 'x', version: '4.5.6' }));
+
+      expect(readSkillVersion(path)).toBe('4.5.6');
+    });
+  });
+
+  it('throws when the file is missing', () => {
+    withTempDir((dir) => {
+      expect(() => readSkillVersion(join(dir, 'absent.json'))).toThrow(
+        /package\.json not found/,
+      );
+    });
+  });
+
+  it('throws when the file is not valid JSON', () => {
+    withTempDir((dir) => {
+      const path = join(dir, 'package.json');
+      writeFileSync(path, '{ not json');
+
+      expect(() => readSkillVersion(path)).toThrow(/not valid JSON/);
+    });
+  });
+
+  it('throws when version is absent or not a string', () => {
+    withTempDir((dir) => {
+      const path = join(dir, 'package.json');
+      writeFileSync(path, JSON.stringify({ name: 'x' }));
+      expect(() => readSkillVersion(path)).toThrow(/no string version/);
+
+      writeFileSync(path, JSON.stringify({ name: 'x', version: 1 }));
+      expect(() => readSkillVersion(path)).toThrow(/no string version/);
+    });
   });
 });

@@ -8,9 +8,10 @@
 #
 # The `release` job runs scripts/release.mjs, which:
 #   1. derives the next version and writes `package.json` + `package-lock.json`
-#   2. records the release in `CHANGELOG.md`
-#   3. commits and tags `vX.Y.Z`
-#   4. publishes to npm, then pushes the commit and tag
+#   2. regenerates the committed skill tree so its provenance records the new version
+#   3. records the release in `CHANGELOG.md`
+#   4. commits and tags `vX.Y.Z`
+#   5. publishes to npm, then pushes the commit and tag
 #
 # Commit -> version mapping: `feat:` -> minor, `fix:` -> patch,
 # `feat!:`/`fix!:`/any `!` -> major.

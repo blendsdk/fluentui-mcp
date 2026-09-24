@@ -5,7 +5,8 @@
  * The skill ships one package, so "the skill version" and "the published
  * package version" are the same value. This script derives the next version
  * from the conventional commit messages written since the last git tag, writes
- * it to `package.json` and `package-lock.json` in one step, records it in
+ * it to `package.json` and `package-lock.json` in one step, regenerates the
+ * committed skill tree so its provenance records the new version, records it in
  * `CHANGELOG.md`, commits and tags it, and publishes it. Because the version is
  * written once and then published, the two can never drift.
  *
@@ -388,7 +389,7 @@ function printUsage() {
   console.log(`Release the single fluentui-skill package.
 
 Usage:
-  node scripts/release.mjs version [options]   Bump the version, changelog, commit, tag
+  node scripts/release.mjs version [options]   Bump the version, regenerate the skill, changelog, commit, tag
   node scripts/release.mjs publish [options]   Publish the current version
   node scripts/release.mjs release [options]   version + publish
 
@@ -500,7 +501,7 @@ export function main(argv) {
         console.log(`[dry-run] would set ${next}, update CHANGELOG.md, commit and tag v${next}`)
       } else {
         applyVersion(next)
-        if (!options.noGitCommit) regenerateSkill()
+        regenerateSkill()
         updateChangelog(next, commits)
         commitAndTag(next, options)
         console.log(`Tagged v${next}`)

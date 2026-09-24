@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 import { listFiles, readTextFile } from './files.js';
 import {
+  DEFAULT_PACKAGE_JSON,
   DEFAULT_SCHEMA_PATH,
   DEFAULT_SKILL_DIR,
   generateSkill,
@@ -167,6 +168,7 @@ export function runCheck(
     const report = checkDrift({
       schemaPath: resolve(cwd, schemaPath),
       skillDir: resolve(cwd, skillDir),
+      packageJsonPath: resolve(cwd, DEFAULT_PACKAGE_JSON),
     });
 
     if (report.differences.length === 0 && report.brokenLinks.length === 0) {
