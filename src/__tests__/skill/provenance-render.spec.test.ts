@@ -138,7 +138,7 @@ function generateAndReadIndex(
 }
 
 // ============================================================================
-// ST-1: the section lists the provenance tuple
+// The section lists the full provenance tuple
 // ============================================================================
 
 describe('provenance section contents', () => {
@@ -161,7 +161,7 @@ describe('provenance section contents', () => {
 });
 
 // ============================================================================
-// ST-2: numeric ordering of the component range
+// Numeric ordering of the component range
 // ============================================================================
 
 describe('component package range', () => {
@@ -174,7 +174,7 @@ describe('component package range', () => {
 });
 
 // ============================================================================
-// ST-3: absent umbrella data omits the row without failing
+// Absent umbrella data omits the row without failing
 // ============================================================================
 
 describe('absent umbrella data', () => {
@@ -197,7 +197,7 @@ describe('absent umbrella data', () => {
 });
 
 // ============================================================================
-// ST-4: no timestamp leaks into a generated reference
+// No timestamp leaks into a generated reference
 // ============================================================================
 
 describe('timestamp freedom', () => {
@@ -232,7 +232,7 @@ describe('timestamp freedom', () => {
 });
 
 // ============================================================================
-// ST-5: the skill version comes from package.json
+// The skill version comes from package.json
 // ============================================================================
 
 describe('skill version parity', () => {
@@ -246,7 +246,7 @@ describe('skill version parity', () => {
 });
 
 // ============================================================================
-// ST-9: deterministic output
+// Deterministic output
 // ============================================================================
 
 describe('deterministic render', () => {
@@ -271,7 +271,7 @@ describe('deterministic render', () => {
 });
 
 // ============================================================================
-// ST-11: a schema without sources fails closed
+// A schema without sources fails closed
 // ============================================================================
 
 describe('missing sources', () => {
