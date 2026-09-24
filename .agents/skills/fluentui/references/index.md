@@ -2,6 +2,17 @@
 
 Hand-written routing lives in `SKILL.md`; this file indexes every generated reference.
 
+## Source & versions
+
+| Item | Value |
+| --- | --- |
+| Fluent UI version | v9 |
+| Fluent UI source | `master` @ `fdf755c` |
+| Component packages | 198 packages, 9.2.17–9.25.0 |
+| Skill version | 1.3.1 |
+| Generator | 1.1.0 |
+| Schema hash | `e93f15e9189f` |
+
 ## Task → recipe
 
 | Task | Recipe | Group |

@@ -38,10 +38,13 @@ import {
   SKILL_NAME,
   buildSkillFiles,
   type SkillFile,
+  type SkillRenderContext,
 } from './mapping.js';
 import {
+  GENERATOR_VERSION,
   MANIFEST_FILE,
   buildManifest,
+  hashSchema,
   serializeManifest,
   type SkillManifest,
 } from './manifest.js';
@@ -56,6 +59,9 @@ export const DEFAULT_SCHEMA_PATH = join(
 /** Default skill root, relative to the current working directory. */
 export const DEFAULT_SKILL_DIR = join('.agents', 'skills', SKILL_NAME);
 
+/** Default `package.json`, relative to the current working directory. */
+export const DEFAULT_PACKAGE_JSON = 'package.json';
+
 /** Options accepted by {@link generateSkill}. */
 export interface GenerateSkillOptions {
   /** Path to the enhanced schema JSON file. */
@@ -63,6 +69,9 @@ export interface GenerateSkillOptions {
 
   /** Skill root directory (default {@link DEFAULT_SKILL_DIR}). */
   skillDir?: string;
+
+  /** Path to the package.json holding the published skill version. */
+  packageJsonPath?: string;
 
   /** When true, compare against disk instead of writing. */
   check?: boolean;
@@ -111,6 +120,41 @@ function loadSchema(schemaPath: string): FluentUISchema {
   }
 
   return parsed;
+}
+
+/**
+ * Read the published skill version from package.json.
+ *
+ * The provenance section states which skill version a reader is looking at, so
+ * the generator must fail loudly rather than guess when the version is
+ * unreadable.
+ *
+ * @param packageJsonPath - Path to the repository package.json
+ * @returns The `version` field
+ * @throws When the file is missing, malformed, or lacks a string version
+ */
+export function readSkillVersion(packageJsonPath: string): string {
+  if (!existsSync(packageJsonPath)) {
+    throw new Error(`package.json not found: ${packageJsonPath}`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`package.json is not valid JSON (${packageJsonPath}): ${reason}`);
+  }
+
+  const version =
+    typeof parsed === 'object' && parsed !== null
+      ? (parsed as { version?: unknown }).version
+      : undefined;
+  if (typeof version !== 'string' || version === '') {
+    throw new Error(`package.json has no string version: ${packageJsonPath}`);
+  }
+
+  return version;
 }
 
 /**
@@ -198,6 +242,7 @@ function removeStaleReferences(
  */
 export function generateSkill(options: GenerateSkillOptions): GenerateSkillResult {
   const skillDir = options.skillDir ?? DEFAULT_SKILL_DIR;
+  const packageJsonPath = options.packageJsonPath ?? DEFAULT_PACKAGE_JSON;
   const schema = loadSchema(options.schemaPath);
 
   const skillFile = join(skillDir, 'SKILL.md');
@@ -206,7 +251,12 @@ export function generateSkill(options: GenerateSkillOptions): GenerateSkillResul
   }
 
   // Render everything first: buildSkillFiles also enforces id and group safety.
-  const referenceFiles = buildSkillFiles(schema);
+  const context: SkillRenderContext = {
+    skillVersion: readSkillVersion(packageJsonPath),
+    generatorVersion: GENERATOR_VERSION,
+    schemaHash: hashSchema(schema),
+  };
+  const referenceFiles = buildSkillFiles(schema, context);
   const manifest = buildManifest(schema, referenceFiles);
   const files: SkillFile[] = [
     ...referenceFiles,
@@ -276,9 +326,18 @@ export async function runGenerate(
   const options = parseArgs(argv);
   const schemaPath = resolve(cwd, options.schemaPath);
   const skillDir = resolve(cwd, options.skillDir ?? DEFAULT_SKILL_DIR);
+  const packageJsonPath = resolve(
+    cwd,
+    options.packageJsonPath ?? DEFAULT_PACKAGE_JSON,
+  );
 
   try {
-    const result = generateSkill({ ...options, schemaPath, skillDir });
+    const result = generateSkill({
+      ...options,
+      schemaPath,
+      skillDir,
+      packageJsonPath,
+    });
 
     if (options.check) {
       if (result.differences.length === 0) {

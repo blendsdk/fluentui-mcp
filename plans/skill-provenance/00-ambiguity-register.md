@@ -21,6 +21,7 @@ requirements set, not inputs to it.
 | AR-9 | Naming | Branch and plan-folder names | `feat/skill-provenance` / `feat/provenance-disclosure` / `docs/skill-provenance` | Branch `feat/skill-provenance`; folder `plans/skill-provenance/` | ✅ Resolved — User |
 | AR-10 | Non-functional | Which command fills every Verify line | `npm run verify` / `npm test` | `npm run verify` (the project standard in `AGENTS.md`) | ✅ Resolved — Author (matches project convention) |
 | AR-11 | Traceability | The umbrella capture changes the scraper, owned by RD-01 | Amend RD-01 / plan-local only | Amend RD-03 for the provenance output; add a one-line RD-01 note recording the new source field | ✅ Resolved — Author (factual field addition; no behavior change) |
+| AR-12 | Technical (runtime) | The drift gate compares the committed tree against generated output, but the plan scheduled regeneration in Phase 4 while the generator changes in Phase 2 | Regenerate at Phase 2 then again after the Phase 4 re-scrape / run the gate only at Phase 4 | Regenerate the committed tree whenever the generator changes (Phase 2), and again in Phase 4 after the corpus refresh. No behavior change. | ✅ Resolved — Necessary correction (execution sequencing) |
 
 ## Resolution Notes
 

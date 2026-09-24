@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-24 22:06
-> **Progress**: 8/25 tasks (32%)
+> **Last Updated**: 2026-09-24 22:11
+> **Progress**: 20/42 tasks (48%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -59,8 +59,8 @@ task-size criteria in the make-plan quality checklist)
 - [x] 1.1.8 Full verify ✅ (completed: 2026-09-24 22:06)
 
 **Deliverables**:
-- [ ] `sources.fluentui` records the umbrella package for v9; absent fields handled gracefully
-- [ ] All verification passing
+- [x] `sources.fluentui` records the umbrella package for v9; absent fields handled gracefully
+- [x] All verification passing
 
 **Verify**: `npm run verify`
 
@@ -71,18 +71,18 @@ task-size criteria in the make-plan quality checklist)
 **Reference**: [03-02 Provenance Render](03-02-provenance-render.md) · ST-1..ST-5, ST-9, ST-11 · AR-1, AR-2, AR-4, AR-5, AR-8
 **Objective**: Render the provenance section deterministically and supply skill version and schema hash.
 
-- [ ] 2.1.1 [spec-author] Write specification tests for ST-1, ST-2, ST-3, ST-4, ST-5, ST-9, ST-11 — `src/__tests__/skill/provenance-render.spec.test.ts`
-- [ ] 2.1.2 Red verify: confirm the specification tests fail for the right reason
-- [ ] 2.2.1 Add `SkillRenderContext`, `renderProvenance`, and `formatPackageVersionRange` — `scripts/skill/mapping.ts`
-- [ ] 2.2.2 Require the context in `buildSkillFiles` and update every call site and fixture
-- [ ] 2.2.3 Add the `packageJsonPath` option, read the skill version, compute the schema hash, pass the context, and bump `GENERATOR_VERSION` to `1.1.0` — `scripts/skill/generate.ts`, `scripts/skill/manifest.ts`
-- [ ] 2.2.4 Green verify: all Phase 2 specification tests pass
-- [ ] 2.2.5 [impl] Impl tests for range formatting, empty-row omission, and escaping — `src/__tests__/skill/provenance-render.impl.test.ts`
-- [ ] 2.2.6 Full verify
+- [x] 2.1.1 [spec-author] Write specification tests for ST-1, ST-2, ST-3, ST-4, ST-5, ST-9, ST-11 — `src/__tests__/skill/provenance-render.spec.test.ts` ✅ (completed: 2026-09-24 22:08)
+- [x] 2.1.2 Red verify: confirm the specification tests fail for the right reason ✅ (completed: 2026-09-24 22:08)
+- [x] 2.2.1 Add `SkillRenderContext`, `renderProvenance`, and `formatPackageVersionRange` — `scripts/skill/mapping.ts` ✅ (completed: 2026-09-24 22:10)
+- [x] 2.2.2 Require the context in `buildSkillFiles` and update every call site and fixture ✅ (completed: 2026-09-24 22:10)
+- [x] 2.2.3 Add the `packageJsonPath` option, read the skill version, compute the schema hash, pass the context, and bump `GENERATOR_VERSION` to `1.1.0` — `scripts/skill/generate.ts`, `scripts/skill/manifest.ts` ✅ (completed: 2026-09-24 22:10)
+- [x] 2.2.4 Green verify: all Phase 2 specification tests pass ✅ (completed: 2026-09-24 22:10)
+- [x] 2.2.5 [impl] Impl tests for range formatting, empty-row omission, and escaping — `src/__tests__/skill/provenance-render.impl.test.ts` ✅ (completed: 2026-09-24 22:10)
+- [x] 2.2.6 Full verify ✅ (completed: 2026-09-24 22:10)
 
 **Deliverables**:
-- [ ] `references/index.md` carries the `## Source & versions` section with no timestamp
-- [ ] All verification passing
+- [x] `references/index.md` carries the `## Source & versions` section with no timestamp
+- [x] All verification passing
 
 **Verify**: `npm run verify`
 

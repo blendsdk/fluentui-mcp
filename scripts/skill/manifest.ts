@@ -19,7 +19,7 @@ import type { FluentUISchema } from '../../src/types/schema.js';
 import type { SkillFile } from './mapping.js';
 
 /** Version of the generator; bump when the output format changes. */
-export const GENERATOR_VERSION = '1.0.0';
+export const GENERATOR_VERSION = '1.1.0';
 
 /** File name of the manifest, relative to the skill root. */
 export const MANIFEST_FILE = '.fluentui-skill-manifest.json';
