@@ -8,10 +8,11 @@ Hand-written routing lives in `SKILL.md`; this file indexes every generated refe
 | --- | --- |
 | Fluent UI version | v9 |
 | Fluent UI source | `master` @ `fdf755c` |
+| Umbrella package | `@fluentui/react-components` 9.74.1 |
 | Component packages | 198 packages, 9.2.17–9.25.0 |
 | Skill version | 1.3.1 |
 | Generator | 1.1.0 |
-| Schema hash | `e93f15e9189f` |
+| Schema hash | `daa4e080d4f0` |
 
 ## Task → recipe
 

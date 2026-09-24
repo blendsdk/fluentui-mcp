@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-24 22:14
-> **Progress**: 27/42 tasks (64%)
+> **Last Updated**: 2026-09-24 22:17
+> **Progress**: 33/42 tasks (79%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -112,14 +112,14 @@ task-size criteria in the make-plan quality checklist)
 **Reference**: [03-01](03-01-provenance-capture.md), [03-02](03-02-provenance-render.md) · AR-3
 **Objective**: Populate the current corpus with the umbrella version and regenerate the committed tree.
 
-- [ ] 4.1.1 Scrape from the cached clone at the current commit (no tag change) — `data/v9/fluentui-schema.json`
-- [ ] 4.1.2 Enhance with carry-forward; confirm zero LLM calls (unchanged components) — `data/v9/fluentui-schema-enhanced.json`
-- [ ] 4.1.3 Regenerate the committed skill tree — `.agents/skills/fluentui/`
-- [ ] 4.1.4 Run `npm run gate:skill` and full verify
+- [x] 4.1.1 Scrape from the cached clone at the current commit (no tag change) — `data/v9/fluentui-schema.json` ✅ (completed: 2026-09-24 22:15)
+- [x] 4.1.2 Enhance with carry-forward; confirm zero LLM calls (unchanged components) — `data/v9/fluentui-schema-enhanced.json` ✅ (completed: 2026-09-24 22:16)
+- [x] 4.1.3 Regenerate the committed skill tree — `.agents/skills/fluentui/` ✅ (completed: 2026-09-24 22:16)
+- [x] 4.1.4 Run `npm run gate:skill` and full verify ✅ (completed: 2026-09-24 22:17)
 
 **Deliverables**:
-- [ ] The committed skill shows `@fluentui/react-components 9.74.1` and the source commit
-- [ ] All gates pass
+- [x] The committed skill shows `@fluentui/react-components 9.74.1` and the source commit
+- [x] All gates pass
 
 **Verify**: `npm run verify`
 
