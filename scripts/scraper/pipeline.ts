@@ -8,6 +8,8 @@
  * @module scraper/pipeline
  */
 
+import { join } from 'node:path';
+
 import type {
   ComponentEntry,
   FluentUISchema,
@@ -20,6 +22,7 @@ import {
   discoverPackages,
   isExcludedPackage,
   readExportsIndexByPackage,
+  readPackageJson,
   resolveExportsIndexPath,
 } from './discover.js';
 import { createAdapter } from './adapters/factory.js';
@@ -148,6 +151,7 @@ export function scrape(options: ScrapeOptions): ScrapeResult {
       ref: fluentuiRef,
       commit: options.commit ?? resolveCommit(sourcePath),
       scrapedAt: new Date().toISOString(),
+      ...(readUmbrellaPackage(sourcePath, config) ?? {}),
     },
   };
 
@@ -220,4 +224,33 @@ function collectExportNames(
   }
 
   return merged;
+}
+
+/**
+ * Read the umbrella suite package's name and version from a checkout.
+ *
+ * The umbrella package (for example `@fluentui/react-components`) is the
+ * single version readers recognize across the many per-component packages.
+ * Its directory is supplied by the version config; versions without one, or
+ * checkouts missing the package, simply yield no value.
+ *
+ * @param sourcePath - Absolute path to the FluentUI checkout
+ * @param config - Version configuration naming the umbrella package directory
+ * @returns The package name and version, or undefined when not found
+ */
+export function readUmbrellaPackage(
+  sourcePath: string,
+  config: VersionConfig,
+): { packageName: string; packageVersion: string } | undefined {
+  const umbrellaDir = config.paths.umbrellaPackageDir;
+  if (!umbrellaDir) {
+    return undefined;
+  }
+
+  const info = readPackageJson(join(sourcePath, umbrellaDir));
+  if (!info) {
+    return undefined;
+  }
+
+  return { packageName: info.name, packageVersion: info.version };
 }

@@ -129,6 +129,12 @@ export interface VersionPaths {
 
   /** Glob pattern for finding Storybook story files */
   storiesGlob: string;
+
+  /**
+   * Directory of the umbrella suite package, relative to the checkout root.
+   * Omitted for versions without an umbrella package.
+   */
+  umbrellaPackageDir?: string;
 }
 
 // ============================================================================

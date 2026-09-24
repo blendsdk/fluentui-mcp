@@ -78,6 +78,19 @@ export interface SourceInfo {
 
   /** ISO 8601 timestamp of the scrape */
   scrapedAt: string;
+
+  /**
+   * npm package name of the umbrella suite package, when one was found at the
+   * scraped ref (for example `@fluentui/react-components`).
+   */
+  packageName?: string;
+
+  /**
+   * Version of the umbrella suite package at the scraped ref. This is the
+   * single version most readers recognize, as opposed to the per-component
+   * `packageVersion` values.
+   */
+  packageVersion?: string;
 }
 
 /**

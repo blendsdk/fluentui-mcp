@@ -1,0 +1,8 @@
+{
+  "name": "@fluentui/react-components",
+  "version": "9.48.0",
+  "description": "FluentUI React Components umbrella package",
+  "main": "lib-commonjs/index.js",
+  "module": "lib/index.js",
+  "typings": "lib/index.d.ts"
+}

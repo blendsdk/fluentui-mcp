@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-24 21:32
-> **Progress**: 0/25 tasks (0%)
+> **Last Updated**: 2026-09-24 22:06
+> **Progress**: 8/25 tasks (32%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -49,14 +49,14 @@ task-size criteria in the make-plan quality checklist)
 **Reference**: [03-01 Provenance Capture](03-01-provenance-capture.md) · AR-3, AR-11
 **Objective**: Record the umbrella package name and version in `sources.fluentui`.
 
-- [ ] 1.1.1 [spec-author] Write specification tests for ST-6 — `src/__tests__/scraper/provenance-capture.spec.test.ts`
-- [ ] 1.1.2 Red verify: confirm ST-6 fails for the right reason
-- [ ] 1.1.3 Add optional `packageName`/`packageVersion` to `SourceInfo` — `src/types/schema.ts`
-- [ ] 1.1.4 Add optional `umbrellaPackageDir` to `VersionPaths` and set it for v9 — `scripts/scraper/types.ts`, `scripts/scraper/config.ts`
-- [ ] 1.1.5 Export `readPackageJson`, add `readUmbrellaPackage`, and wire it into the source record — `scripts/scraper/discover.ts`, `scripts/scraper/pipeline.ts`
-- [ ] 1.1.6 Green verify: ST-6 passes
-- [ ] 1.1.7 [impl] Impl tests and the umbrella fixture package.json — `src/__tests__/scraper/provenance-capture.impl.test.ts`, `src/__tests__/fixtures/mock-fluentui`
-- [ ] 1.1.8 Full verify
+- [x] 1.1.1 [spec-author] Write specification tests for ST-6 — `src/__tests__/scraper/provenance-capture.spec.test.ts` ✅ (completed: 2026-09-24 22:04)
+- [x] 1.1.2 Red verify: confirm ST-6 fails for the right reason ✅ (completed: 2026-09-24 22:04)
+- [x] 1.1.3 Add optional `packageName`/`packageVersion` to `SourceInfo` — `src/types/schema.ts` ✅ (completed: 2026-09-24 22:06)
+- [x] 1.1.4 Add optional `umbrellaPackageDir` to `VersionPaths` and set it for v9 — `scripts/scraper/types.ts`, `scripts/scraper/config.ts` ✅ (completed: 2026-09-24 22:06)
+- [x] 1.1.5 Export `readPackageJson`, add `readUmbrellaPackage`, and wire it into the source record — `scripts/scraper/discover.ts`, `scripts/scraper/pipeline.ts` ✅ (completed: 2026-09-24 22:06)
+- [x] 1.1.6 Green verify: ST-6 passes ✅ (completed: 2026-09-24 22:06)
+- [x] 1.1.7 [impl] Impl tests and the umbrella fixture package.json — `src/__tests__/scraper/provenance-capture.impl.test.ts`, `src/__tests__/fixtures/mock-fluentui` ✅ (completed: 2026-09-24 22:06)
+- [x] 1.1.8 Full verify ✅ (completed: 2026-09-24 22:06)
 
 **Deliverables**:
 - [ ] `sources.fluentui` records the umbrella package for v9; absent fields handled gracefully
