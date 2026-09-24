@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.4.0 — 2026-09-24
+
+### Features
+
+- skill: disclose source/version provenance in the generated skill (#7)
+
+### Fixes
+
+- ci: regenerate the lockfile with npm 11 optional packages
+
+### CI
+
+- repo: rebuild the CI/CD pipeline around the npm release tool
+- drop registry-url from the publish job
+- consolidate publishing into release-please.yml
+- fix yarn install in the publish jobs and refresh publish.yml
+- upgrade actions and isolate the publish job (#6)
+
 ## 1.3.2 — 2026-09-20
 
 ### Fixes
