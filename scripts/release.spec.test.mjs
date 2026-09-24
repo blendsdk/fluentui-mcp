@@ -19,6 +19,7 @@ import {
   mergeChangelog,
   parseCli,
   parseCommit,
+  releasePushArgs,
   releaseStagePaths,
   semverBump,
 } from "./release.mjs"
@@ -170,5 +171,18 @@ describe("releaseStagePaths", () => {
     assert.ok(paths.includes("package-lock.json"))
     assert.ok(paths.includes("CHANGELOG.md"))
     assert.ok(paths.includes(".agents/skills/fluentui"))
+  })
+})
+
+describe("releasePushArgs", () => {
+  it("pushes the branch and the lightweight release tag explicitly", () => {
+    assert.deepEqual(releasePushArgs("1.4.0"), [
+      ["push", "--follow-tags"],
+      ["push", "origin", "v1.4.0"],
+    ])
+  })
+
+  it("does not push a tag when no version is given", () => {
+    assert.deepEqual(releasePushArgs(), [["push", "--follow-tags"]])
   })
 })

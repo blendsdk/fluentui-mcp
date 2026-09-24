@@ -379,9 +379,29 @@ export function publish({ tag, access = "public", dryRun = false }) {
   run("npm", args)
 }
 
-/** Pushes the release commit and its tags. */
-function gitPush() {
-  run("git", ["push", "--follow-tags"])
+/**
+ * The git push operations performed after a release.
+ *
+ * Exported as a pure value so the refspecs can be unit-tested without invoking
+ * git, matching the existing pure-function spec-test style. `--follow-tags`
+ * pushes only annotated tags, while this repository's release tags are
+ * lightweight, so the new tag is also pushed explicitly by name.
+ *
+ * @param version - Version being released, or omitted when publishing without a
+ *   new tag
+ * @returns The ordered `git` argument lists
+ */
+export function releasePushArgs(version) {
+  const args = [["push", "--follow-tags"]]
+  if (version) args.push(["push", "origin", `v${version}`])
+  return args
+}
+
+/** Push the branch and, when a version is given, its release tag. */
+function gitPush(version) {
+  for (const args of releasePushArgs(version)) {
+    run("git", args)
+  }
 }
 
 /** Prints command usage. */
@@ -508,7 +528,7 @@ export function main(argv) {
       }
 
       if (command === "version") {
-        if (options.gitPush && !options.dryRun) gitPush()
+        if (options.gitPush && !options.dryRun) gitPush(next)
         return 0
       }
 
@@ -517,7 +537,7 @@ export function main(argv) {
         return 2
       }
       publish({ tag: options.tag, access: options.access, dryRun: options.dryRun })
-      if (options.gitPush && !options.dryRun) gitPush()
+      if (options.gitPush && !options.dryRun) gitPush(next)
       return 0
     }
 
