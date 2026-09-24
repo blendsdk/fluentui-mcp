@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.1 — 2026-09-24
+
+### Fixes
+
+- release: push the release tag explicitly (#8)
+
 ## 1.4.0 — 2026-09-24
 
 ### Features

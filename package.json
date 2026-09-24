@@ -1,6 +1,6 @@
 {
   "name": "fluentui-skill",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Agent Skill that teaches AI coding assistants Microsoft FluentUI React v9 with component, category, recipe, and API references installed into Claude Code and compatible agents.",
   "type": "module",
   "bin": {
