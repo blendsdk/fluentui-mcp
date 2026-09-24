@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-24 22:11
-> **Progress**: 20/42 tasks (48%)
+> **Last Updated**: 2026-09-24 22:14
+> **Progress**: 27/42 tasks (64%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -93,15 +93,15 @@ task-size criteria in the make-plan quality checklist)
 **Reference**: [03-03 Skill Guidance](03-03-skill-guidance.md) · ST-7, ST-8 · AR-1, AR-7
 **Objective**: Add the disclosure rule and correct the React compatibility value.
 
-- [ ] 3.1.1 [spec-author] Write specification tests for ST-7 and ST-8 — `src/__tests__/skill/skill-guidance.spec.test.ts`
-- [ ] 3.1.2 Red verify: confirm the specification tests fail for the right reason
-- [ ] 3.2.1 Fix `compatibility` and append hard rule 8 — `.agents/skills/fluentui/SKILL.md`
-- [ ] 3.2.2 Green verify: ST-7 and ST-8 pass
-- [ ] 3.2.3 Full verify
+- [x] 3.1.1 [spec-author] Write specification tests for ST-7 and ST-8 — `src/__tests__/skill/skill-guidance.spec.test.ts` ✅ (completed: 2026-09-24 22:13)
+- [x] 3.1.2 Red verify: confirm the specification tests fail for the right reason ✅ (completed: 2026-09-24 22:13)
+- [x] 3.2.1 Fix `compatibility` and append hard rule 8 — `.agents/skills/fluentui/SKILL.md` ✅ (completed: 2026-09-24 22:14)
+- [x] 3.2.2 Green verify: ST-7 and ST-8 pass ✅ (completed: 2026-09-24 22:14)
+- [x] 3.2.3 Full verify ✅ (completed: 2026-09-24 22:14)
 
 **Deliverables**:
-- [ ] `SKILL.md` states the coverage rule and the real peer range
-- [ ] All verification passing
+- [x] `SKILL.md` states the coverage rule and the real peer range
+- [x] All verification passing
 
 **Verify**: `npm run verify`
 
