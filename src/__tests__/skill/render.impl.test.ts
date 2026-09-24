@@ -46,6 +46,7 @@ import {
   GENERATED_MARKER,
   buildSkillFiles,
   isSafeSkillId,
+  type SkillRenderContext,
 } from '../../../scripts/skill/mapping.js';
 import { buildManifest, hashContent } from '../../../scripts/skill/manifest.js';
 import { generateSkill } from '../../../scripts/skill/generate.js';
@@ -64,6 +65,13 @@ import {
 // ============================================================================
 // Markdown primitives
 // ============================================================================
+
+/** Render context used by the mapping tests. */
+const TEST_CONTEXT: SkillRenderContext = {
+  skillVersion: '1.0.0',
+  generatorVersion: '1.1.0',
+  schemaHash: '0123456789abcdef',
+};
 
 describe('Markdown primitives', () => {
   it('joins sections with blank lines and drops blanks', () => {
@@ -218,14 +226,14 @@ describe('mapping safety and ordering', () => {
     const schema = createFluentUISchema({
       recipes: [createRecipeEntry('login-form', { group: 'bogus' })],
     });
-    expect(() => buildSkillFiles(schema)).toThrow(/Unknown recipe group "bogus"/);
+    expect(() => buildSkillFiles(schema, TEST_CONTEXT)).toThrow(/Unknown recipe group "bogus"/);
   });
 
   it('rejects an unsafe component id before building files', () => {
     const schema = createFluentUISchema({
       components: [createComponentEntry('Button', { id: '../evil' })],
     });
-    expect(() => buildSkillFiles(schema)).toThrow(/Unsafe component id/);
+    expect(() => buildSkillFiles(schema, TEST_CONTEXT)).toThrow(/Unsafe component id/);
   });
 
   it('orders recipe files by group order then id', () => {
@@ -236,7 +244,7 @@ describe('mapping safety and ordering', () => {
         createRecipeEntry('settings-form', { group: 'forms' }),
       ],
     });
-    const paths = buildSkillFiles(schema)
+    const paths = buildSkillFiles(schema, TEST_CONTEXT)
       .map((file) => file.path)
       .filter((path) => path.startsWith('references/recipes/'));
     expect(paths).toEqual([
@@ -269,7 +277,7 @@ describe('manifest', () => {
       generatedAt: '2020-01-02T03:04:05Z',
       components: [createComponentEntry('Button')],
     });
-    const manifest = buildManifest(schema, buildSkillFiles(schema));
+    const manifest = buildManifest(schema, buildSkillFiles(schema, TEST_CONTEXT));
     expect(manifest.generatedAt).toBe('2020-01-02T03:04:05Z');
     expect(manifest.files['references/components/button.md']).toMatch(/^[0-9a-f]{64}$/);
   });

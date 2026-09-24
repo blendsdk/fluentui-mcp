@@ -77,6 +77,26 @@ export interface SkillFile {
 }
 
 /**
+ * Render-time identifiers recorded in the provenance section.
+ *
+ * These values are not part of the schema, so they are threaded in explicitly:
+ * the skill version comes from `package.json`, the generator version from this
+ * codebase, and the schema hash from the manifest. Keeping them out of the
+ * schema preserves the determinism promise — identical inputs, identical
+ * bytes — because none of them is a wall-clock value.
+ */
+export interface SkillRenderContext {
+  /** Published version of the fluentui-skill package (from package.json). */
+  skillVersion: string;
+
+  /** Version of the generator that produced the tree. */
+  generatorVersion: string;
+
+  /** SHA-256 of the input schema, as recorded in the manifest. */
+  schemaHash: string;
+}
+
+/**
  * Safe id pattern: lowercase kebab-case.
  *
  * Ids become file and directory names, so the pattern permits only `a-z`, `0-9`,
@@ -412,11 +432,144 @@ function renderRecipeFile(
   );
 }
 
+/**
+ * Format the package versions that the scraped components come from as a
+ * compact range and count.
+ *
+ * Counting is per package, not per component: many components share one package
+ * (the Button family, for example), so counting entries would overstate how many
+ * packages the snapshot covers. Only plain `x.y.z` versions are considered;
+ * prerelease or malformed values are ignored so a single odd value cannot
+ * distort the range. Comparison is numeric by major, then minor, then patch, so
+ * `9.10.0` sorts above `9.2.0` rather than being compared as text.
+ *
+ * @param components - Component entries carrying `packageName`/`packageVersion`
+ * @returns For example `2 packages, 9.2.0–9.10.0`, or undefined when none
+ */
+export function formatPackageVersionRange(
+  components: readonly ComponentEntry[],
+): string | undefined {
+  // Map each package to one parsed version. Taking the first valid version per
+  // package keeps the result deterministic for a given schema.
+  const versionByPackage = new Map<string, number[]>();
+  for (const component of components) {
+    if (versionByPackage.has(component.packageName)) {
+      continue;
+    }
+    const parsed = parsePlainVersion(component.packageVersion);
+    if (parsed) {
+      versionByPackage.set(component.packageName, parsed);
+    }
+  }
+
+  const versions = [...versionByPackage.values()];
+  if (versions.length === 0) {
+    return undefined;
+  }
+
+  const sorted = [...versions].sort(compareVersions);
+  const min = formatVersion(sorted[0]);
+  const max = formatVersion(sorted[sorted.length - 1]);
+  const noun = versions.length === 1 ? 'package' : 'packages';
+  const range = min === max ? min : `${min}–${max}`;
+
+  return `${versions.length} ${noun}, ${range}`;
+}
+
+/**
+ * Parse a plain `x.y.z` version into its numeric parts.
+ *
+ * @param version - Candidate version string
+ * @returns The three numeric parts, or undefined when not plain semver
+ */
+function parsePlainVersion(version: string): number[] | undefined {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  if (!match) {
+    return undefined;
+  }
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+/**
+ * Compare two parsed versions by major, minor, then patch.
+ *
+ * @param a - First parsed version
+ * @param b - Second parsed version
+ * @returns A negative, zero, or positive number following `Array#sort` rules
+ */
+function compareVersions(a: number[], b: number[]): number {
+  for (let index = 0; index < 3; index += 1) {
+    const difference = a[index] - b[index];
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+  return 0;
+}
+
+/** Render a parsed version back to `x.y.z`. */
+function formatVersion(parts: number[]): string {
+  return parts.join('.');
+}
+
+/**
+ * Render the "Source & versions" provenance section.
+ *
+ * The section lists the FluentUI source ref and commit, the umbrella package
+ * version when present, the component package version range, and the skill,
+ * generator, and schema identifiers. It deliberately excludes any timestamp so
+ * generated references stay reproducible.
+ *
+ * Rows whose data is absent are omitted. The schema is validated before
+ * rendering, so `sources.fluentui` is always present.
+ *
+ * @param schema - The enhanced schema
+ * @param context - Skill version, generator version, and schema hash
+ * @returns A Markdown section
+ */
+function renderProvenance(
+  schema: FluentUISchema,
+  context: SkillRenderContext,
+): string {
+  const source = schema.sources.fluentui;
+  const rows: string[][] = [
+    ['Fluent UI version', escapeTableCell(schema.version)],
+    [
+      'Fluent UI source',
+      `${inlineCode(source.ref)} @ ${inlineCode(source.commit.slice(0, 7))}`,
+    ],
+  ];
+
+  if (source.packageName && source.packageVersion) {
+    rows.push([
+      'Umbrella package',
+      `${inlineCode(source.packageName)} ${escapeTableCell(source.packageVersion)}`,
+    ]);
+  }
+
+  const range = formatPackageVersionRange(schema.components ?? []);
+  if (range) {
+    rows.push(['Component packages', escapeTableCell(range)]);
+  }
+
+  rows.push(
+    ['Skill version', escapeTableCell(context.skillVersion)],
+    ['Generator', escapeTableCell(context.generatorVersion)],
+    ['Schema hash', inlineCode(context.schemaHash.slice(0, 12))],
+  );
+
+  return joinSections([
+    heading(2, 'Source & versions'),
+    table(['Item', 'Value'], rows),
+  ]);
+}
+
 /** Render the routing index: task→recipe map, category index, and all references. */
 function renderIndexFile(
   schema: FluentUISchema,
   orderedRecipes: readonly RecipeEntry[],
   orderedComponents: readonly ComponentEntry[],
+  context: SkillRenderContext,
 ): string {
   const taskTable = table(
     ['Task', 'Recipe', 'Group'],
@@ -439,6 +592,7 @@ function renderIndexFile(
     joinSections([
       heading(1, 'FluentUI reference index'),
       'Hand-written routing lives in `SKILL.md`; this file indexes every generated reference.',
+      renderProvenance(schema, context),
       heading(2, 'Task → recipe'),
       taskTable,
       heading(2, 'Categories'),
@@ -500,10 +654,14 @@ function byId(a: { id: string }, b: { id: string }): number {
  * recipes by fixed group order and id. The result is not re-sorted by path.
  *
  * @param schema - The enhanced schema to render.
+ * @param context - Skill version, generator version, and schema hash.
  * @returns Every generated file, in mapping order.
  * @throws When an id is unsafe or a recipe group is unknown.
  */
-export function buildSkillFiles(schema: FluentUISchema): SkillFile[] {
+export function buildSkillFiles(
+  schema: FluentUISchema,
+  context: SkillRenderContext,
+): SkillFile[] {
   const components = [...(schema.components ?? [])].sort(byId);
   const foundation = [...(schema.foundation ?? [])].sort(byId);
   const categories = [...(schema.categoryGuidance ?? [])].sort(byId);
@@ -546,7 +704,7 @@ export function buildSkillFiles(schema: FluentUISchema): SkillFile[] {
   const files: SkillFile[] = [
     {
       path: `${REFERENCE_DIR}/index.md`,
-      content: renderIndexFile(schema, orderedRecipes, components),
+      content: renderIndexFile(schema, orderedRecipes, components, context),
     },
     ...foundation.map((guide) => ({
       path: `${REFERENCE_DIR}/foundation/${guide.id}.md`,

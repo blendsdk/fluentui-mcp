@@ -41,6 +41,9 @@ closed before the skill is generated.
       `navigation`, `data-display`, `feedback`, `overlays`, `layout`, `utilities`.
 - [ ] The scraper source ref is pinned to the latest stable FluentUI release tag at generation time;
       `sources.fluentui.ref` records the tag and `sources.fluentui.commit` records the full commit.
+- [ ] `sources.fluentui` also records the umbrella package's `packageName` and `packageVersion`
+      (for example `@fluentui/react-components` 9.74.1) when the umbrella package is present, so
+      the schema names the single suite version most readers recognize.
 - [ ] Raw schema carries `schemaVersion`, `version`, `generatedAt`, `sources`, and `stats`.
 - [ ] A coverage report lists every public v9 component and marks it scraped or explicitly excluded
       with a reason (internal, unstable, non-component export).
@@ -67,7 +70,7 @@ closed before the skill is generated.
 |------|------|
 | Default ref | Latest stable release tag of `microsoft/fluentui` |
 | Override | `--fluentui-ref <tag>` CLI flag / `FLUENTUI_REF` env var |
-| Recording | `sources.fluentui.ref`, `.commit`, `.repo`, `.scrapedAt` written into the raw schema |
+| Recording | `sources.fluentui.ref`, `.commit`, `.repo`, `.scrapedAt` written into the raw schema; the umbrella package's `.packageName` and `.packageVersion` are recorded when that package is present |
 | Contrib | `microsoft/fluentui-contrib` ref pinned the same way when included |
 
 ### Component identity rules
@@ -90,7 +93,7 @@ Raw schema
 ├── schemaVersion: "1.0"        (bumped when the format changes — see RD-07)
 ├── version: "v9"
 ├── generatedAt
-├── sources { fluentui {repo, ref, commit, scrapedAt}, contrib? }
+├── sources { fluentui {repo, ref, commit, scrapedAt, packageName?, packageVersion?}, contrib? }
 ├── components ─┬─ name, id, packageName, packageVersion, importPath
 │               ├─ importStatement, category, stability, deprecated
 │               ├─ props[], slots[], stories[]

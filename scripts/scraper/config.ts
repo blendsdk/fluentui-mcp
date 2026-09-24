@@ -44,6 +44,7 @@ const V9_CONFIG: VersionConfig = {
       'packages/react-components/react-components/library/src/unstable/index.ts',
     storiesGlob:
       'packages/react-components/react-*/stories/src/**/*.stories.tsx',
+    umbrellaPackageDir: 'packages/react-components/react-components',
   },
   skipPackages: [
     // Build tooling and internal utilities

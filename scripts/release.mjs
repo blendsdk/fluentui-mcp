@@ -5,7 +5,8 @@
  * The skill ships one package, so "the skill version" and "the published
  * package version" are the same value. This script derives the next version
  * from the conventional commit messages written since the last git tag, writes
- * it to `package.json` and `package-lock.json` in one step, records it in
+ * it to `package.json` and `package-lock.json` in one step, regenerates the
+ * committed skill tree so its provenance records the new version, records it in
  * `CHANGELOG.md`, commits and tags it, and publishes it. Because the version is
  * written once and then published, the two can never drift.
  *
@@ -280,6 +281,30 @@ function applyVersion(version) {
 }
 
 /**
+ * The paths staged by the release commit.
+ *
+ * Exported as a pure value so the staging set can be unit-tested without
+ * invoking git, matching the existing pure-function spec-test style.
+ *
+ * @returns The `git add` argument list
+ */
+export function releaseStagePaths() {
+  return ["package.json", "package-lock.json", "CHANGELOG.md", ".agents/skills/fluentui"]
+}
+
+/**
+ * Regenerate the committed skill tree so it records the new skill version.
+ *
+ * The generator is deterministic and offline and makes no LLM call. The
+ * regenerated tree is picked up by the release commit.
+ *
+ * @throws When the generator exits non-zero
+ */
+function regenerateSkill() {
+  run("node", ["--import", "tsx", "scripts/skill/generate.ts"])
+}
+
+/**
  * Inserts a release section into an existing changelog.
  *
  * When the changelog has an `## Unreleased` section, it is replaced by the
@@ -334,7 +359,7 @@ function updateChangelog(version, commits) {
 function commitAndTag(version, { ci, noGitCommit }) {
   if (noGitCommit) return
 
-  run("git", ["add", "package.json", "package-lock.json", "CHANGELOG.md"])
+  run("git", ["add", ...releaseStagePaths()])
   run("git", ["commit", "-m", `chore(release): v${version}${ci ? " [skip ci]" : ""}`])
   run("git", ["tag", `v${version}`])
 }
@@ -364,7 +389,7 @@ function printUsage() {
   console.log(`Release the single fluentui-skill package.
 
 Usage:
-  node scripts/release.mjs version [options]   Bump the version, changelog, commit, tag
+  node scripts/release.mjs version [options]   Bump the version, regenerate the skill, changelog, commit, tag
   node scripts/release.mjs publish [options]   Publish the current version
   node scripts/release.mjs release [options]   version + publish
 
@@ -473,9 +498,10 @@ export function main(argv) {
 
       console.log(`Version: ${current} -> ${next} (${type})`)
       if (options.dryRun) {
-        console.log(`[dry-run] would set ${next}, update CHANGELOG.md, commit and tag v${next}`)
+        console.log(`[dry-run] would set ${next}, regenerate the skill, update CHANGELOG.md, commit and tag v${next}`)
       } else {
         applyVersion(next)
+        regenerateSkill()
         updateChangelog(next, commits)
         commitAndTag(next, options)
         console.log(`Tagged v${next}`)

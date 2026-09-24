@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 import { listFiles, readTextFile } from './files.js';
 import {
+  DEFAULT_PACKAGE_JSON,
   DEFAULT_SCHEMA_PATH,
   DEFAULT_SKILL_DIR,
   generateSkill,
@@ -110,17 +111,20 @@ function findBrokenLinks(skillDir: string): LinkFinding[] {
 /**
  * Run the drift and coverage checks.
  *
- * @param options - Paths to the enhanced schema and the skill root.
+ * @param options - Paths to the enhanced schema, the skill root, and the
+ *   package.json holding the skill version.
  * @returns The differences, missing files, and broken links.
  * @throws When the schema is invalid or `SKILL.md` is missing.
  */
 export function checkDrift(options: {
   schemaPath: string;
   skillDir: string;
+  packageJsonPath?: string;
 }): DriftReport {
   const result = generateSkill({
     schemaPath: options.schemaPath,
     skillDir: options.skillDir,
+    packageJsonPath: options.packageJsonPath,
     check: true,
   });
 
@@ -164,6 +168,7 @@ export function runCheck(
     const report = checkDrift({
       schemaPath: resolve(cwd, schemaPath),
       skillDir: resolve(cwd, skillDir),
+      packageJsonPath: resolve(cwd, DEFAULT_PACKAGE_JSON),
     });
 
     if (report.differences.length === 0 && report.brokenLinks.length === 0) {

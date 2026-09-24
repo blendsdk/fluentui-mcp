@@ -252,7 +252,7 @@ export function readExportsIndexByPackage(
 /**
  * Parsed data from a package.json file.
  */
-interface PackageJsonInfo {
+export interface PackageJsonInfo {
   /** npm package name */
   name: string;
   /** Package version */
@@ -275,7 +275,7 @@ interface PackageJsonInfo {
  * @param dirPath - Directory containing the package.json
  * @returns Parsed name and version, or null if unreadable
  */
-function readPackageJson(dirPath: string): PackageJsonInfo | null {
+export function readPackageJson(dirPath: string): PackageJsonInfo | null {
   const rootPkgJsonPath = join(dirPath, 'package.json');
   const libraryPkgJsonPath = join(dirPath, 'library', 'package.json');
 

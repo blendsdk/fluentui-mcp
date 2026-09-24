@@ -2,7 +2,7 @@
 name: fluentui
 description: Use when building React user interfaces with FluentUI React v9 (for example Button, Input, Dialog, DataGrid, FluentProvider, makeStyles, tokens). Covers setup, theming, styling, accessibility, component APIs, and task recipes, with verified examples from the real package.
 license: MIT
-compatibility: FluentUI React v9 with React 17/18; examples import from @fluentui/react-components and @fluentui/react-icons.
+compatibility: FluentUI React v9 with React 16.14–19 (peer range >=16.14.0 <20.0.0); examples import from @fluentui/react-components and @fluentui/react-icons.
 metadata:
   author: blendsdk
 ---
@@ -36,6 +36,11 @@ rather than guessing.
 7. **Accessibility is part of the task.** Every interactive element needs a
    label, keyboard support, and correct roles. See
    `references/foundation/accessibility.md`.
+8. **Disclose the covered version and stay inside it.** Answer from what this
+   skill version covers — see `## Source & versions` in `references/index.md`.
+   State the covered Fluent UI version, list the reference files you used, and
+   if a component, prop, or API is not present in the references, say it is
+   **not covered by this skill version** instead of guessing.
 
 ## How to route a task
 

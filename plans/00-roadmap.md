@@ -1,10 +1,10 @@
 # Roadmap: FluentUI Agent Skill
 
 > **Feature-Set**: FluentUI Agent Skill
-> **Status**: Complete
+> **Status**: Complete (8/8 RD + SP-01)
 > **Created**: 2026-09-19
-> **Last Updated**: 2026-09-20 06:55
-> **Progress**: 8 / 8 (100%)
+> **Last Updated**: 2026-09-24 22:21
+> **Progress**: 8 / 8 RD (100%) · SP-01 done
 > **CodeOps Artifact Schema**: 1
 
 ## Legend
@@ -23,3 +23,4 @@
 | RD-06 | MCP retirement & cleanup | [RD-06](../requirements/RD-06-mcp-retirement.md) | [plan](fluentui-agent-skill/00-index.md) | Done | ✅ | 2026-09-19 | depends on RD-03, RD-05 |
 | RD-07 | Non-functional requirements | [RD-07](../requirements/RD-07-non-functional.md) | [plan](fluentui-agent-skill/00-index.md) | Done | ✅ | 2026-09-19 | depends on RD-01 … RD-06 |
 | RD-08 | Documentation, decisions & evaluation | [RD-08](../requirements/RD-08-docs-evaluation.md) | [plan](fluentui-agent-skill/00-index.md) | Done | ✅ | 2026-09-19 | depends on RD-03, RD-06 |
+| SP-01 | Skill provenance disclosure (standalone) | — | [plan](skill-provenance/00-index.md) | Done | ✅ | 2026-09-24 | depends on RD-03 |
