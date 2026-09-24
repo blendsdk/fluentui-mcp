@@ -110,17 +110,20 @@ function findBrokenLinks(skillDir: string): LinkFinding[] {
 /**
  * Run the drift and coverage checks.
  *
- * @param options - Paths to the enhanced schema and the skill root.
+ * @param options - Paths to the enhanced schema, the skill root, and the
+ *   package.json holding the skill version.
  * @returns The differences, missing files, and broken links.
  * @throws When the schema is invalid or `SKILL.md` is missing.
  */
 export function checkDrift(options: {
   schemaPath: string;
   skillDir: string;
+  packageJsonPath?: string;
 }): DriftReport {
   const result = generateSkill({
     schemaPath: options.schemaPath,
     skillDir: options.skillDir,
+    packageJsonPath: options.packageJsonPath,
     check: true,
   });
 

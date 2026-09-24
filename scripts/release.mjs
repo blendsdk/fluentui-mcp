@@ -280,6 +280,30 @@ function applyVersion(version) {
 }
 
 /**
+ * The paths staged by the release commit.
+ *
+ * Exported as a pure value so the staging set can be unit-tested without
+ * invoking git, matching the existing pure-function spec-test style.
+ *
+ * @returns The `git add` argument list
+ */
+export function releaseStagePaths() {
+  return ["package.json", "package-lock.json", "CHANGELOG.md", ".agents/skills/fluentui"]
+}
+
+/**
+ * Regenerate the committed skill tree so it records the new skill version.
+ *
+ * The generator is deterministic and offline and makes no LLM call. The
+ * regenerated tree is picked up by the release commit.
+ *
+ * @throws When the generator exits non-zero
+ */
+function regenerateSkill() {
+  run("node", ["--import", "tsx", "scripts/skill/generate.ts"])
+}
+
+/**
  * Inserts a release section into an existing changelog.
  *
  * When the changelog has an `## Unreleased` section, it is replaced by the
@@ -334,7 +358,7 @@ function updateChangelog(version, commits) {
 function commitAndTag(version, { ci, noGitCommit }) {
   if (noGitCommit) return
 
-  run("git", ["add", "package.json", "package-lock.json", "CHANGELOG.md"])
+  run("git", ["add", ...releaseStagePaths()])
   run("git", ["commit", "-m", `chore(release): v${version}${ci ? " [skip ci]" : ""}`])
   run("git", ["tag", `v${version}`])
 }
@@ -476,6 +500,7 @@ export function main(argv) {
         console.log(`[dry-run] would set ${next}, update CHANGELOG.md, commit and tag v${next}`)
       } else {
         applyVersion(next)
+        if (!options.noGitCommit) regenerateSkill()
         updateChangelog(next, commits)
         commitAndTag(next, options)
         console.log(`Tagged v${next}`)

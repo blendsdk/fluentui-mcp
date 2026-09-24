@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-09-24 22:17
-> **Progress**: 33/42 tasks (79%)
+> **Last Updated**: 2026-09-24 22:20
+> **Progress**: 42/42 tasks (100%)
 > **CodeOps Artifact Schema**: 1
 
 ## Overview
@@ -130,17 +130,17 @@ task-size criteria in the make-plan quality checklist)
 **Reference**: [03-04 Release Integration](03-04-release-integration.md) · ST-10 · AR-6, AR-8, AR-11
 **Objective**: Regenerate and stage the skill on release, and amend the owning requirements.
 
-- [ ] 5.1.1 [spec-author] Write the specification test for ST-10 using a temporary `package.json` and skill directory — `src/__tests__/integration/provenance-release.spec.test.ts`
-- [ ] 5.1.2 Red verify: confirm ST-10 fails for the right reason
-- [ ] 5.2.1 Add `regenerateSkill`, export `releaseStagePaths`, guard it for dry-run/no-commit, and use it when staging — `scripts/release.mjs`
-- [ ] 5.2.2 Amend RD-03 and add the RD-01 source-field note — `requirements/RD-03-skill-generator.md`, `requirements/RD-01-content-model.md`
-- [ ] 5.2.3 Green verify: ST-10 passes
-- [ ] 5.2.4 Full verify
+- [x] 5.1.1 [spec-author] Write the specification test for ST-10 using a temporary `package.json` and skill directory — `src/__tests__/integration/provenance-release.spec.test.ts` ✅ (completed: 2026-09-24 22:18)
+- [x] 5.1.2 Red verify: confirm ST-10 fails for the right reason ✅ (completed: 2026-09-24 22:18)
+- [x] 5.2.1 Add `regenerateSkill`, export `releaseStagePaths`, guard it for dry-run/no-commit, and use it when staging — `scripts/release.mjs` ✅ (completed: 2026-09-24 22:19)
+- [x] 5.2.2 Amend RD-03 and add the RD-01 source-field note — `requirements/RD-03-skill-generator.md`, `requirements/RD-01-content-model.md` ✅ (completed: 2026-09-24 22:19)
+- [x] 5.2.3 Green verify: ST-10 passes ✅ (completed: 2026-09-24 22:20)
+- [x] 5.2.4 Full verify ✅ (completed: 2026-09-24 22:20)
 
 **Deliverables**:
-- [ ] A version bump plus regeneration keeps the drift gate green
-- [ ] RD-03 and RD-01 updated
-- [ ] All verification passing
+- [x] A version bump plus regeneration keeps the drift gate green
+- [x] RD-03 and RD-01 updated
+- [x] All verification passing
 
 **Verify**: `npm run verify`
 

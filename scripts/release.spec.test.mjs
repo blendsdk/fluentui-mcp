@@ -19,6 +19,7 @@ import {
   mergeChangelog,
   parseCli,
   parseCommit,
+  releaseStagePaths,
   semverBump,
 } from "./release.mjs"
 
@@ -159,5 +160,15 @@ describe("parseCli", () => {
     assert.match(parseCli(["frobnicate"]).error, /unknown command/)
     assert.match(parseCli(["version", "--nope"]).error, /unknown argument/)
     assert.match(parseCli(["version", "--type", "banana"]).error, /--type must be/)
+  })
+})
+
+describe("releaseStagePaths", () => {
+  it("stages the version files, the changelog, and the regenerated skill", () => {
+    const paths = releaseStagePaths()
+    assert.ok(paths.includes("package.json"))
+    assert.ok(paths.includes("package-lock.json"))
+    assert.ok(paths.includes("CHANGELOG.md"))
+    assert.ok(paths.includes(".agents/skills/fluentui"))
   })
 })
